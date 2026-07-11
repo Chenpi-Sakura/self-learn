@@ -1,0 +1,62 @@
+.chat {
+  position: fixed; right: 24px; bottom: 110px;
+  width: 380px; height: 500px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-2);
+  display: flex; flex-direction: column;
+  z-index: 9999;
+  overflow: hidden;
+}
+.chat-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.chat-head .av {
+  width: 36px; height: 36px;
+  border-radius: var(--r-pill);
+  background: var(--indigo);
+  color: var(--card);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.chat-head .name { font-size: 18px; color: var(--ink); }
+.chat-head .sub  { font-size: 14px; color: var(--mute); margin-left: auto; }
+.chat-body {
+  flex: 1; overflow-y: auto;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 18px;
+  line-height: 1.55;
+}
+.bubble.ai  { background: var(--paper); color: var(--ink); align-self: flex-start; border: 1px solid var(--border); }
+.bubble.user { background: var(--indigo); color: var(--card); align-self: flex-end; }
+.chat-input {
+  border-top: 1px solid var(--border);
+  padding: 10px;
+  display: flex; gap: 8px;
+}
+.chat-input input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 8px 14px;
+  outline: none;
+  background: var(--card);
+  font-size: 18px;
+}
+.chat-input input:focus { border-color: var(--indigo); }
+.chat-input button {
+  width: 36px; height: 36px;
+  border-radius: var(--r-pill);
+  background: var(--vermilion);
+  color: var(--card);
+  font-size: 18px;
+}

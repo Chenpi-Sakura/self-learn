@@ -1,0 +1,21 @@
+@font-face {
+  font-family: 'FlyFlower';
+  src:
+    url('/fonts/FlyFlowerSong-OTF.otf') format('opentype'),
+    url('/fonts/FlyFlowerSong-TTF.ttf') format('truetype');
+  font-display: swap;
+  unicode-range: U+4E00-9FFF;
+}
+
+@font-face {
+  font-family: 'Hedvig';
+  src:
+    url('/fonts/HedvigLettersSerif-Regular.otf') format('opentype'),
+    url('/fonts/HedvigLettersSerif-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --font-serif-cn: 'FlyFlower', 'Songti SC', 'STSong', serif;
+  --font-serif-en: 'Hedvig', 'Iowan Old Style', 'Georgia', serif;
+}

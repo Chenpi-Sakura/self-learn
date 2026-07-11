@@ -1,0 +1,29 @@
+:root {
+  /* ===== 色板（制图院蓝图） ===== */
+  --ink: #0F0F0E;            /* 近黑墨 · 主文字 */
+  --ink-soft: #1A1A18;        /* 边框墨 */
+  --ink-mute: #4A4842;        /* 弱化文字 */
+  --paper: #F7F5EF;           /* 米白纸 · 页面底 */
+  --paper-card: #F2EFE7;      /* 卡片底（比页面底深一档） */
+  --paper-deep: #ECE8DD;      /* 强调底色 */
+  --vermilion: #C8341C;       /* 朱印 · 关键高亮 */
+  --vermilion-soft: #E8B4A8;  /* 朱印淡 */
+  --mint: #2A6F4F;            /* 薄荷 · 完成/活跃 */
+  --mint-soft: #A8C9B5;       /* 薄荷淡 */
+  --faded: #8A8478;           /* 褪色棕灰 · 休眠 */
+  --faded-soft: #C9C2B5;      /* 褪色淡 */
+
+  /* ===== 字体 ===== */
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-num: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ===== 几何 ===== */
+  --r: 2px;
+  --gap: 12px;
+  --topbar-h: 48px;
+  --dock-h: 72px;
+  --border: 1px solid var(--ink-soft);
+  --border-fade: 1px solid rgba(26, 26, 24, 0.12);
+  --border-key: 1.5px dotted var(--vermilion);
+}

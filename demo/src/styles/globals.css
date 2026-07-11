@@ -1,0 +1,113 @@
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 桌面底纹：米白纸 + 极淡网格 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(26, 26, 24, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 26, 24, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  z-index: 0;
+}
+
+/* 纸纹噪点（用 SVG data-uri） */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.06  0 0 0 0 0.06  0 0 0 0 0.05  0 0 0 0.08 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+button {
+  font-family: inherit;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+input, textarea {
+  font-family: inherit;
+  background: none;
+  border: none;
+  color: inherit;
+  outline: none;
+}
+
+::selection {
+  background: var(--vermilion);
+  color: var(--paper);
+}
+
+/* 通用：标签式文本（用于 [图标] [标签] 风格） */
+.mono { font-family: var(--font-mono); letter-spacing: 0.02em; }
+.num  { font-family: var(--font-num);  font-variant-numeric: tabular-nums; }
+.tiny { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); }
+
+/* ===== 印章动画（hover 时盖下又消失） ===== */
+@keyframes stamp {
+  0%   { transform: scale(2.5); opacity: 0; }
+  20%  { transform: scale(1);   opacity: 0.85; }
+  60%  { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+.stamp-anim::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--vermilion);
+  pointer-events: none;
+  animation: stamp 0.45s ease-out forwards;
+}
+
+/* ===== 通用热力字符 ===== */
+.heat-0 { color: var(--faded-soft); }
+.heat-1 { color: #BFB7A0; }
+.heat-2 { color: #7E9A7B; }
+.heat-3 { color: var(--mint); }
+.heat-4 { color: var(--mint); font-weight: 600; }
+
+/* 节点呼吸光晕 */
+@keyframes pulse-ring {
+  0%, 100% { stroke-opacity: 1; }
+  50%      { stroke-opacity: 0.4; }
+}
+.pulse { animation: pulse-ring 2.5s ease-in-out infinite; }

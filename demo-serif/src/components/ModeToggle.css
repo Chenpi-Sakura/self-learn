@@ -1,0 +1,26 @@
+.mode {
+  display: inline-flex;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 2px;
+  position: relative;
+  margin-left: 16px;
+}
+.mode button {
+  position: relative;
+  z-index: 1;
+  padding: 6px 18px;
+  font-size: 18px;
+  border-radius: var(--r-pill);
+  color: var(--mute);
+  transition: color 180ms ease;
+}
+.mode button.on { color: var(--card); }
+.mode .pill {
+  position: absolute;
+  top: 2px; bottom: 2px;
+  background: var(--indigo);
+  border-radius: var(--r-pill);
+  z-index: 0;
+}

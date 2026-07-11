@@ -1,0 +1,9 @@
+.app {
+  position: relative;
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+}
+.windows-layer {
+  position: absolute;
+  inset: var(--topbar-h) 0 0 0;
+}

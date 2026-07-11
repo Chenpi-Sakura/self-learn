@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Modern · SaaS Tool (Notion/Linear)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page:    #FAFAFA;
+    --card:    #FFFFFF;
+    --hover:   #F4F4F5;
+    --border:  #E4E4E7;
+    --border-s:#F4F4F5;
+    --ink:     #18181B;
+    --mute:    #71717A;
+    --subtle:  #A1A1AA;
+    --accent:  #2563EB;
+    --accent-s:#DBEAFE;
+    --green:   #10B981;
+    --red:     #EF4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+
+  /* ─── 顶部：Linear 风简洁导航 ─── */
+  .top {
+    height: 52px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .brand-mark {
+    width: 22px; height: 22px;
+    background: var(--ink);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .top-search {
+    flex: 1;
+    max-width: 480px;
+    height: 32px;
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 8px;
+    color: var(--subtle);
+    font-size: 13px;
+  }
+  .top-search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .top-search .kbd {
+    padding: 2px 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono';
+    font-size: 10px;
+    color: var(--mute);
+  }
+  .top-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .top-right .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mute);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .top-right .icon-btn:hover { background: var(--hover); color: var(--ink); }
+  .top-right .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563EB, #7C3AED);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* 二级工具条：模式 + 布局 */
+  .sub-bar {
+    height: 48px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+  }
+  .seg {
+    display: inline-flex;
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+  }
+  .seg-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mute);
+    cursor: pointer;
+    transition: all .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .seg-btn:hover { color: var(--ink); }
+  .seg-btn.active {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .seg-btn .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--subtle);
+  }
+  .seg-btn.active .dot { background: var(--accent); }
+  .sub-bar .spacer { flex: 1; }
+  .breadcrumb {
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .breadcrumb .sep { margin: 0 6px; color: var(--subtle); }
+  .breadcrumb .current { color: var(--ink); font-weight: 500; }
+
+  /* ─── 桌面 ─── */
+  .desktop {
+    display: grid;
+    grid-template-columns: minmax(360px, 5fr) minmax(440px, 7fr);
+    gap: 16px;
+    padding: 16px;
+    height: calc(100vh - 100px - 64px);
+    overflow: hidden;
+  }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card.flex { flex: 1; min-height: 0; }
+  .card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-s);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card-head .title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .card-head .sub {
+    font-size: 12px;
+    color: var(--mute);
+    margin-left: auto;
+  }
+  .card-head .badge {
+    padding: 2px 8px;
+    background: var(--accent-s);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 4px;
+  }
+
+  /* 藏宝图 */
+  .map-body { flex: 1; min-height: 0; padding: 16px; position: relative; }
+  .map-svg { width: 100%; height: 100%; display: block; }
+  .node-g { transition: all .15s; cursor: pointer; }
+  .node-g:hover .node-circle { stroke: var(--accent); stroke-width: 2; }
+  .node-g:hover .node-label { fill: var(--accent); }
+  .node-g .node-label { font-family: 'Inter'; font-size: 11px; font-weight: 500; fill: var(--ink); }
+  .node-g .node-num { font-family: 'JetBrains Mono'; font-size: 9px; fill: var(--mute); letter-spacing: 0.04em; }
+
+  /* 雷达 */
+  .radar-body {
+    flex: 1;
+    min-height: 0;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+  .radar-svg { width: 100%; height: 100%; max-height: 180px; }
+  .rb-list { display: flex; flex-direction: column; gap: 10px; }
+  .rb { display: flex; align-items: center; gap: 10px; }
+  .rb .lbl { font-size: 12px; color: var(--ink); font-weight: 500; width: 80px; }
+  .rb .bar { flex: 1; height: 6px; background: var(--hover); border-radius: 3px; overflow: hidden; }
+  .rb .bar::before { content: ''; display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .rb.r1 .bar::before { width: 78%; }
+  .rb.r2 .bar::before { width: 62%; }
+  .rb.r3 .bar::before { width: 55%; }
+  .rb.r4 .bar::before { width: 70%; }
+  .rb.r5 .bar::before { width: 74%; background: var(--green); }
+  .rb.r6 .bar::before { width: 48%; }
+  .rb .v {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: var(--mute);
+    width: 28px;
+    text-align: right;
+  }
+  .rb.up .v { color: var(--green); }
+  .rb.up .v::before { content: '↑'; margin-right: 2px; }
+
+  /* 日历 */
+  .cal-body {
+    flex: 1;
+    min-height: 0;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 16px;
+  }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-h {
+    font-size: 10px;
+    color: var(--mute);
+    text-align: center;
+    padding: 4px 0;
+    font-weight: 500;
+  }
+  .cal-c {
+    aspect-ratio: 1;
+    background: var(--page);
+    border-radius: 6px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--ink);
+    position: relative;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .cal-c:hover { border-color: var(--accent); }
+  .cal-c.empty { background: transparent; }
+  .cal-c.future { opacity: 0.4; }
+  .cal-c.is-today {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .cal-c .heat {
+    align-self: flex-end;
+    width: 14px; height: 14px;
+    border-radius: 3px;
+  }
+  .cal-c.h1 .heat { background: #D1FAE5; }
+  .cal-c.h2 .heat { background: #6EE7B7; }
+  .cal-c.h3 .heat { background: var(--green); }
+  .cal-c.h4 .heat { background: #047857; }
+  .cal-c.is-today .heat { background: white; }
+
+  .cal-side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-left: 1px solid var(--border-s);
+    padding-left: 16px;
+  }
+  .cal-stat { }
+  .cal-stat .l {
+    font-size: 11px;
+    color: var(--mute);
+    margin-bottom: 4px;
+  }
+  .cal-stat .v {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .cal-stat .v small {
+    font-size: 14px;
+    color: var(--mute);
+    font-weight: 400;
+  }
+  .cal-stat.green .v { color: var(--green); }
+  #ckBtn {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  #ckBtn:hover { background: #1D4ED8; }
+  #ckBtn.done { background: var(--green); }
+
+  /* 任务 */
+  .tasks-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-s);
+    transition: background .15s;
+  }
+  .task-row:hover { background: var(--page); }
+  .task-row .ck {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid var(--subtle);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    font-size: 10px;
+  }
+  .task-row.done .ck { background: var(--green); border-color: var(--green); }
+  .task-row.doing .ck { border-color: var(--accent); }
+  .task-row .ttl { flex: 1; font-size: 13px; color: var(--ink); }
+  .task-row.done .ttl { color: var(--mute); text-decoration: line-through; }
+  .task-row .bar { width: 80px; height: 4px; background: var(--hover); border-radius: 2px; overflow: hidden; }
+  .task-row .bar::before { content: ''; display: block; height: 100%; background: var(--accent); }
+  .task-row.done .bar::before { width: 100%; background: var(--mute); }
+  .task-row.t1 .bar::before { width: 62%; }
+  .task-row.t2 .bar::before { width: 30%; }
+  .task-row .eta {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: var(--mute);
+    width: 50px;
+    text-align: right;
+  }
+
+  /* ─── Dock ─── */
+  .dock {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 48px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    display: flex;
+    gap: 2px;
+    z-index: 5000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .dock-item {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--mute);
+    transition: all .15s;
+    font-size: 16px;
+  }
+  .dock-item:hover { background: var(--hover); color: var(--ink); }
+  .dock-item.active { background: var(--accent); color: white; }
+
+  /* ─── AI 浮窗 ─── */
+  .chat {
+    position: fixed;
+    right: 20px;
+    bottom: 76px;
+    width: 360px;
+    height: 460px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.1);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .chat-title {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-s);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .chat-title .av {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #7C3AED);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .chat-title .nm {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .chat-title .status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--mute);
+  }
+  .chat-title .status::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .bubble {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .bubble.ai {
+    background: var(--hover);
+    color: var(--ink);
+    align-self: flex-start;
+  }
+  .bubble.user {
+    background: var(--accent);
+    color: white;
+    align-self: flex-end;
+  }
+  .chat-input {
+    padding: 12px;
+    border-top: 1px solid var(--border-s);
+    display: flex;
+    gap: 8px;
+  }
+  .chat-input input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+  }
+  .chat-input input:focus { border-color: var(--accent); }
+  .chat-input button {
+    padding: 8px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="brand-mark">S</div>
+    SelfLearn
+  </div>
+  <div class="top-search">
+    <span>⌕</span>
+    <input placeholder="Search levels, exercises, notes…">
+    <span class="kbd">⌘K</span>
+  </div>
+  <div class="top-right">
+    <div class="icon-btn" title="Notifications">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10"/></svg>
+    </div>
+    <div class="icon-btn" title="Help">?</div>
+    <div class="avatar">M</div>
+  </div>
+</header>
+
+<div class="sub-bar">
+  <div class="seg">
+    <div class="seg-btn active"><span class="dot"></span>Master</div>
+    <div class="seg-btn"><span class="dot"></span>Explore</div>
+  </div>
+  <div class="seg">
+    <div class="seg-btn active">📖 Reading</div>
+    <div class="seg-btn">✏️ Practice</div>
+    <div class="seg-btn">💻 Coding</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="breadcrumb">
+    <span>Workspace</span>
+    <span class="sep">/</span>
+    <span>Today</span>
+    <span class="sep">/</span>
+    <span class="current">Self-Attention</span>
+  </div>
+</div>
+
+<main class="desktop">
+  <section class="col">
+    <div class="card flex">
+      <div class="card-head">
+        <span class="title">Treasure Map</span>
+        <span class="badge">14 levels</span>
+        <span class="sub">2 dormant</span>
+      </div>
+      <div class="map-body">
+        <svg class="map-svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid meet">
+          <!-- 极细连线 -->
+          <g stroke="#A1A1AA" stroke-width="1" fill="none" stroke-linecap="round">
+            <line x1="80" y1="80" x2="200" y2="140"/>
+            <line x1="200" y1="140" x2="320" y2="100"/>
+            <line x1="200" y1="140" x2="320" y2="220"/>
+            <line x1="320" y1="100" x2="440" y2="170"/>
+            <line x1="320" y1="220" x2="440" y2="170"/>
+            <line x1="440" y1="170" x2="540" y2="100"/>
+            <line x1="440" y1="170" x2="540" y2="240"/>
+          </g>
+          <g stroke="#A1A1AA" stroke-width="1" fill="none" stroke-dasharray="3 3" opacity="0.5">
+            <line x1="200" y1="140" x2="200" y2="310"/>
+            <line x1="200" y1="310" x2="320" y2="310"/>
+          </g>
+
+          <!-- 节点：极简圆点 -->
+          <g class="node-g" transform="translate(80,80)">
+            <circle class="node-circle" r="10" fill="#10B981"/>
+            <path d="M-4 0 L-1 3 L4 -3" stroke="white" stroke-width="1.5" fill="none"/>
+            <text class="node-num" x="0" y="-18" text-anchor="middle">01</text>
+            <text class="node-label" x="0" y="28" text-anchor="middle">Embedding</text>
+          </g>
+          <g class="node-g" transform="translate(200,140)">
+            <circle class="node-circle" r="10" fill="#10B981"/>
+            <path d="M-4 0 L-1 3 L4 -3" stroke="white" stroke-width="1.5" fill="none"/>
+            <text class="node-num" x="0" y="-18" text-anchor="middle">02</text>
+            <text class="node-label" x="0" y="28" text-anchor="middle">Recurrent</text>
+          </g>
+          <g class="node-g" transform="translate(320,100)">
+            <circle class="node-circle" r="10" fill="#10B981"/>
+            <path d="M-4 0 L-1 3 L4 -3" stroke="white" stroke-width="1.5" fill="none"/>
+            <text class="node-num" x="0" y="-18" text-anchor="middle">03</text>
+            <text class="node-label" x="0" y="28" text-anchor="middle">LSTM</text>
+          </g>
+          <g class="node-g" transform="translate(320,220)">
+            <circle class="node-circle" r="12" fill="#2563EB"/>
+            <circle r="4" fill="white"/>
+            <text class="node-num" x="0" y="-20" text-anchor="middle" fill="#2563EB">NOW · 04</text>
+            <text class="node-label" x="0" y="32" text-anchor="middle" fill="#2563EB" font-weight="600">GRU</text>
+          </g>
+          <g class="node-g" transform="translate(440,170)">
+            <circle class="node-circle" r="14" fill="#18181B"/>
+            <circle r="6" fill="#2563EB"/>
+            <text class="node-num" x="0" y="-22" text-anchor="middle">05 · KEY</text>
+            <text class="node-label" x="0" y="34" text-anchor="middle" font-weight="600">Self-Attention</text>
+          </g>
+          <g class="node-g" transform="translate(540,100)">
+            <circle class="node-circle" r="10" fill="white" stroke="#A1A1AA" stroke-width="1.5"/>
+            <text class="node-num" x="0" y="-18" text-anchor="middle">06</text>
+            <text class="node-label" x="0" y="28" text-anchor="middle">Transformer</text>
+          </g>
+          <g class="node-g" transform="translate(540,240)">
+            <circle class="node-circle" r="10" fill="white" stroke="#A1A1AA" stroke-width="1.5"/>
+            <text class="node-num" x="0" y="-18" text-anchor="middle">07</text>
+            <text class="node-label" x="0" y="28" text-anchor="middle">Pos. Encoding</text>
+          </g>
+          <g class="node-g" transform="translate(200,310)" opacity="0.4">
+            <circle class="node-circle" r="8" fill="none" stroke="#A1A1AA" stroke-width="1" stroke-dasharray="2 2"/>
+            <text class="node-num" x="-14" y="-14" text-anchor="end">DORMANT</text>
+            <text class="node-label" x="-14" y="0" text-anchor="end">Classical ML</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card flex">
+      <div class="card-head">
+        <span class="title">Profile</span>
+        <span class="badge">6 axes</span>
+        <span class="sub">v3.2</span>
+      </div>
+      <div class="radar-body">
+        <svg class="radar-svg" viewBox="-100 -100 200 200">
+          <g stroke="#E4E4E7" stroke-width="1" fill="none">
+            <polygon points="0,-80 69,-40 69,40 0,80 -69,40 -69,-40"/>
+            <polygon points="0,-60 52,-30 52,30 0,60 -52,30 -52,-30"/>
+            <polygon points="0,-40 35,-20 35,20 0,40 -35,20 -35,-20"/>
+            <polygon points="0,-20 17,-10 17,10 0,20 -17,10 -17,-10"/>
+          </g>
+          <polygon points="0,-62 52,-30 52,22 0,52 -45,26 -55,-32" fill="#2563EB" fill-opacity="0.15" stroke="#2563EB" stroke-width="2"/>
+          <circle cx="0" cy="-62" r="3" fill="#2563EB"/>
+          <circle cx="52" cy="-30" r="3" fill="#2563EB"/>
+          <circle cx="52" cy="22" r="3" fill="#2563EB"/>
+          <circle cx="0" cy="52" r="3" fill="#2563EB"/>
+          <circle cx="-45" cy="26" r="3" fill="#2563EB"/>
+          <circle cx="-55" cy="-32" r="3" fill="#2563EB"/>
+        </svg>
+        <div class="rb-list">
+          <div class="rb r1"><span class="lbl">Understanding</span><span class="bar"></span><span class="v">78</span></div>
+          <div class="rb r2"><span class="lbl">Reason</span><span class="bar"></span><span class="v">62</span></div>
+          <div class="rb r3"><span class="lbl">Expression</span><span class="bar"></span><span class="v">55</span></div>
+          <div class="rb r4"><span class="lbl">Application</span><span class="bar"></span><span class="v">70</span></div>
+          <div class="rb r5 up"><span class="lbl">Transfer</span><span class="bar"></span><span class="v">74</span></div>
+          <div class="rb r6"><span class="lbl">Creation</span><span class="bar"></span><span class="v">48</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="card flex">
+      <div class="card-head">
+        <span class="title">Calendar</span>
+        <span class="badge">Today</span>
+        <span class="sub">× 32 day streak</span>
+      </div>
+      <div class="cal-body">
+        <div class="cal-grid">
+          <div class="cal-h">M</div><div class="cal-h">T</div><div class="cal-h">W</div>
+          <div class="cal-h">T</div><div class="cal-h">F</div><div class="cal-h">S</div><div class="cal-h">S</div>
+          <div class="cal-c empty"></div><div class="cal-c empty"></div>
+          <div class="cal-c h1"><span>1</span><div class="heat"></div></div>
+          <div class="cal-c h2"><span>2</span><div class="heat"></div></div>
+          <div class="cal-c h1"><span>3</span><div class="heat"></div></div>
+          <div class="cal-c h3"><span>4</span><div class="heat"></div></div>
+          <div class="cal-c h2"><span>5</span><div class="heat"></div></div>
+          <div class="cal-c h3"><span>6</span><div class="heat"></div></div>
+          <div class="cal-c h3"><span>7</span><div class="heat"></div></div>
+          <div class="cal-c h3"><span>8</span><div class="heat"></div></div>
+          <div class="cal-c h4"><span>9</span><div class="heat"></div></div>
+          <div class="cal-c is-today"><span>10</span><div class="heat"></div></div>
+          <div class="cal-c future"><span>11</span></div>
+          <div class="cal-c future"><span>12</span></div>
+        </div>
+        <div class="cal-side">
+          <div class="cal-stat">
+            <div class="l">This month</div>
+            <div class="v">4<small>h</small> 32<small>m</small></div>
+          </div>
+          <div class="cal-stat green">
+            <div class="l">Streak</div>
+            <div class="v">× 32<small> d</small></div>
+          </div>
+          <button id="ckBtn">✓ Check in</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card flex">
+      <div class="card-head">
+        <span class="title">Today's tasks</span>
+        <span class="sub">2 / 4 in progress</span>
+      </div>
+      <div class="tasks-body">
+        <div class="task-row done">
+          <div class="ck">✓</div>
+          <div class="ttl">Read: Self-Attention § 03</div>
+          <div class="bar"></div>
+          <div class="eta">12 min</div>
+        </div>
+        <div class="task-row doing t1">
+          <div class="ck"></div>
+          <div class="ttl">Drill: Q / K / V trinity</div>
+          <div class="bar"></div>
+          <div class="eta">~ 8 min</div>
+        </div>
+        <div class="task-row doing t2">
+          <div class="ck"></div>
+          <div class="ttl">Implement: scaled dot-product</div>
+          <div class="bar"></div>
+          <div class="eta">~ 15 min</div>
+        </div>
+        <div class="task-row">
+          <div class="ck"></div>
+          <div class="ttl">Challenge: attention interview</div>
+          <div class="bar"></div>
+          <div class="eta">~ 20 min</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="dock">
+  <div class="dock-item active" title="Map">◇</div>
+  <div class="dock-item" title="AI">✦</div>
+  <div class="dock-item" title="Doc">□</div>
+  <div class="dock-item" title="Exercise">≡</div>
+  <div class="dock-item" title="Code">⌨</div>
+  <div class="dock-item" title="Note">✎</div>
+  <div class="dock-item" title="Mind">◈</div>
+  <div class="dock-item" title="Resource">❐</div>
+  <div class="dock-item" title="Dashboard">▣</div>
+</nav>
+
+<aside class="chat">
+  <div class="chat-title">
+    <div class="av">书</div>
+    <div>
+      <div class="nm">小书 · AI tutor</div>
+    </div>
+    <div class="status">always on</div>
+  </div>
+  <div class="chat-body" id="cb">
+    <div class="bubble ai">You've been reading for 30 minutes. Want a quick question on Q, K, V?</div>
+  </div>
+  <div class="chat-input">
+    <input placeholder="Ask anything…" id="ci">
+    <button onclick="sc()">Send</button>
+  </div>
+</aside>
+
+<script>
+  document.querySelectorAll('.seg-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      b.parentElement.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.dock-item').forEach(d => {
+    d.addEventListener('click', () => {
+      document.querySelectorAll('.dock-item').forEach(x => x.classList.remove('active'));
+      d.classList.add('active');
+    });
+  });
+  const ckBtn = document.getElementById('ckBtn');
+  let ckd = false;
+  ckBtn.addEventListener('click', () => {
+    ckd = !ckd;
+    ckBtn.classList.toggle('done', ckd);
+    ckBtn.textContent = ckd ? '✓ 23 min today' : '✓ Check in';
+  });
+  function sc() {
+    const i = document.getElementById('ci');
+    const v = i.value.trim();
+    if (!v) return;
+    const cb = document.getElementById('cb');
+    const u = document.createElement('div');
+    u.className = 'bubble user'; u.textContent = v;
+    cb.appendChild(u);
+    i.value = '';
+    cb.scrollTop = cb.scrollHeight;
+    setTimeout(() => {
+      const r = document.createElement('div');
+      r.className = 'bubble ai';
+      r.textContent = 'Think of Q as the query, K as the key, V as the value. They form a small trinity.';
+      cb.appendChild(r);
+      cb.scrollTop = cb.scrollHeight;
+    }, 500);
+  }
+  document.getElementById('ci').addEventListener('keydown', e => e.key === 'Enter' && sc());
+</script>
+</body>
+</html>

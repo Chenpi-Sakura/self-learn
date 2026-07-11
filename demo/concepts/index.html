@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>SelfLearn · 风格概念</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: #FAFAFA;
+    color: #1D1D1F;
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    padding: 48px 64px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    max-width: 1200px;
+    margin: 0 auto 48px;
+    border-bottom: 1px solid #E5E5E5;
+    padding-bottom: 24px;
+  }
+  header .eyebrow {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6E6E73;
+    margin-bottom: 8px;
+  }
+  header h1 {
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+  header h1 .accent {
+    background: linear-gradient(135deg, #C8341C, #1B3B6F, #2A6F4F);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header p {
+    font-size: 18px;
+    color: #6E6E73;
+    max-width: 760px;
+    font-weight: 300;
+  }
+  header .meta {
+    margin-top: 16px;
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: #6E6E73;
+    letter-spacing: 0.05em;
+  }
+
+  .grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    display: block;
+    background: #FFFFFF;
+    border: 1px solid #E5E5E5;
+    border-radius: 14px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: all .25s;
+    cursor: pointer;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+    border-color: #1D1D1F;
+  }
+  .preview {
+    height: 200px;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid #E5E5E5;
+  }
+  .meta {
+    padding: 18px 20px 20px;
+  }
+  .meta .num {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #6E6E73;
+    margin-bottom: 4px;
+  }
+  .meta h3 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin-bottom: 6px;
+  }
+  .meta p {
+    font-size: 13px;
+    color: #6E6E73;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .meta .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .meta .tag {
+    padding: 3px 10px;
+    background: #F5F5F7;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono';
+    font-size: 10px;
+    color: #6E6E73;
+    letter-spacing: 0.04em;
+  }
+  .meta .open {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #06C;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  footer {
+    max-width: 1200px;
+    margin: 64px auto 0;
+    padding-top: 24px;
+    border-top: 1px solid #E5E5E5;
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: #6E6E73;
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* 每个卡片的小预览（用 CSS + SVG 模拟该风格的视觉） */
+  .prev-01 { background: #F4F1EA; color: #1A1A1A; }
+  .prev-01::before {
+    content: 'The Self Learner';
+    position: absolute;
+    top: 14px; left: 14px;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-style: italic;
+    font-weight: 900;
+    font-size: 24px;
+    color: #1A1A1A;
+  }
+  .prev-01::after {
+    content: '§ § §';
+    position: absolute;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: #1A1A1A;
+    letter-spacing: 1em;
+    font-size: 18px;
+  }
+  .prev-01 .line {
+    position: absolute;
+    left: 14px; right: 14px;
+    height: 1px;
+    background: #1A1A1A;
+    top: 50px;
+  }
+
+  .prev-03 { background: #1D3557; color: #F1FAEE; }
+  .prev-03::before {
+    content: '';
+    position: absolute;
+    top: 14px; left: 14px;
+    width: 36px; height: 36px;
+    background: #F4D35E;
+    border-radius: 50%;
+    border: 3px solid #1A1A1A;
+  }
+  .prev-03::after {
+    content: 'A△■';
+    position: absolute;
+    bottom: 14px; right: 14px;
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 28px;
+    color: #F1FAEE;
+    letter-spacing: 0.1em;
+  }
+  .prev-03 .band {
+    position: absolute;
+    top: 70px; left: 0; right: 0;
+    height: 24px;
+    background: #E63946;
+  }
+
+  .prev-04 { background: #F0E9D2; color: #2C2C2C; }
+  .prev-04::before {
+    content: 'Field Notes';
+    position: absolute;
+    top: 22px; left: 50%;
+    transform: translateX(-50%) rotate(-1deg);
+    font-family: 'Caveat', cursive;
+    font-size: 36px;
+    font-weight: 700;
+    color: #2C2C2C;
+  }
+  .prev-04::after {
+    content: '✓';
+    position: absolute;
+    bottom: 30px; left: 30%;
+    width: 36px; height: 36px;
+    background: #5C7A4F;
+    color: #F0E9D2;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Caveat', cursive;
+    font-size: 28px;
+    box-shadow: 2px 2px 0 #2C2C2C;
+  }
+  .prev-04 .tape {
+    position: absolute;
+    top: -4px; right: 30px;
+    width: 70px; height: 18px;
+    background: #D4B254;
+    transform: rotate(8deg);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+
+  .prev-05 { background: #F5E6D3; color: #1A1A1A; }
+  .prev-05::before {
+    content: '';
+    position: absolute;
+    top: 14px; left: 14px;
+    width: 50px; height: 50px;
+    background: #C8102E;
+    clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  }
+  .prev-05::after {
+    content: '★ WORKERS ★';
+    position: absolute;
+    bottom: 24px; left: 0; right: 0;
+    text-align: center;
+    font-family: 'Black Ops One', sans-serif;
+    font-size: 28px;
+    color: #C8102E;
+    letter-spacing: 0.06em;
+  }
+  .prev-05 .red-band {
+    position: absolute;
+    top: 80px; left: 0; right: 0;
+    height: 8px;
+    background: #1A1A1A;
+  }
+
+  .prev-06 { background: #1B3B6F; color: #E8D5B7; }
+  .prev-06::before {
+    content: '自學';
+    position: absolute;
+    top: 18px; left: 18px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 56px;
+    font-weight: 800;
+    color: #E8D5B7;
+    line-height: 1;
+    writing-mode: vertical-rl;
+    border-right: 2px solid #E8D5B7;
+    padding-right: 8px;
+  }
+  .prev-06::after {
+    content: '道';
+    position: absolute;
+    bottom: 14px; right: 14px;
+    width: 50px; height: 50px;
+    background: #BC4749;
+    color: #E8D5B7;
+    border: 2px solid #E8D5B7;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 24px;
+    font-weight: 700;
+    transform: rotate(-6deg);
+  }
+  .prev-06 .wave {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 28px;
+    background:
+      radial-gradient(ellipse 16px 10px at 16px 14px, #E8D5B7 50%, transparent 51%) 0 0/32px 28px repeat-x,
+      #1B3B6F;
+  }
+
+  .prev-07 { background: #FFFFFF; color: #000000; }
+  .prev-07::before {
+    content: 'SYSTEM / ACTIVE';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 32px;
+    letter-spacing: -0.04em;
+    color: #000000;
+  }
+  .prev-07::after {
+    content: '/';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 32px;
+    color: #FF0000;
+    margin-left: 95px;
+  }
+  .prev-07 .grid-line {
+    position: absolute;
+    background: rgba(255,0,0,0.15);
+  }
+  .prev-07 .g1 { top: 0; bottom: 0; left: 25%; width: 1px; }
+  .prev-07 .g2 { top: 0; bottom: 0; left: 50%; width: 1px; }
+  .prev-07 .g3 { top: 0; bottom: 0; left: 75%; width: 1px; }
+
+  .prev-10 { background: #F5F2EC; color: #1C1C1E; }
+  .prev-10::before {
+    content: 'SelfLearn';
+    position: absolute;
+    top: 40%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: 44px;
+    letter-spacing: -0.02em;
+    color: #1C1C1E;
+  }
+  .prev-10::after {
+    content: '— a quiet companion';
+    position: absolute;
+    top: calc(40% + 50px); left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 14px;
+    color: #7A7A78;
+  }
+  .prev-10 .brown-circle {
+    position: absolute;
+    bottom: 30px; right: 30px;
+    width: 56px; height: 56px;
+    background: #A56C4D;
+    border-radius: 50%;
+  }
+  .prev-10 .thin-line {
+    position: absolute;
+    left: 30px; right: 30px;
+    bottom: 110px;
+    height: 1px;
+    background: #1C1C1E;
+    opacity: 0.2;
+  }
+
+  .prev-11 { background: #FFFFFF; color: #1D1D1F; }
+  .prev-11::before {
+    content: 'Learning,';
+    position: absolute;
+    top: 38%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 56px;
+    letter-spacing: -0.02em;
+    color: #1D1D1F;
+  }
+  .prev-11::after {
+    content: 'mapped to who you are.';
+    position: absolute;
+    top: calc(38% + 50px); left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    color: #1D1D1F;
+  }
+  .prev-11 .pill-dock {
+    position: absolute;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    height: 32px;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    border: 1px solid rgba(0,0,0,0.08);
+    display: flex;
+    gap: 4px;
+    padding: 0 8px;
+    align-items: center;
+  }
+  .prev-11 .pill-dock div {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+  }
+  .prev-11 .pill-dock div:nth-child(3) { background: #1D1D1F; }
+
+  /* ── 章节分隔标题 ── */
+  .section-title {
+    max-width: 1200px;
+    margin: 32px auto 16px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid #E5E5E5;
+    padding-bottom: 8px;
+  }
+  .section-title span:first-child {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .section-title .meta {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    color: #6E6E73;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── 12 现代 SaaS 预览 ── */
+  .prev-saas {
+    background: #FAFAFA;
+    color: #18181B;
+  }
+  .prev-saas::before {
+    content: '';
+    position: absolute;
+    top: 16px; left: 16px; right: 16px;
+    height: 24px;
+    background: #FFFFFF;
+    border: 1px solid #E4E4E7;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .prev-saas::after {
+    content: '';
+    position: absolute;
+    top: 56px; left: 16px;
+    width: 70px; height: 70px;
+    background: #FFFFFF;
+    border: 1px solid #E4E4E7;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .prev-saas .panel-2 {
+    position: absolute;
+    top: 56px; right: 16px;
+    width: calc(100% - 120px);
+    height: 120px;
+    background: #FFFFFF;
+    border: 1px solid #E4E4E7;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .prev-saas .accent-dot {
+    position: absolute;
+    top: 64px; left: 24px;
+    width: 50px; height: 8px;
+    background: #2563EB;
+    border-radius: 4px;
+  }
+
+  /* ── 13 开发者后台预览 ── */
+  .prev-dev {
+    background: #09090B;
+  }
+  .prev-dev .grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+  .prev-dev .terminal-lines {
+    position: absolute;
+    top: 18px; left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 70%;
+  }
+  .prev-dev .terminal-lines span {
+    height: 4px;
+    background: rgba(16,185,129,0.3);
+    border-radius: 2px;
+  }
+  .prev-dev .terminal-lines span:nth-child(1) { width: 40%; background: rgba(16,185,129,0.6); }
+  .prev-dev .terminal-lines span:nth-child(2) { width: 65%; background: rgba(255,255,255,0.1); }
+  .prev-dev .terminal-lines span:nth-child(3) { width: 50%; background: rgba(255,255,255,0.1); }
+  .prev-dev .terminal-lines span:nth-child(4) { width: 80%; background: rgba(16,185,129,0.4); }
+  .prev-dev .terminal-lines span:nth-child(5) { width: 35%; background: rgba(255,255,255,0.1); }
+  .prev-dev .dev-glow {
+    position: absolute;
+    bottom: 16px; right: 16px;
+    width: 80px; height: 80px;
+    background: radial-gradient(circle, rgba(16,185,129,0.6), transparent 70%);
+    border-radius: 50%;
+    filter: blur(8px);
+  }
+  .prev-dev::after {
+    content: '▷ session.live';
+    position: absolute;
+    bottom: 24px; left: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #10B981;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── 14 创意产品预览 ── */
+  .prev-creative {
+    background: #FAFAFA;
+  }
+  .prev-creative::before {
+    content: '';
+    position: absolute;
+    top: 24px; left: 24px;
+    width: 60px; height: 60px;
+    background: conic-gradient(from 45deg, #7C3AED, #EC4899, #F97316, #7C3AED);
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(124,58,237,0.3);
+  }
+  .prev-creative::after {
+    content: '';
+    position: absolute;
+    top: 32px; right: 24px;
+    width: 80px;
+    height: 6px;
+    background: linear-gradient(90deg, #7C3AED, #EC4899);
+    border-radius: 3px;
+  }
+  .prev-creative .grad-ball {
+    position: absolute;
+    bottom: 24px; left: 28px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7C3AED, #EC4899);
+  }
+  .prev-creative .grad-bar {
+    position: absolute;
+    bottom: 26px; left: 56px;
+    width: 100px; height: 4px;
+    background: linear-gradient(90deg, #7C3AED, #EC4899);
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">SelfLearn · Style Concepts</div>
+  <h1>Eleven directions<br>for the <span class="accent">same product</span>.</h1>
+  <p>Each card below opens a self-contained page that re-skins the entire learning workstation — same skeleton (top bar, treasure map, radar, calendar, dock, AI float), eleven different visual languages. Built to compare side-by-side. No backend, no real functionality, just pure direction.</p>
+  <div class="meta">11 files · 0 dependencies · open each in any modern browser · scroll, hover, click</div>
+</header>
+
+<div class="section-title">
+  <span>Classical · 有性格的视觉实验</span>
+  <span class="meta">8 styles · 强烈个人风格，适合产品调性强的场景</span>
+</div>
+
+<div class="grid">
+
+  <a class="card" href="01-newyorker.html">
+    <div class="preview prev-01"><div class="line"></div></div>
+    <div class="meta">
+      <div class="num">N° 01 · THE NEW YORKER</div>
+      <h3>Editorial Weekly</h3>
+      <p>黑白线条插画 + 衬线标题 + 极致留白。像 David Remnick 主编下的杂志内页——克制、有教养、不喊叫。</p>
+      <div class="tags">
+        <span class="tag">Playfair Display</span>
+        <span class="tag">EB Garamond</span>
+        <span class="tag">drop cap</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="03-bauhaus.html">
+    <div class="preview prev-03"><div class="band"></div></div>
+    <div class="meta">
+      <div class="num">N° 03 · BAUHAUS</div>
+      <h3>Constructivist</h3>
+      <p>纯红黄蓝三原色 + 黑，几何构成（圆/方/三角），非对称版式。1920 年代德国包豪斯 + 苏联构成主义的硬切美学。</p>
+      <div class="tags">
+        <span class="tag">Archivo Black</span>
+        <span class="tag">circle · triangle · square</span>
+        <span class="tag">form follows function</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="04-labnotes.html">
+    <div class="preview prev-04"><div class="tape"></div></div>
+    <div class="meta">
+      <div class="num">N° 04 · LAB FIELD NOTES</div>
+      <h3>Biology Notebook</h3>
+      <p>米黄纸上手写钢笔字 + 标本贴纸 + 手绘草图 + 胶带贴的标签。生物学家在亚马逊雨林的田野笔记。</p>
+      <div class="tags">
+        <span class="tag">Caveat 手写体</span>
+        <span class="tag">wax seal</span>
+        <span class="tag">tape decoration</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="05-soviet.html">
+    <div class="preview prev-05"><div class="red-band"></div></div>
+    <div class="meta">
+      <div class="num">N° 05 · SOVIET POSTER</div>
+      <h3>Constructivist Propaganda</h3>
+      <p>血红 + 军用模板字体 + 工人齿轮五角星。1920-30 年代苏联宣传画——庄严、革命、力量。</p>
+      <div class="tags">
+        <span class="tag">Black Ops One</span>
+        <span class="tag">СССР</span>
+        <span class="tag">poster typography</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="06-ukiyo.html">
+    <div class="preview prev-06"><div class="wave"></div></div>
+    <div class="meta">
+      <div class="num">N° 06 · UKIYO-E</div>
+      <h3>Woodblock Print</h3>
+      <p>靛蓝主调 + 朱印章 + 波纹条带。葛饰北斋《富岳三十六景》——装饰性极强，平面化，无渐变。</p>
+      <div class="tags">
+        <span class="tag">Shippori Mincho</span>
+        <span class="tag">漢字</span>
+        <span class="tag">波紋</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="07-swiss.html">
+    <div class="preview prev-07"><div class="grid-line g1"></div><div class="grid-line g2"></div><div class="grid-line g3"></div></div>
+    <div class="meta">
+      <div class="num">N° 07 · SWISS GRID</div>
+      <h3>International Style</h3>
+      <p>严格 12 列网格 + Helvetica 替代 + 瑞士红。Müller-Brockmann 风格——极简、信息优先、设计即功能。</p>
+      <div class="tags">
+        <span class="tag">Archivo</span>
+        <span class="tag">12-col grid</span>
+        <span class="tag">Swiss red</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="10-nordic.html">
+    <div class="preview prev-10"><div class="thin-line"></div><div class="brown-circle"></div></div>
+    <div class="meta">
+      <div class="num">N° 10 · NORDIC</div>
+      <h3>Bang &amp; Olufsen</h3>
+      <p>奶白 + 灰蓝 + 焦糖棕，超大半圆字，大量负空间。丹麦/瑞典设计——奢华但安静。</p>
+      <div class="tags">
+        <span class="tag">Fraunces 衬线</span>
+        <span class="tag">8px 圆角</span>
+        <span class="tag">generous whitespace</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="11-apple.html">
+    <div class="preview prev-11">
+      <div class="pill-dock">
+        <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="num">N° 11 · APPLE</div>
+      <h3>Product Page</h3>
+      <p>Jony Ive 巅峰期。纯白背景 + 96px 巨型字 + 极致留白。一个页面只表达一个观点。</p>
+      <div class="tags">
+        <span class="tag">Inter</span>
+        <span class="tag">56–96px display</span>
+        <span class="tag">pill dock</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+</div>
+
+<div class="section-title" style="margin-top:48px">
+  <span>Modern · 符合当下用户审美</span>
+  <span class="meta">3 styles · 现代 SaaS 基础审美，最适合做真实产品的方向</span>
+</div>
+
+<div class="grid">
+
+  <a class="card" href="modern-saas.html">
+    <div class="preview prev-saas"></div>
+    <div class="meta">
+      <div class="num">N° 12 · MODERN SAAS</div>
+      <h3>Notion / Linear</h3>
+      <p>中性灰 + 单一重点色（蓝/绿）+ 8-12px 圆角 + Inter。最贴近『日常工具』感，最不容易讨慶。</p>
+      <div class="tags">
+        <span class="tag">Inter</span>
+        <span class="tag">10px 圆角</span>
+        <span class="tag">#2563EB 蓝</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="modern-dev.html">
+    <div class="preview prev-dev">
+      <div class="grid-bg"></div>
+      <div class="terminal-lines">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="dev-glow"></div>
+    </div>
+    <div class="meta">
+      <div class="num">N° 13 · DEV CONSOLE</div>
+      <h3>Vercel / Cursor</h3>
+      <p>深色 + 发光绿/青 + JetBrains Mono 数字。技术型产品气质，让人一眼觉得是『给懂的人用的工具』。</p>
+      <div class="tags">
+        <span class="tag">JetBrains Mono</span>
+        <span class="tag">#10B981 发光绿</span>
+        <span class="tag">dark mode</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+  <a class="card" href="modern-creative.html">
+    <div class="preview prev-creative">
+      <div class="grad-ball"></div>
+      <div class="grad-bar"></div>
+    </div>
+    <div class="meta">
+      <div class="num">N° 14 · CREATIVE PRODUCT</div>
+      <h3>Figma / Loom</h3>
+      <p>白色卡片 + 软阴影 + 紫粉青橙多色渐变点缀。适度鲜艳，会让人记住『这家品牌是欢快的』。</p>
+      <div class="tags">
+        <span class="tag">Inter</span>
+        <span class="tag">14px 圆角</span>
+        <span class="tag">purple → pink 渐变</span>
+      </div>
+      <div class="open">Open →</div>
+    </div>
+  </a>
+
+</div>
+
+<footer>
+  <span>· SELFLEARN / CONCEPT DIRECTIONS · v1 · 2026 / 07 / 10 ·</span>
+  <span><a href="../" style="color:inherit;text-decoration:none">← back to blueprint demo</a></span>
+</footer>
+
+</body>
+</html>

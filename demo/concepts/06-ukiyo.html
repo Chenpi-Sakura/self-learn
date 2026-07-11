@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Style 06 · Ukiyo-e Woodblock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700;800&family=Noto+Serif+JP:wght@400;500;700&family=Sawarabi+Mincho&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --indigo: #1B3B6F;   /* 藍 */
+    --paper:  #E8D5B7;   /* 和紙 */
+    --paper-d:#D9C19A;
+    --red:    #BC4749;   /* 朱 */
+    --green:  #2E8B57;   /* 翠 */
+    --gold:   #B58E3A;
+    --ink:    #0E1116;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Noto Serif JP', 'Shippori Mincho', serif;
+    font-size: 13px;
+    line-height: 1.6;
+    /* 和纸纹理 */
+    background-image:
+      repeating-linear-gradient(45deg, rgba(27,59,111,0.02) 0 2px, transparent 2px 5px),
+      repeating-linear-gradient(-45deg, rgba(188,71,73,0.02) 0 2px, transparent 2px 7px);
+  }
+
+  /* ─── 顶部：浮世绘题字 ─── */
+  .top {
+    background: var(--indigo);
+    color: var(--paper);
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  /* 波纹装饰带（葛饰北斋） */
+  .wave-band {
+    height: 24px;
+    background:
+      radial-gradient(ellipse 20px 12px at 20px 12px, var(--paper) 50%, transparent 51%) 0 0/40px 24px repeat-x,
+      var(--indigo);
+    border-bottom: 3px solid var(--ink);
+  }
+  .top-main {
+    padding: 14px 32px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: center;
+  }
+  .kanji {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    writing-mode: vertical-rl;
+    color: var(--paper);
+    border-right: 2px solid var(--paper);
+    padding-right: 12px;
+  }
+  .top-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .top-title h1 {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+  }
+  .top-title h1 .accent { color: var(--red); }
+  .top-title .sub {
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    opacity: 0.75;
+    font-family: 'Noto Serif JP';
+  }
+  .seal-stack { display: flex; gap: 6px; align-items: center; }
+  .seal {
+    width: 44px; height: 44px;
+    background: var(--red);
+    color: var(--paper);
+    border: 2px solid var(--paper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 4px;
+    transform: rotate(-4deg);
+    box-shadow: 1px 1px 0 var(--ink);
+  }
+  .seal.green { background: var(--green); transform: rotate(3deg); }
+  .seal.gold { background: var(--gold); transform: rotate(-2deg); color: var(--ink); }
+
+  /* 模式 + 布局：印章 + 汉字 */
+  .modes {
+    background: var(--paper-d);
+    border-top: 3px solid var(--ink);
+    border-bottom: 3px solid var(--ink);
+    padding: 8px 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mode-label {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 14px;
+    font-weight: 600;
+    margin-right: 12px;
+    color: var(--ink);
+  }
+  .mode-btn {
+    padding: 6px 14px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    cursor: pointer;
+    transition: all .15s;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mode-btn .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink);
+  }
+  .mode-btn.active { background: var(--red); color: var(--paper); border-color: var(--red); }
+  .mode-btn.active .dot { background: var(--paper); border-color: var(--paper); }
+  .mode-sep { width: 1px; height: 24px; background: var(--ink); margin: 0 8px; }
+
+  /* ─── 桌面 ─── */
+  .desktop {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(440px, 1.6fr);
+    height: calc(100vh - 220px - 80px);
+    position: relative;
+  }
+
+  /* 左 */
+  .left {
+    display: grid;
+    grid-template-rows: 1.5fr 1fr;
+    border-right: 3px solid var(--ink);
+    min-height: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 28px, rgba(27,59,111,0.04) 28px 29px);
+  }
+  .panel {
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+  }
+  .panel + .panel { border-top: 3px solid var(--ink); }
+  .panel-title {
+    background: var(--indigo);
+    color: var(--paper);
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid var(--ink);
+  }
+  .panel-title .nm {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .panel-title .nm::before {
+    content: '— ';
+    color: var(--red);
+  }
+  .panel-title .meta {
+    font-family: 'Sawarabi Mincho', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    opacity: 0.85;
+  }
+
+  /* 藏宝图 */
+  .map-body { padding: 8px; height: calc(100% - 42px); position: relative; }
+  .map-svg { width: 100%; height: 100%; display: block; }
+  .map-corner {
+    position: absolute;
+    bottom: 10px;
+    left: 14px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 11px;
+    color: var(--ink);
+    transform: rotate(-2deg);
+  }
+  /* 节点：木板画圆 + 粗描边 */
+  .node-g:hover .node-rect { stroke: var(--red); }
+  .node-g .lbl-txt {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 11px;
+    fill: var(--ink);
+    font-weight: 500;
+  }
+  .node-g .num-txt {
+    font-family: 'Sawarabi Mincho', monospace;
+    font-size: 9px;
+    fill: var(--ink);
+    opacity: 0.7;
+    letter-spacing: 0.1em;
+  }
+
+  /* 雷达 */
+  .radar-body {
+    padding: 14px;
+    height: calc(100% - 42px);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+  .radar-svg { width: 130px; height: 130px; }
+  .rb-list { display: flex; flex-direction: column; gap: 5px; }
+  .rb {
+    display: grid;
+    grid-template-columns: 60px 1fr 28px;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 12px;
+    border-bottom: 1px dotted var(--indigo);
+    padding: 2px 0;
+  }
+  .rb .lbl { letter-spacing: 0.1em; font-weight: 500; }
+  .rb .bar { height: 8px; background: var(--paper-d); border: 1px solid var(--ink); position: relative; }
+  .rb .bar::before { content: ''; position: absolute; inset: 0; }
+  .rb.r1 .bar::before { width: 78%; background: var(--indigo); }
+  .rb.r2 .bar::before { width: 62%; background: var(--ink); }
+  .rb.r3 .bar::before { width: 55%; background: var(--ink); }
+  .rb.r4 .bar::before { width: 70%; background: var(--indigo); }
+  .rb.r5 .bar::before { width: 74%; background: var(--red); }
+  .rb.r6 .bar::before { width: 48%; background: var(--ink); }
+  .rb .v {
+    font-family: 'Sawarabi Mincho', monospace;
+    font-size: 10px;
+    text-align: right;
+  }
+  .rb.feature .lbl { color: var(--red); }
+  .rb.feature .v::before { content: '↑ '; color: var(--red); }
+
+  /* ─── 右：日历 ─── */
+  .right {
+    display: grid;
+    grid-template-rows: 1.5fr 1fr;
+    min-height: 0;
+  }
+  .panel.cal { background: var(--paper); }
+  .cal-body {
+    padding: 14px;
+    height: calc(100% - 42px);
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 0;
+  }
+  .cal-grid-wrap { border-right: 2px solid var(--ink); padding-right: 14px; }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    height: 100%;
+  }
+  .cal-h {
+    background: var(--indigo);
+    color: var(--paper);
+    padding: 4px 0;
+    text-align: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .cal-c {
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    padding: 3px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-family: 'Sawarabi Mincho', monospace;
+    font-size: 10px;
+    position: relative;
+  }
+  .cal-c.empty { background: transparent; border-color: transparent; }
+  .cal-c.future { opacity: 0.4; }
+  .cal-c.is-today {
+    background: var(--red);
+    color: var(--paper);
+  }
+  .cal-c .heat {
+    align-self: flex-end;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--indigo);
+  }
+  .cal-c.h2 .heat { color: var(--green); }
+  .cal-c.h3 .heat { color: var(--indigo); font-weight: 700; }
+  .cal-c.h4 .heat { color: var(--red); font-weight: 700; }
+  .cal-c.is-today .heat { color: var(--paper); }
+  .cal-c .stamp-mark {
+    position: absolute;
+    top: -6px; right: -6px;
+    width: 16px; height: 16px;
+    background: var(--red);
+    color: var(--paper);
+    border-radius: 2px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(-8deg);
+  }
+
+  .cal-side {
+    padding: 0 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .cal-stat {
+    border: 2px solid var(--ink);
+    padding: 8px 10px;
+    background: var(--paper);
+    position: relative;
+  }
+  .cal-stat .l {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--indigo);
+    font-weight: 600;
+  }
+  .cal-stat .v {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-top: 2px;
+  }
+  .cal-stat .seal {
+    position: absolute;
+    top: 50%;
+    right: -8px;
+    transform: translateY(-50%) rotate(8deg);
+    width: 28px; height: 28px;
+    background: var(--green);
+    color: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid var(--paper);
+    border-radius: 3px;
+  }
+  .checkin-btn {
+    background: var(--red);
+    color: var(--paper);
+    border: 3px solid var(--ink);
+    padding: 10px;
+    text-align: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--ink);
+    transition: all .15s;
+  }
+  .checkin-btn:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }
+  .checkin-btn.done { background: var(--green); }
+
+  /* 任务 */
+  .tasks { padding: 14px; height: calc(100% - 42px); overflow-y: auto; }
+  .task-row {
+    display: grid;
+    grid-template-columns: 28px 28px 1fr 80px 50px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--ink);
+  }
+  .task-row.done .ttl { color: var(--indigo); opacity: 0.6; text-decoration: line-through; }
+  .task-row .ic { font-size: 18px; }
+  .task-row .ck {
+    width: 20px; height: 20px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .task-row.done .ck { background: var(--green); color: var(--paper); border-color: var(--green); }
+  .task-row.doing .ck { background: var(--indigo); color: var(--paper); border-color: var(--indigo); }
+  .task-row .ttl { font-family: 'Shippori Mincho', serif; font-size: 13px; }
+  .task-row .bar {
+    height: 6px;
+    background: var(--paper-d);
+    border: 1px solid var(--ink);
+    position: relative;
+  }
+  .task-row .bar::before { content: ''; position: absolute; inset: 0; background: var(--indigo); }
+  .task-row.done .bar::before { width: 100%; background: var(--green); }
+  .task-row.t1 .bar::before { width: 62%; background: var(--red); }
+  .task-row.t2 .bar::before { width: 30%; }
+  .task-row .eta {
+    font-family: 'Sawarabi Mincho', monospace;
+    font-size: 10px;
+    text-align: right;
+    color: var(--indigo);
+  }
+
+  /* ─── Dock：木板画条 ─── */
+  .dock {
+    height: 80px;
+    background: var(--indigo);
+    color: var(--paper);
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    border-top: 3px solid var(--ink);
+    position: relative;
+  }
+  .dock::before {
+    content: '';
+    position: absolute;
+    top: -3px; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--red) 0 20%, transparent 20% 40%, var(--red) 40% 60%, transparent 60% 80%, var(--red) 80% 100%);
+    z-index: 1;
+  }
+  .dock-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-right: 1px solid var(--paper);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .dock-item:last-child { border-right: none; }
+  .dock-item:hover { background: rgba(188,71,73,0.4); }
+  .dock-item.active { background: var(--red); }
+  .dock-item .ic {
+    width: 32px; height: 32px;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1.5px solid var(--paper);
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .dock-item.active .ic { background: var(--paper); }
+  .dock-item .nm {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+
+  /* ─── AI 浮窗 ─── */
+  .chat {
+    position: fixed;
+    right: 24px;
+    bottom: 100px;
+    width: 320px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    z-index: 9999;
+    box-shadow: 4px 4px 0 var(--indigo);
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-title {
+    background: var(--indigo);
+    color: var(--paper);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 3px solid var(--ink);
+  }
+  .chat-title .seal-mini {
+    width: 18px; height: 18px;
+    background: var(--red);
+    color: var(--paper);
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 10px;
+    font-weight: 700;
+    transform: rotate(-6deg);
+  }
+  .chat-title .nm {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .chat-title .tag {
+    margin-left: auto;
+    font-family: 'Sawarabi Mincho', monospace;
+    font-size: 9px;
+    opacity: 0.8;
+  }
+  .chat-body {
+    padding: 12px;
+    height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 22px, rgba(27,59,111,0.05) 22px 23px);
+  }
+  .bubble {
+    padding: 8px 12px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    line-height: 1.6;
+    border: 1.5px solid var(--ink);
+  }
+  .bubble.ai {
+    background: var(--paper-d);
+    border-left: 4px solid var(--indigo);
+  }
+  .bubble.ai::before {
+    content: '小書 — ';
+    color: var(--red);
+    font-weight: 600;
+  }
+  .bubble.user {
+    background: var(--ink);
+    color: var(--paper);
+    align-self: flex-end;
+    border-color: var(--ink);
+  }
+  .chat-input {
+    border-top: 2px solid var(--ink);
+    display: flex;
+  }
+  .chat-input input {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    background: var(--paper);
+    border: none;
+    outline: none;
+  }
+  .chat-input button {
+    padding: 8px 14px;
+    background: var(--red);
+    color: var(--paper);
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    font-weight: 600;
+    border-left: 2px solid var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wave-band"></div>
+  <div class="top-main">
+    <div class="kanji">自學道中</div>
+    <div class="top-title">
+      <h1>The Way of <span class="accent">Self-Learning</span></h1>
+      <div class="sub">— 江 戸 版 画 · JULY MMXXVI —</div>
+    </div>
+    <div class="seal-stack">
+      <div class="seal">学</div>
+      <div class="seal green">進</div>
+      <div class="seal gold">道</div>
+    </div>
+  </div>
+</div>
+
+<div class="modes">
+  <span class="mode-label">道</span>
+  <div class="mode-btn active" data-m="0"><span class="dot"></span>精 通</div>
+  <div class="mode-btn" data-m="1"><span class="dot"></span>探 索</div>
+  <div class="mode-sep"></div>
+  <span class="mode-label">卷</span>
+  <div class="mode-btn active" data-l="0"><span class="dot"></span>閲 讀</div>
+  <div class="mode-btn" data-l="1"><span class="dot"></span>演 練</div>
+  <div class="mode-btn" data-l="2"><span class="dot"></span>実 驗</div>
+</div>
+
+<main class="desktop">
+  <!-- 左 -->
+  <section class="left">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="nm">學 問 之 圖</span>
+        <span class="meta">14 関所 · 2 休眠中</span>
+      </div>
+      <div class="map-body">
+        <svg class="map-svg" viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">
+          <!-- 粗黑连线（木板画轮廓线） -->
+          <g stroke="var(--ink)" stroke-width="2" fill="none">
+            <path d="M 80,90 L 200,150"/>
+            <path d="M 200,150 L 320,110"/>
+            <path d="M 200,150 L 320,230"/>
+            <path d="M 320,110 L 440,170"/>
+            <path d="M 320,230 L 440,170"/>
+            <path d="M 440,170 L 540,100"/>
+            <path d="M 440,170 L 540,240"/>
+          </g>
+          <!-- 休眠虚线 -->
+          <g stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 4" fill="none" opacity="0.45">
+            <path d="M 200,150 L 200,330"/>
+            <path d="M 200,330 L 320,330"/>
+          </g>
+
+          <!-- 节点：木板画圆 + 粗描边 -->
+          <g class="node-g" transform="translate(80,90)">
+            <circle r="14" fill="var(--green)" stroke="var(--ink)" stroke-width="2"/>
+            <path d="M -5,0 L -1,4 L 5,-4" stroke="var(--paper)" stroke-width="2" fill="none"/>
+            <text class="num-txt" x="-22" y="-18" text-anchor="end">N°01</text>
+            <text class="lbl-txt" x="-22" y="-2" text-anchor="end">埋め込み</text>
+          </g>
+          <g class="node-g" transform="translate(200,150)">
+            <circle r="14" fill="var(--green)" stroke="var(--ink)" stroke-width="2"/>
+            <path d="M -5,0 L -1,4 L 5,-4" stroke="var(--paper)" stroke-width="2" fill="none"/>
+            <text class="num-txt" x="-22" y="-18" text-anchor="end">N°02</text>
+            <text class="lbl-txt" x="-22" y="-2" text-anchor="end">回帰</text>
+          </g>
+          <g class="node-g" transform="translate(320,110)">
+            <circle r="14" fill="var(--green)" stroke="var(--ink)" stroke-width="2"/>
+            <path d="M -5,0 L -1,4 L 5,-4" stroke="var(--paper)" stroke-width="2" fill="none"/>
+            <text class="num-txt" x="22" y="-18">N°03</text>
+            <text class="lbl-txt" x="22" y="-2">LSTM</text>
+          </g>
+          <!-- 当前节点 -->
+          <g class="node-g" transform="translate(320,230)">
+            <circle r="18" fill="var(--paper)" stroke="var(--red)" stroke-width="3"/>
+            <circle r="6" fill="var(--red)"/>
+            <text class="num-txt" x="0" y="-24" text-anchor="middle" fill="var(--red)">NOW</text>
+            <text class="lbl-txt" x="0" y="36" text-anchor="middle" fill="var(--red)">GRU</text>
+          </g>
+          <!-- 关键：双层圆 + 朱红印章 -->
+          <g class="node-g" transform="translate(440,170)">
+            <circle r="22" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>
+            <circle r="14" fill="var(--red)"/>
+            <text x="0" y="4" text-anchor="middle" font-family="Shippori Mincho" font-size="14" fill="var(--paper)" font-weight="700">注</text>
+            <text class="num-txt" x="-30" y="-28" text-anchor="end" fill="var(--red)">N°05 · KEY</text>
+            <text class="lbl-txt" x="-30" y="-12" text-anchor="end" font-weight="700">自己注意</text>
+          </g>
+          <g class="node-g" transform="translate(540,100)">
+            <circle r="14" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>
+            <text class="num-txt" x="22" y="-18">N°06</text>
+            <text class="lbl-txt" x="22" y="-2">変形器</text>
+          </g>
+          <g class="node-g" transform="translate(540,240)">
+            <circle r="14" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>
+            <text class="num-txt" x="22" y="-18">N°07</text>
+            <text class="lbl-txt" x="22" y="-2">位置符号</text>
+          </g>
+          <!-- 休眠 -->
+          <g class="node-g" transform="translate(200,330)" opacity="0.55">
+            <circle r="11" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <text x="0" y="3" text-anchor="middle" font-family="Shippori Mincho" font-size="11" fill="var(--ink)">眠</text>
+            <text class="num-txt" x="-18" y="-18" text-anchor="end">DORMANT</text>
+            <text class="lbl-txt" x="-18" y="-2" text-anchor="end">古典</text>
+          </g>
+
+          <!-- 装饰：右下角题字 -->
+          <text x="570" y="370" text-anchor="end" font-family="Shippori Mincho" font-size="10" letter-spacing="0.3em" fill="var(--ink)">— 画 師 自 學 —</text>
+        </svg>
+        <div class="map-corner">葛飾 北斎 風</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span class="nm">學 者 之 姿</span>
+        <span class="meta">v.3.2 · 二刻前</span>
+      </div>
+      <div class="radar-body">
+        <svg class="radar-svg" viewBox="-100 -100 200 200">
+          <g>
+            <polygon points="0,-78 67,-39 67,39 0,78 -67,39 -67,-39" fill="none" stroke="var(--ink)" stroke-width="2"/>
+            <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill="none" stroke="var(--ink)" stroke-width="1.5" opacity="0.4"/>
+            <polygon points="0,-39 33,-19 33,19 0,39 -33,19 -33,-19" fill="none" stroke="var(--ink)" stroke-width="1.5" opacity="0.4"/>
+            <line x1="0" y1="-78" x2="0" y2="78" stroke="var(--ink)" stroke-width="1.5"/>
+            <line x1="-67" y1="-39" x2="67" y2="39" stroke="var(--ink)" stroke-width="1.5"/>
+            <line x1="-67" y1="39" x2="67" y2="-39" stroke="var(--ink)" stroke-width="1.5"/>
+          </g>
+          <polygon points="0,-60 50,-29 50,22 0,52 -45,26 -55,-32" fill="var(--indigo)" fill-opacity="0.45" stroke="var(--ink)" stroke-width="2"/>
+          <circle cx="0" cy="-60" r="3.5" fill="var(--ink)"/>
+          <circle cx="50" cy="-29" r="3.5" fill="var(--ink)"/>
+          <circle cx="50" cy="22" r="3.5" fill="var(--ink)"/>
+          <circle cx="0" cy="52" r="3.5" fill="var(--ink)"/>
+          <circle cx="-45" cy="26" r="3.5" fill="var(--ink)"/>
+          <circle cx="-55" cy="-32" r="3.5" fill="var(--ink)"/>
+          <!-- 中心朱印 -->
+          <circle r="6" fill="var(--red)"/>
+        </svg>
+        <div class="rb-list">
+          <div class="rb r1 feature"><span class="lbl">理解</span><span class="bar"></span><span class="v">78</span></div>
+          <div class="rb r2"><span class="lbl">推理</span><span class="bar"></span><span class="v">62</span></div>
+          <div class="rb r3"><span class="lbl">表現</span><span class="bar"></span><span class="v">55</span></div>
+          <div class="rb r4 feature"><span class="lbl">応用</span><span class="bar"></span><span class="v">70</span></div>
+          <div class="rb r5"><span class="lbl">転移</span><span class="bar"></span><span class="v">74</span></div>
+          <div class="rb r6"><span class="lbl">創造</span><span class="bar"></span><span class="v">48</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右 -->
+  <section class="right">
+    <div class="panel cal">
+      <div class="panel-title">
+        <span class="nm">七 月 之 暦</span>
+        <span class="meta">× 32 日 連続</span>
+      </div>
+      <div class="cal-body">
+        <div class="cal-grid-wrap">
+          <div class="cal-grid">
+            <div class="cal-h">月</div><div class="cal-h">火</div><div class="cal-h">水</div>
+            <div class="cal-h">木</div><div class="cal-h">金</div><div class="cal-h">土</div><div class="cal-h">日</div>
+            <div class="cal-c empty"></div><div class="cal-c empty"></div>
+            <div class="cal-c h1"><span>1</span><span class="heat">░</span></div>
+            <div class="cal-c h2"><span>2</span><span class="heat">▒</span></div>
+            <div class="cal-c h1"><span>3</span><span class="heat">▒</span></div>
+            <div class="cal-c h3"><span>4</span><span class="heat">▓</span></div>
+            <div class="cal-c h2"><span>5</span><span class="heat">▒</span></div>
+            <div class="cal-c h3"><span>6</span><span class="heat">▓</span></div>
+            <div class="cal-c h3"><span>7</span><span class="heat">▓</span></div>
+            <div class="cal-c h3"><span>8</span><span class="heat">▓</span></div>
+            <div class="cal-c h4"><span>9</span><span class="heat">█</span></div>
+            <div class="cal-c is-today">
+              <span>10</span>
+              <span class="heat">█</span>
+              <span class="stamp-mark">今</span>
+            </div>
+            <div class="cal-c future"><span>11</span></div>
+            <div class="cal-c future"><span>12</span></div>
+          </div>
+        </div>
+        <div class="cal-side">
+          <div class="cal-stat">
+            <div class="l">月 計</div>
+            <div class="v">4 時 32 分</div>
+            <div class="seal">月</div>
+          </div>
+          <div class="cal-stat">
+            <div class="l">連 続</div>
+            <div class="v" style="color:var(--red)">× 32 日</div>
+          </div>
+          <div class="checkin-btn" id="ckBtn">今 日 之 打 印</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span class="nm">今 日 之 業</span>
+        <span class="meta">2 / 4 進行中</span>
+      </div>
+      <div class="tasks">
+        <div class="task-row done">
+          <span class="ck">済</span><span class="ic">📖</span><span class="ttl">自己注意 · 第 三 章</span><div class="bar"></div><span class="eta">12 分</span>
+        </div>
+        <div class="task-row doing t1">
+          <span class="ck">進</span><span class="ic">🤖</span><span class="ttl">Q / K / V 三 位 一 体</span><div class="bar"></div><span class="eta">~ 8 分</span>
+        </div>
+        <div class="task-row doing t2">
+          <span class="ck">進</span><span class="ic">💻</span><span class="ttl">実装 · 尺度付き内積</span><div class="bar"></div><span class="eta">~ 15 分</span>
+        </div>
+        <div class="task-row">
+          <span class="ck"></span><span class="ic">🎯</span><span class="ttl">挑戦 · 注意 会 話</span><div class="bar"></div><span class="eta">~ 20 分</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="dock">
+  <div class="dock-item active"><div class="ic">図</div><span>宝の地図</span></div>
+  <div class="dock-item"><div class="ic">話</div><span>対 話</span></div>
+  <div class="dock-item"><div class="ic">書</div><span>講 義</span></div>
+  <div class="dock-item"><div class="ic">習</div><span>演 習</span></div>
+  <div class="dock-item"><div class="ic">符</div><span>符 号</span></div>
+  <div class="dock-item"><div class="ic">筆</div><span>筆 記</span></div>
+  <div class="dock-item"><div class="ic">枝</div><span>枝 図</span></div>
+  <div class="dock-item"><div class="ic">蔵</div><span>蔵 庫</span></div>
+  <div class="dock-item"><div class="ic">表</div><span>表 盤</span></div>
+</nav>
+
+<aside class="chat">
+  <div class="chat-title">
+    <span class="seal-mini">書</span>
+    <span class="nm">小書 · 浮世絵風</span>
+    <span class="tag">常 駐</span>
+  </div>
+  <div class="chat-body" id="cb">
+    <div class="bubble ai">半 時 程 読 み 続 け て お り ま す 。 Q / K / V の 直 感 に つ い て 、 少 し お 手 伝 い で き ま し ょ う か ?</div>
+  </div>
+  <div class="chat-input">
+    <input placeholder="声 を 掛 け る…" id="ci">
+    <button onclick="sc()">送</button>
+  </div>
+</aside>
+
+<script>
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      b.parentElement.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+
+  const ckBtn = document.getElementById('ckBtn');
+  let ckd = false;
+  ckBtn.addEventListener('click', () => {
+    ckd = !ckd;
+    ckBtn.classList.toggle('done', ckd);
+    ckBtn.textContent = ckd ? '印 を 押 し ま し た · 23 分' : '今 日 之 打 印';
+  });
+
+  function sc() {
+    const i = document.getElementById('ci');
+    const v = i.value.trim();
+    if (!v) return;
+    const cb = document.getElementById('cb');
+    const u = document.createElement('div');
+    u.className = 'bubble user'; u.textContent = v;
+    cb.appendChild(u);
+    i.value = '';
+    cb.scrollTop = cb.scrollHeight;
+    setTimeout(() => {
+      const r = document.createElement('div');
+      r.className = 'bubble ai';
+      r.textContent = 'Q は 問 い 、 K は 鍵 、 V は 値 。 三 位 一 体 で は な い よ り 、 三 脚 の 如 く で す 。';
+      cb.appendChild(r);
+      cb.scrollTop = cb.scrollHeight;
+    }, 600);
+  }
+  document.getElementById('ci').addEventListener('keydown', e => e.key === 'Enter' && sc());
+</script>
+</body>
+</html>

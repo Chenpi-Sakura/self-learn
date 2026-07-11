@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Style 04 · Lab Field Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:   #F0E9D2;   /* 旧笔记本纸 */
+    --ink:     #2C2C2C;   /* 钢笔墨 */
+    --ink-soft:#2C2C2C;
+    --red:     #8B0000;   /* 红蜡封 */
+    --green:   #5C7A4F;   /* 叶绿 */
+    --yellow:  #D4B254;   /* 胶带黄 */
+    --brown:   #8B4513;   /* 皮革棕 */
+    --fade:    rgba(44,44,44,0.55);
+    --hair:    rgba(44,44,44,0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 14px;
+    line-height: 1.6;
+    /* 横线笔记本底纹 */
+    background-image:
+      linear-gradient(rgba(44,44,44,0.08) 1px, transparent 1px);
+    background-size: 100% 28px;
+    background-position: 0 14px;
+  }
+
+  /* ─── 胶带装饰 ─── */
+  .tape {
+    position: absolute;
+    background: var(--yellow);
+    opacity: 0.7;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .tape-v { width: 80px; height: 22px; transform: rotate(-30deg); }
+  .tape-h { width: 90px; height: 20px; transform: rotate(5deg); }
+
+  /* ─── 顶部：手写标题 + 标本贴纸 ─── */
+  .top {
+    padding: 18px 36px 14px;
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 16px;
+    align-items: center;
+    border-bottom: 1.5px dashed var(--ink);
+  }
+  .pin {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--brown);
+    position: relative;
+    box-shadow: inset 0 0 0 4px var(--paper), 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .pin::after {
+    content: '';
+    position: absolute;
+    top: 4px; left: 50%;
+    width: 8px; height: 8px;
+    background: var(--ink);
+    border-radius: 50%;
+    transform: translateX(-50%);
+  }
+  .title h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1;
+    transform: rotate(-1deg);
+  }
+  .title h1 span { color: var(--red); text-decoration: underline wavy var(--red); text-underline-offset: 4px; }
+  .title .sub {
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    color: var(--fade);
+    margin-top: 2px;
+    transform: rotate(-0.5deg);
+    display: inline-block;
+  }
+  .specimen {
+    padding: 8px 14px;
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    transform: rotate(2deg);
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    box-shadow: 2px 2px 0 var(--ink);
+    position: relative;
+  }
+  .specimen::before {
+    content: 'SPECIMEN N°047';
+    position: absolute;
+    top: -8px; left: 8px;
+    background: var(--paper);
+    padding: 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+  .specimen .row { display: flex; justify-content: space-between; gap: 16px; }
+  .specimen .lbl { color: var(--fade); }
+
+  /* ─── 工具条：印章按钮 ─── */
+  .tools {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 36px;
+    border-bottom: 1.5px dashed var(--ink);
+    align-items: center;
+  }
+  .stamp {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: 'Caveat', cursive;
+    transform: rotate(-6deg);
+    transition: all .15s;
+    margin-right: -10px;
+  }
+  .stamp:hover { transform: rotate(-6deg) scale(1.08); background: var(--ink); color: var(--paper); }
+  .stamp .ic { font-size: 20px; line-height: 1; }
+  .stamp .lbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-family: 'Courier Prime', monospace; }
+  .stamp.active { background: var(--red); color: var(--paper); border-color: var(--red); }
+
+  /* ─── 桌面 ─── */
+  .desktop {
+    display: grid;
+    grid-template-columns: minmax(380px, 1fr) minmax(440px, 1.5fr);
+    gap: 24px;
+    padding: 24px 36px;
+    height: calc(100vh - 220px - 90px);
+    min-height: 0;
+  }
+
+  /* 左：藏宝图 + 雷达 */
+  .left {
+    display: grid;
+    grid-template-rows: 1.6fr 1fr;
+    gap: 18px;
+    min-height: 0;
+  }
+  .card {
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 3px 3px 0 var(--ink);
+    padding: 0;
+  }
+  .card-title {
+    font-family: 'Caveat', cursive;
+    font-size: 24px;
+    padding: 6px 14px;
+    border-bottom: 1.5px dashed var(--ink);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .card-title .nm { font-weight: 700; }
+  .card-title .nm::before { content: '● '; color: var(--red); }
+  .card-title .meta { font-family: 'Courier Prime', monospace; font-size: 10px; color: var(--fade); letter-spacing: 0.08em; }
+
+  /* 藏宝图 */
+  .map-body { padding: 8px; height: calc(100% - 40px); }
+  .map-svg { width: 100%; height: 100%; display: block; }
+  .leaf {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    font-family: 'Caveat', cursive;
+    font-size: 14px;
+    color: var(--green);
+    transform: rotate(-15deg);
+  }
+
+  /* 节点：手绘风 + 标本钉 */
+  .node-g { transition: all .15s; cursor: pointer; }
+  .node-g:hover .pin-r { fill: var(--red); }
+  .node-g .label-txt {
+    font-family: 'Caveat', cursive;
+    font-size: 14px;
+    fill: var(--ink);
+  }
+  .node-g .num-txt {
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    fill: var(--fade);
+    letter-spacing: 0.1em;
+  }
+
+  /* 雷达：手绘风 + 圈点高亮 */
+  .radar-body {
+    padding: 12px;
+    height: calc(100% - 40px);
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    align-items: center;
+  }
+  .radar-svg { width: 140px; height: 140px; }
+  .radar-list { display: flex; flex-direction: column; gap: 6px; }
+  .rb {
+    display: grid;
+    grid-template-columns: 70px 1fr 30px;
+    gap: 8px;
+    align-items: center;
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    border-bottom: 1px dashed var(--hair);
+    padding: 2px 0;
+  }
+  .rb .lbl { font-weight: 600; }
+  .rb .bar { height: 8px; background: var(--paper-deep); border: 1px solid var(--ink); position: relative; }
+  .rb .bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--green);
+  }
+  .rb.r1 .bar::before { width: 78%; }
+  .rb.r2 .bar::before { width: 62%; background: var(--ink); }
+  .rb.r3 .bar::before { width: 55%; background: var(--ink); }
+  .rb.r4 .bar::before { width: 70%; background: var(--green); }
+  .rb.r5 .bar::before { width: 74%; background: var(--red); }
+  .rb.r6 .bar::before { width: 48%; background: var(--ink); }
+  .rb .v {
+    font-family: 'Courier Prime', monospace;
+    font-size: 11px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .rb .v::after { content: '%'; opacity: 0.6; font-size: 9px; }
+  .rb.feature .lbl::before { content: '●  '; color: var(--red); }
+  .rb.feature .v::before { content: '↑ '; color: var(--red); }
+
+  /* ─── 右：日历 + 任务 ─── */
+  .right { display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+  .cal-card { flex: 1.4; min-height: 0; }
+  .cal-body {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    height: calc(100% - 40px);
+  }
+  .cal-grid-wrap { padding: 12px; border-right: 1.5px dashed var(--ink); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; height: 100%; }
+  .cal-h {
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    text-align: center;
+    color: var(--fade);
+    border-bottom: 1.5px dashed var(--ink);
+    padding-bottom: 2px;
+  }
+  .cal-c {
+    border: 1px solid var(--hair);
+    padding: 4px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    background: var(--paper);
+  }
+  .cal-c.empty { background: transparent; border: none; }
+  .cal-c.future { opacity: 0.4; }
+  .cal-c.is-today {
+    background: var(--yellow);
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 2px var(--ink);
+  }
+  .cal-c .heat {
+    align-self: flex-end;
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .cal-c .wax-seal {
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 12px; height: 12px;
+    background: var(--red);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--paper);
+  }
+  .cal-side {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .cal-stat {
+    border: 1px solid var(--ink);
+    padding: 8px 10px;
+    background: var(--paper);
+    transform: rotate(-1deg);
+  }
+  .cal-stat .l {
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--fade);
+    text-transform: uppercase;
+  }
+  .cal-stat .v {
+    font-family: 'Caveat', cursive;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 2px;
+  }
+  .cal-stat:nth-child(2) { transform: rotate(0.5deg); }
+  .checkin-btn {
+    border: 2px solid var(--ink);
+    padding: 10px;
+    background: var(--red);
+    color: var(--paper);
+    font-family: 'Caveat', cursive;
+    font-size: 20px;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    transform: rotate(-2deg);
+    box-shadow: 2px 2px 0 var(--ink);
+    transition: all .15s;
+  }
+  .checkin-btn:hover { transform: rotate(-2deg) translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+  .checkin-btn.done { background: var(--green); }
+
+  /* 任务 */
+  .tasks-card { flex: 1; }
+  .task-row {
+    display: grid;
+    grid-template-columns: 24px 28px 1fr 80px 60px;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    border-bottom: 1px dashed var(--hair);
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+  }
+  .task-row.done .ttl { text-decoration: line-through; color: var(--fade); }
+  .task-row .ttl { color: var(--ink); }
+  .task-row .ic { font-size: 22px; }
+  .task-row .ck {
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier Prime', monospace;
+    font-size: 12px;
+  }
+  .task-row.done .ck { background: var(--green); color: var(--paper); }
+  .task-row.doing .ck { background: var(--yellow); }
+  .task-row .bar {
+    height: 6px;
+    background: var(--paper-deep);
+    border: 1px solid var(--ink);
+    position: relative;
+  }
+  .task-row .bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--ink);
+  }
+  .task-row.done .bar::before { width: 100%; }
+  .task-row.t1 .bar::before { width: 62%; background: var(--green); }
+  .task-row.t2 .bar::before { width: 30%; background: var(--brown); }
+  .task-row .eta { font-family: 'Courier Prime', monospace; font-size: 10px; color: var(--fade); text-align: right; }
+
+  /* ─── Dock ─── */
+  .dock {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 90px;
+    background: var(--brown);
+    color: var(--paper);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 10px;
+    box-shadow: 0 -3px 0 var(--ink);
+  }
+  .dock-label {
+    font-family: 'Caveat', cursive;
+    font-size: 22px;
+    color: var(--yellow);
+    margin-right: 12px;
+    transform: rotate(-2deg);
+  }
+  .dock-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: all .15s;
+    flex: 1;
+  }
+  .dock-item:hover { border-color: var(--yellow); transform: translateY(-3px); }
+  .dock-item.active { border-color: var(--paper); background: rgba(240,233,210,0.1); }
+  .dock-item .ic {
+    width: 32px; height: 32px;
+    border: 1.5px solid var(--paper);
+    background: var(--paper);
+    color: var(--brown);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Caveat', cursive;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .dock-item .nm {
+    font-family: 'Caveat', cursive;
+    font-size: 14px;
+    color: var(--paper);
+  }
+
+  /* ─── AI 浮窗：手写便签 ─── */
+  .chat {
+    position: fixed;
+    right: 24px;
+    bottom: 110px;
+    width: 320px;
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    z-index: 9999;
+    box-shadow: 4px 4px 0 var(--ink);
+    transform: rotate(-1deg);
+  }
+  .chat::before {
+    content: 'PINNED NOTE';
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    background: var(--paper);
+    padding: 0 6px;
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--fade);
+  }
+  .chat-title {
+    background: var(--paper-deep);
+    padding: 10px 14px;
+    border-bottom: 1.5px dashed var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-title .pin-mini {
+    width: 14px; height: 14px;
+    background: var(--red);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--paper);
+  }
+  .chat-title .nm {
+    font-family: 'Caveat', cursive;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .chat-title .tag {
+    margin-left: auto;
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    color: var(--fade);
+    letter-spacing: 0.1em;
+  }
+  .chat-body {
+    padding: 14px;
+    height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* 横线 */
+    background-image: linear-gradient(rgba(44,44,44,0.06) 1px, transparent 1px);
+    background-size: 100% 24px;
+  }
+  .bubble {
+    padding: 6px 10px;
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    line-height: 1.4;
+    max-width: 90%;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+  }
+  .bubble.ai { background: var(--yellow); transform: rotate(-0.5deg); }
+  .bubble.ai::before {
+    content: '—— 小书 写道 · ';
+    display: block;
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--fade);
+    margin-bottom: 2px;
+  }
+  .bubble.user {
+    align-self: flex-end;
+    background: var(--ink);
+    color: var(--paper);
+    transform: rotate(0.5deg);
+  }
+  .chat-input {
+    border-top: 1.5px dashed var(--ink);
+    display: flex;
+  }
+  .chat-input input {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+  .chat-input button {
+    padding: 8px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<header class="top">
+  <div class="pin"></div>
+  <div class="title">
+    <h1>Field Notes — <span>Self-Attention</span></h1>
+    <span class="sub">collected by xiaoming · 2026.07.10 · amazon basin of LLMs</span>
+  </div>
+  <div class="specimen">
+    <div class="row"><span class="lbl">ID</span><span>047-26</span></div>
+    <div class="row"><span class="lbl">LAT</span><span>+31.23°</span></div>
+    <div class="row"><span class="lbl">LON</span><span>+121.47°</span></div>
+    <div class="row"><span class="lbl">HABITAT</span><span>notebook</span></div>
+  </div>
+</header>
+
+<!-- 工具条（印章） -->
+<div class="tools">
+  <div style="display:flex;gap:8px">
+    <div class="stamp active"><span class="ic">⊙</span><span class="lbl">Master</span></div>
+    <div class="stamp"><span class="ic">◯</span><span class="lbl">Explore</span></div>
+    <div class="stamp"><span class="ic">📖</span><span class="lbl">Read</span></div>
+    <div class="stamp"><span class="ic">✏️</span><span class="lbl">Drill</span></div>
+    <div class="stamp"><span class="ic">💻</span><span class="lbl">Code</span></div>
+  </div>
+  <div style="font-family:'Caveat',cursive;font-size:20px;color:var(--ink);transform:rotate(-1deg)">
+    — pinned to my desk —
+  </div>
+</div>
+
+<main class="desktop">
+  <!-- 左：藏宝图 + 雷达 -->
+  <section class="left">
+    <div class="card">
+      <div class="tape tape-v" style="top:-8px;left:-12px"></div>
+      <div class="card-title">
+        <span class="nm">Map of Discoveries</span>
+        <span class="meta">14 sites · 2 dormant</span>
+      </div>
+      <div class="map-body">
+        <svg class="map-svg" viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">
+          <!-- 路径：手绘风（弯曲线条） -->
+          <g stroke="var(--ink)" stroke-width="1.5" fill="none" stroke-linecap="round">
+            <path d="M 100,80 Q 150,110 200,140" />
+            <path d="M 200,140 Q 270,120 320,100" />
+            <path d="M 200,140 Q 270,180 320,220" />
+            <path d="M 320,100 Q 380,135 440,170" />
+            <path d="M 320,220 Q 380,195 440,170" />
+            <path d="M 440,170 Q 490,140 540,100" />
+            <path d="M 440,170 Q 490,205 540,240" />
+          </g>
+          <g stroke="var(--ink)" stroke-width="1.2" fill="none" stroke-dasharray="4 4" stroke-linecap="round" opacity="0.55">
+            <path d="M 200,140 Q 200,230 200,320" />
+            <path d="M 200,320 Q 260,320 320,340" />
+          </g>
+
+          <!-- 节点：标本钉 + 手写标签 -->
+          <g class="node-g" transform="translate(100,80)">
+            <circle r="14" fill="var(--green)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="0" y="4" text-anchor="middle" font-family="Caveat" font-size="16" fill="var(--paper)" font-weight="700">✓</text>
+            <text class="num-txt" x="-10" y="-22" text-anchor="end">N°01</text>
+            <text class="label-txt" x="-10" y="-6" text-anchor="end">embed</text>
+          </g>
+          <g class="node-g" transform="translate(200,140)">
+            <circle r="14" fill="var(--green)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="0" y="4" text-anchor="middle" font-family="Caveat" font-size="16" fill="var(--paper)" font-weight="700">✓</text>
+            <text class="num-txt" x="-10" y="-22" text-anchor="end">N°02</text>
+            <text class="label-txt" x="-10" y="-6" text-anchor="end">recurrent</text>
+          </g>
+          <g class="node-g" transform="translate(320,100)">
+            <circle r="14" fill="var(--green)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="0" y="4" text-anchor="middle" font-family="Caveat" font-size="16" fill="var(--paper)" font-weight="700">✓</text>
+            <text class="num-txt" x="-10" y="-22" text-anchor="end">N°03</text>
+            <text class="label-txt" x="-10" y="-6" text-anchor="end">LSTM</text>
+          </g>
+          <g class="node-g" transform="translate(320,220)">
+            <circle r="16" fill="var(--yellow)" stroke="var(--red)" stroke-width="2"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Caveat" font-size="18" fill="var(--red)" font-weight="700">!</text>
+            <text class="num-txt" x="20" y="-22" fill="var(--red)">NOW</text>
+            <text class="label-txt" x="20" y="-6" fill="var(--red)" font-weight="700">GRU</text>
+          </g>
+          <!-- 关键节点：大圆 + 红蜡封 -->
+          <g class="node-g" transform="translate(440,170)">
+            <circle r="18" fill="var(--red)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="0" y="6" text-anchor="middle" font-family="Caveat" font-size="20" fill="var(--paper)" font-weight="700">§</text>
+            <text class="num-txt" x="-24" y="-26" text-anchor="end" fill="var(--red)">N°05 ★</text>
+            <text class="label-txt" x="-24" y="-10" text-anchor="end" font-weight="700">self-attention</text>
+          </g>
+          <g class="node-g" transform="translate(540,100)">
+            <circle r="14" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="0" y="3" text-anchor="middle" font-family="Caveat" font-size="14" fill="var(--ink)">○</text>
+            <text class="num-txt" x="20" y="-6">N°06</text>
+            <text class="label-txt" x="20" y="10">Transformer</text>
+          </g>
+          <g class="node-g" transform="translate(540,240)">
+            <circle r="14" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="0" y="3" text-anchor="middle" font-family="Caveat" font-size="14" fill="var(--ink)">○</text>
+            <text class="num-txt" x="20" y="-6">N°07</text>
+            <text class="label-txt" x="20" y="10">pos.enc</text>
+          </g>
+          <!-- 休眠 -->
+          <g class="node-g" transform="translate(200,320)" opacity="0.6">
+            <circle r="12" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="3 3"/>
+            <text x="0" y="4" text-anchor="middle" font-family="Caveat" font-size="14" fill="var(--ink)" font-style="italic">z</text>
+            <text class="num-txt" x="-18" y="-18" text-anchor="end">DORMANT</text>
+            <text class="label-txt" x="-18" y="-2" text-anchor="end" fill="var(--fade)">classical ML</text>
+          </g>
+        </svg>
+      </div>
+      <div class="leaf">~ field notes ~</div>
+    </div>
+
+    <div class="card">
+      <div class="tape tape-h" style="top:-6px;right:24px"></div>
+      <div class="card-title">
+        <span class="nm">Profile · Six Measures</span>
+        <span class="meta">v.3.2 · 2 min ago</span>
+      </div>
+      <div class="radar-body">
+        <svg class="radar-svg" viewBox="-100 -100 200 200">
+          <!-- 手绘圈层（不规则） -->
+          <ellipse cx="0" cy="0" rx="80" ry="78" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>
+          <ellipse cx="0" cy="0" rx="60" ry="58" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>
+          <ellipse cx="0" cy="0" rx="40" ry="38" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>
+          <line x1="0" y1="-78" x2="0" y2="78" stroke="var(--ink)" stroke-width="0.8" opacity="0.4"/>
+          <line x1="-78" y1="0" x2="78" y2="0" stroke="var(--ink)" stroke-width="0.8" opacity="0.4"/>
+          <line x1="-55" y1="-55" x2="55" y2="55" stroke="var(--ink)" stroke-width="0.8" opacity="0.4"/>
+          <line x1="-55" y1="55" x2="55" y2="-55" stroke="var(--ink)" stroke-width="0.8" opacity="0.4"/>
+          <!-- 数据多边形 -->
+          <polygon points="0,-62 48,-28 50,25 0,46 -50,28 -52,-32" fill="var(--green)" fill-opacity="0.25" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round"/>
+          <!-- 顶点圈点 -->
+          <circle cx="0" cy="-62" r="3" fill="var(--ink)"/>
+          <circle cx="48" cy="-28" r="3" fill="var(--ink)"/>
+          <circle cx="50" cy="25" r="3" fill="var(--ink)"/>
+          <circle cx="0" cy="46" r="3" fill="var(--ink)"/>
+          <circle cx="-50" cy="28" r="3" fill="var(--ink)"/>
+          <circle cx="-52" cy="-32" r="3" fill="var(--ink)"/>
+          <!-- 标签 -->
+          <text x="0" y="-90" text-anchor="middle" font-family="Caveat" font-size="14" fill="var(--ink)">und</text>
+          <text x="84" y="-26" font-family="Caveat" font-size="14" fill="var(--ink)">rzn</text>
+          <text x="84" y="32" font-family="Caveat" font-size="14" fill="var(--ink)">exp</text>
+          <text x="0" y="92" text-anchor="middle" font-family="Caveat" font-size="14" fill="var(--ink)">app</text>
+          <text x="-90" y="32" font-family="Caveat" font-size="14" fill="var(--ink)">trn</text>
+          <text x="-90" y="-26" font-family="Caveat" font-size="14" fill="var(--ink)">crt</text>
+        </svg>
+        <div class="radar-list">
+          <div class="rb r1 feature"><span class="lbl">und</span><span class="bar"></span><span class="v">78</span></div>
+          <div class="rb r2"><span class="lbl">rzn</span><span class="bar"></span><span class="v">62</span></div>
+          <div class="rb r3"><span class="lbl">exp</span><span class="bar"></span><span class="v">55</span></div>
+          <div class="rb r4 feature"><span class="lbl">app</span><span class="bar"></span><span class="v">70</span></div>
+          <div class="rb r5"><span class="lbl">trn</span><span class="bar"></span><span class="v">74</span></div>
+          <div class="rb r6"><span class="lbl">crt</span><span class="bar"></span><span class="v">48</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右 -->
+  <section class="right">
+    <div class="card cal-card">
+      <div class="tape tape-v" style="top:-10px;right:-10px;transform:rotate(20deg)"></div>
+      <div class="card-title">
+        <span class="nm">Almanac · July MMXXVI</span>
+        <span class="meta">streak ★ 32 days</span>
+      </div>
+      <div class="cal-body">
+        <div class="cal-grid-wrap">
+          <div class="cal-grid">
+            <div class="cal-h">M</div><div class="cal-h">T</div><div class="cal-h">W</div>
+            <div class="cal-h">T</div><div class="cal-h">F</div><div class="cal-h">S</div><div class="cal-h">S</div>
+            <div class="cal-c empty"></div><div class="cal-c empty"></div>
+            <div class="cal-c"><span>1</span><span class="heat" style="color:var(--green)">░</span></div>
+            <div class="cal-c"><span>2</span><span class="heat" style="color:var(--ink)">▒</span></div>
+            <div class="cal-c"><span>3</span><span class="heat" style="color:var(--ink)">▓</span></div>
+            <div class="cal-c"><span>4</span><span class="heat" style="color:var(--ink)">█</span></div>
+            <div class="cal-c"><span>5</span><span class="heat" style="color:var(--green)">▒</span></div>
+            <div class="cal-c"><span>6</span><span class="heat" style="color:var(--ink)">█</span></div>
+            <div class="cal-c"><span>7</span><span class="heat" style="color:var(--green)">▓</span></div>
+            <div class="cal-c"><span>8</span><span class="heat" style="color:var(--ink)">▓</span></div>
+            <div class="cal-c"><span>9</span><span class="heat" style="color:var(--ink)">█</span></div>
+            <div class="cal-c is-today">
+              <span>10</span>
+              <span class="heat" style="color:var(--ink)">█</span>
+              <span class="wax-seal"></span>
+            </div>
+            <div class="cal-c future"><span>11</span></div>
+            <div class="cal-c future"><span>12</span></div>
+          </div>
+        </div>
+        <div class="cal-side">
+          <div class="cal-stat">
+            <div class="l">month Σ</div>
+            <div class="v">4h 32m</div>
+          </div>
+          <div class="cal-stat">
+            <div class="l">streak</div>
+            <div class="v" style="color:var(--red)">× 32 d</div>
+          </div>
+          <div class="checkin-btn" id="ckBtn">~ check in ~</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card tasks-card">
+      <div class="card-title">
+        <span class="nm">Today's Tasks</span>
+        <span class="meta">2 / 4 in progress</span>
+      </div>
+      <div class="task-row done">
+        <span class="ck">✓</span><span class="ic">📖</span><span class="ttl">read: self-attention §03</span><div class="bar"></div><span class="eta">12'</span>
+      </div>
+      <div class="task-row doing t1">
+        <span class="ck">▷</span><span class="ic">🤖</span><span class="ttl">drill: Q/K/V trinity</span><div class="bar"></div><span class="eta">~8'</span>
+      </div>
+      <div class="task-row doing t2">
+        <span class="ck">▷</span><span class="ic">💻</span><span class="ttl">implement: scaled dot-prod</span><div class="bar"></div><span class="eta">~15'</span>
+      </div>
+      <div class="task-row">
+        <span class="ck"></span><span class="ic">🎯</span><span class="ttl">challenge: an attention chat</span><div class="bar"></div><span class="eta">~20'</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="dock">
+  <div class="dock-label">— bag —</div>
+  <div class="dock-item active"><div class="ic">M</div><span class="nm">Map</span></div>
+  <div class="dock-item"><div class="ic">A</div><span class="nm">AI</span></div>
+  <div class="dock-item"><div class="ic">D</div><span class="nm">Doc</span></div>
+  <div class="dock-item"><div class="ic">E</div><span class="nm">Ex.</span></div>
+  <div class="dock-item"><div class="ic">C</div><span class="nm">Code</span></div>
+  <div class="dock-item"><div class="ic">N</div><span class="nm">Note</span></div>
+  <div class="dock-item"><div class="ic">M</div><span class="nm">Mind</span></div>
+  <div class="dock-item"><div class="ic">R</div><span class="nm">Res</span></div>
+  <div class="dock-item"><div class="ic">D</div><span class="nm">Dash</span></div>
+</nav>
+
+<aside class="chat">
+  <div class="chat-title">
+    <span class="pin-mini"></span>
+    <span class="nm">小书 · note</span>
+    <span class="tag">ALWAYS</span>
+  </div>
+  <div class="chat-body" id="cb">
+    <div class="bubble ai">— you've been reading 30 min. want a question on Q/K/V intuition?</div>
+  </div>
+  <div class="chat-input">
+    <input placeholder="write a note…" id="ci">
+    <button onclick="sc()">→</button>
+  </div>
+</aside>
+
+<script>
+  // 印章切换
+  document.querySelectorAll('.stamp').forEach(s => {
+    s.addEventListener('click', () => {
+      s.parentElement.querySelectorAll('.stamp').forEach(x => x.classList.remove('active'));
+      s.classList.add('active');
+    });
+  });
+
+  // 打卡
+  const ckBtn = document.getElementById('ckBtn');
+  let ckd = false;
+  ckBtn.addEventListener('click', () => {
+    ckd = !ckd;
+    ckBtn.classList.toggle('done', ckd);
+    ckBtn.textContent = ckd ? '✓ checked · 23\'' : '~ check in ~';
+  });
+
+  // chat
+  function sc() {
+    const i = document.getElementById('ci');
+    const v = i.value.trim();
+    if (!v) return;
+    const cb = document.getElementById('cb');
+    const u = document.createElement('div');
+    u.className = 'bubble user';
+    u.textContent = v;
+    cb.appendChild(u);
+    i.value = '';
+    cb.scrollTop = cb.scrollHeight;
+    setTimeout(() => {
+      const r = document.createElement('div');
+      r.className = 'bubble ai';
+      r.textContent = '— think of Q as the question, K as the index, V as the payload.';
+      cb.appendChild(r);
+      cb.scrollTop = cb.scrollHeight;
+    }, 600);
+  }
+  document.getElementById('ci').addEventListener('keydown', e => e.key === 'Enter' && sc());
+</script>
+</body>
+</html>

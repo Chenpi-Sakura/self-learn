@@ -1,0 +1,30 @@
+.dock {
+  position: fixed;
+  left: 50%; bottom: 20px;
+  transform: translateX(-50%);
+  height: var(--dock-h);
+  padding: 0 14px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-2);
+  display: flex; align-items: center;
+  gap: 4px;
+  z-index: 100;
+}
+.dock-item {
+  width: 60px; height: 64px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px;
+  border-radius: var(--r-card);
+  cursor: pointer;
+  transition: background 160ms ease;
+  color: var(--mute);
+}
+.dock-item:hover { background: var(--hover); color: var(--ink); }
+.dock-item.active { background: var(--indigo-soft); color: var(--indigo); }
+.dock-item .ic { font-size: 22px; line-height: 1; }
+.dock-item .lb { font-size: 12px; letter-spacing: 0.06em; }

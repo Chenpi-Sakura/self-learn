@@ -1,0 +1,47 @@
+.win {
+  position: absolute;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: box-shadow 200ms ease, transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.win.dragging { transition: none; }
+}
+.win.focused { box-shadow: var(--shadow-2); }
+.win.minimized { opacity: 0; pointer-events: none; }
+.win-title {
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  cursor: grab;
+  user-select: none;
+  background: var(--card);
+}
+.win-title:active { cursor: grabbing; }
+.win-title .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border);
+}
+.win-title .dot.key { background: var(--vermilion); }
+.win-title .name {
+  flex: 1;
+  font-size: 18px;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.win-title .ctrls { display: flex; gap: 6px; }
+.win-title .ctrl {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-btn);
+  color: var(--mute);
+  font-size: 12px;
+}
+.win-title .ctrl:hover { background: var(--hover); color: var(--ink); }
+.win-title .ctrl.close:hover { background: var(--vermilion); color: var(--card); }
+.win-body { flex: 1; overflow: auto; padding: 16px; }

@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Style 07 · Swiss International Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --white:  #FFFFFF;
+    --ink:    #000000;
+    --red:    #FF0000;
+    --mute:   #767676;
+    --hair:   #E5E5E5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--white);
+    color: var(--ink);
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  /* ─── 12 列网格底（瑞士派标志） ─── */
+  .grid-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+    padding: 0 32px;
+  }
+  .grid-overlay div {
+    background: rgba(255,0,0,0.04);
+    border-left: 1px solid rgba(255,0,0,0.1);
+    border-right: 1px solid rgba(255,0,0,0.1);
+  }
+
+  /* ─── 顶部：水平基线 + 大字号 ─── */
+  .top {
+    height: 64px;
+    border-bottom: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 32px;
+    position: relative;
+    z-index: 2;
+    background: var(--white);
+  }
+  .top-l {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo-block {
+    width: 36px; height: 36px;
+    background: var(--ink);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: -0.04em;
+  }
+  .brand-name {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.04em;
+  }
+  .top-c {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 28px;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  .top-c .accent { color: var(--red); }
+  .top-r {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .top-r .time { font-weight: 700; font-size: 18px; }
+  .top-r .sep { width: 1px; height: 18px; background: var(--ink); }
+  .top-r .user { display: flex; align-items: center; gap: 6px; }
+  .top-r .avatar {
+    width: 28px; height: 28px;
+    background: var(--ink);
+    color: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+  }
+
+  /* 模式 + 布局：基线对位 */
+  .tools {
+    height: 48px;
+    border-bottom: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+    position: relative;
+    z-index: 2;
+    background: var(--white);
+  }
+  .tool {
+    border-right: 1px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 16px;
+    cursor: pointer;
+    transition: all .1s;
+    position: relative;
+  }
+  .tool:last-child { border-right: none; }
+  .tool:hover { background: var(--hair); }
+  .tool.active { background: var(--ink); color: var(--white); }
+  .tool .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--mute);
+    letter-spacing: 0.04em;
+  }
+  .tool.active .num { color: rgba(255,255,255,0.6); }
+  .tool .lbl {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .tool.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 3px;
+    background: var(--red);
+  }
+
+  /* ─── 桌面 ─── */
+  .desktop {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    height: calc(100vh - 112px - 72px);
+    position: relative;
+    z-index: 2;
+  }
+  .left {
+    border-right: 2px solid var(--ink);
+    display: grid;
+    grid-template-rows: 7fr 5fr;
+    background: var(--white);
+  }
+  .panel {
+    padding: 24px;
+    position: relative;
+  }
+  .panel + .panel { border-top: 2px solid var(--ink); }
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 8px;
+  }
+  .panel-header .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .panel-header .nm {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .panel-header .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--mute);
+  }
+
+  /* 藏宝图 */
+  .map-area {
+    flex: 1;
+    height: calc(100% - 60px);
+    position: relative;
+  }
+  .map-svg { width: 100%; height: 100%; display: block; }
+
+  /* 节点：纯黑方块 */
+  .node-g { transition: all .1s; }
+  .node-g:hover .node-rect { fill: var(--red); }
+  .node-g .lbl {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .node-g .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  /* 雷达 */
+  .radar-area {
+    flex: 1;
+    height: calc(100% - 60px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .radar-svg { width: 100%; height: 100%; max-height: 220px; }
+  .rb-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .rb {
+    display: grid;
+    grid-template-columns: 80px 1fr 36px;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--ink);
+    font-family: 'Archivo', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .rb .bar { height: 8px; background: var(--hair); position: relative; }
+  .rb .bar::before { content: ''; position: absolute; inset: 0; background: var(--ink); }
+  .rb.r1 .bar::before { width: 78%; }
+  .rb.r2 .bar::before { width: 62%; }
+  .rb.r3 .bar::before { width: 55%; }
+  .rb.r4 .bar::before { width: 70%; background: var(--red); }
+  .rb.r5 .bar::before { width: 74%; }
+  .rb.r6 .bar::before { width: 48%; }
+  .rb .v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: right;
+  }
+  .rb.feature .v { color: var(--red); }
+
+  /* 右 */
+  .right {
+    display: grid;
+    grid-template-rows: 7fr 5fr;
+    background: var(--white);
+  }
+  .cal-area { padding: 24px; display: flex; flex-direction: column; }
+  .cal-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+    margin-top: 16px;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-top: 1px solid var(--ink);
+    border-left: 1px solid var(--ink);
+  }
+  .cal-h {
+    background: var(--ink);
+    color: var(--white);
+    padding: 6px 0;
+    text-align: center;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    border-right: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+  }
+  .cal-c {
+    aspect-ratio: 1;
+    background: var(--white);
+    border-right: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    position: relative;
+  }
+  .cal-c.empty { background: var(--hair); }
+  .cal-c.future { opacity: 0.35; }
+  .cal-c.is-today {
+    background: var(--red);
+    color: var(--white);
+  }
+  .cal-c .heat {
+    align-self: flex-end;
+    font-family: 'Archivo', sans-serif;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .cal-c.is-today .heat { color: var(--white); }
+
+  .cal-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--ink);
+  }
+  .cal-stat {
+    flex: 1;
+    padding: 12px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .cal-stat:last-child { border-bottom: none; }
+  .cal-stat .l {
+    font-family: 'Archivo', sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    color: var(--mute);
+    text-transform: uppercase;
+  }
+  .cal-stat .v {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    font-size: 36px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .cal-stat.red { background: var(--red); color: var(--white); }
+  .cal-stat.red .l { color: var(--white); }
+  .cal-stat.red .v { color: var(--white); }
+  #ckBtn {
+    flex: 1;
+    border-bottom: 1px solid var(--ink);
+    padding: 12px;
+    cursor: pointer;
+    background: var(--white);
+    transition: all .1s;
+  }
+  #ckBtn:hover { background: var(--ink); color: var(--white); }
+  #ckBtn.active { background: var(--ink); color: var(--white); }
+  #ckBtn .l { font-family: 'Archivo'; font-weight: 800; font-size: 10px; letter-spacing: 0.16em; }
+  #ckBtn .v { font-family: 'Archivo'; font-weight: 900; font-size: 28px; }
+
+  /* 任务 */
+  .task-area { padding: 24px; border-top: 2px solid var(--ink); }
+  .task-list { margin-top: 12px; }
+  .task-row {
+    display: grid;
+    grid-template-columns: 28px 1fr 100px 50px;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hair);
+  }
+  .task-row.done .ttl { color: var(--mute); text-decoration: line-through; }
+  .task-row .ck {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Archivo'; font-weight: 900; font-size: 11px;
+    color: var(--ink);
+  }
+  .task-row.done .ck { background: var(--ink); color: var(--white); border-color: var(--ink); }
+  .task-row.doing .ck { background: var(--red); color: var(--white); border-color: var(--red); }
+  .task-row .ttl {
+    font-family: 'Archivo';
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+  }
+  .task-row .bar {
+    height: 4px;
+    background: var(--hair);
+    position: relative;
+  }
+  .task-row .bar::before { content: ''; position: absolute; inset: 0; background: var(--ink); }
+  .task-row.done .bar::before { width: 100%; }
+  .task-row.t1 .bar::before { width: 62%; background: var(--red); }
+  .task-row.t2 .bar::before { width: 30%; }
+  .task-row .eta {
+    font-family: 'JetBrains Mono';
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  /* ─── Dock ─── */
+  .dock {
+    height: 72px;
+    border-top: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    background: var(--white);
+    position: relative;
+    z-index: 2;
+  }
+  .dock-item {
+    border-right: 1px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 8px;
+    cursor: pointer;
+    transition: all .1s;
+    position: relative;
+  }
+  .dock-item:last-child { border-right: none; }
+  .dock-item:hover { background: var(--hair); }
+  .dock-item.active { background: var(--ink); color: var(--white); }
+  .dock-item .num {
+    font-family: 'JetBrains Mono';
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    color: var(--mute);
+  }
+  .dock-item.active .num { color: rgba(255,255,255,0.6); }
+  .dock-item .nm {
+    font-family: 'Archivo';
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .dock-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--red);
+  }
+
+  /* ─── AI 浮窗 ─── */
+  .chat {
+    position: fixed;
+    right: 32px;
+    bottom: 96px;
+    width: 340px;
+    background: var(--white);
+    border: 2px solid var(--ink);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-title {
+    background: var(--ink);
+    color: var(--white);
+    padding: 10px 14px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    border-bottom: 2px solid var(--ink);
+  }
+  .chat-title .nm {
+    font-family: 'Archivo';
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .chat-title .nm::before {
+    content: '— ';
+    color: var(--red);
+  }
+  .chat-title .tag {
+    font-family: 'JetBrains Mono';
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    background: var(--red);
+    color: var(--white);
+    padding: 2px 6px;
+  }
+  .chat-body {
+    padding: 14px;
+    height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .bubble {
+    padding: 8px 12px;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    border: 1px solid var(--ink);
+  }
+  .bubble.ai {
+    background: var(--white);
+    border-left: 4px solid var(--ink);
+  }
+  .bubble.ai::before {
+    content: 'ASSISTANT · ';
+    font-family: 'Archivo';
+    font-weight: 800;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--red);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .bubble.user {
+    background: var(--ink);
+    color: var(--white);
+    align-self: flex-end;
+    border-color: var(--ink);
+  }
+  .bubble.user::before {
+    content: 'YOU · ';
+    font-family: 'Archivo';
+    font-weight: 800;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.6);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .chat-input {
+    border-top: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr 56px;
+  }
+  .chat-input input {
+    padding: 10px 14px;
+    font-family: 'Inter Tight';
+    font-size: 13px;
+    background: var(--white);
+    border: none;
+    outline: none;
+  }
+  .chat-input button {
+    background: var(--red);
+    color: var(--white);
+    font-family: 'Archivo';
+    font-weight: 900;
+    font-size: 13px;
+    border-left: 2px solid var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-overlay"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+
+<!-- 顶部 -->
+<header class="top">
+  <div class="top-l">
+    <div class="logo-block">S</div>
+    <div class="brand-name">SELFLEARN / 02</div>
+  </div>
+  <div class="top-c">SYSTEM <span class="accent">/</span> ACTIVE</div>
+  <div class="top-r">
+    <span class="num">v3.2.0</span>
+    <span class="sep"></span>
+    <span class="time">14:32:08</span>
+    <span class="sep"></span>
+    <span class="user"><span class="avatar">M</span>XIAOMING</span>
+  </div>
+</header>
+
+<!-- 模式 + 布局 -->
+<div class="tools">
+  <div class="tool active" data-m="0"><span class="num">A1 · MODE</span><span class="lbl">MASTER</span></div>
+  <div class="tool" data-m="1"><span class="num">A2 · MODE</span><span class="lbl">EXPLORE</span></div>
+  <div class="tool" data-l="0"><span class="num">B1 · LAYOUT</span><span class="lbl">READING</span></div>
+  <div class="tool active" data-l="1"><span class="num">B2 · LAYOUT</span><span class="lbl">PRACTICE</span></div>
+  <div class="tool" data-l="2"><span class="num">B3 · LAYOUT</span><span class="lbl">CODING</span></div>
+  <div class="tool" data-l="3"><span class="num">B4 · LAYOUT</span><span class="lbl">DASHBOARD</span></div>
+</div>
+
+<main class="desktop">
+  <!-- 左 -->
+  <section class="left">
+    <div class="panel" style="display:flex;flex-direction:column">
+      <div class="panel-header">
+        <span class="num">01 / TREASURE MAP</span>
+        <span class="nm">PATH</span>
+        <span class="meta">14 NODES · 02 DORMANT</span>
+      </div>
+      <div class="map-area">
+        <svg class="map-svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid meet">
+          <!-- 粗黑直线（瑞士派：纯几何） -->
+          <g stroke="var(--ink)" stroke-width="2" fill="none">
+            <line x1="80" y1="80" x2="200" y2="140"/>
+            <line x1="200" y1="140" x2="320" y2="100"/>
+            <line x1="200" y1="140" x2="320" y2="220"/>
+            <line x1="320" y1="100" x2="440" y2="170"/>
+            <line x1="320" y1="220" x2="440" y2="170"/>
+            <line x1="440" y1="170" x2="540" y2="100"/>
+            <line x1="440" y1="170" x2="540" y2="240"/>
+          </g>
+          <g stroke="var(--ink)" stroke-width="1" stroke-dasharray="4 4" opacity="0.4">
+            <line x1="200" y1="140" x2="200" y2="320"/>
+            <line x1="200" y1="320" x2="320" y2="320"/>
+          </g>
+
+          <!-- 节点：统一 32×32 纯黑方块 -->
+          <g class="node-g" transform="translate(80,80)">
+            <rect class="node-rect" x="-16" y="-16" width="32" height="32" fill="var(--ink)"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="14" fill="var(--white)">01</text>
+            <text class="lbl" x="0" y="34" text-anchor="middle" fill="var(--ink)">EMBED</text>
+          </g>
+          <g class="node-g" transform="translate(200,140)">
+            <rect class="node-rect" x="-16" y="-16" width="32" height="32" fill="var(--ink)"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="14" fill="var(--white)">02</text>
+            <text class="lbl" x="0" y="34" text-anchor="middle" fill="var(--ink)">RNN</text>
+          </g>
+          <g class="node-g" transform="translate(320,100)">
+            <rect class="node-rect" x="-16" y="-16" width="32" height="32" fill="var(--ink)"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="14" fill="var(--white)">03</text>
+            <text class="lbl" x="0" y="34" text-anchor="middle" fill="var(--ink)">LSTM</text>
+          </g>
+          <!-- 当前：红色实心 -->
+          <g class="node-g" transform="translate(320,220)">
+            <rect class="node-rect" x="-16" y="-16" width="32" height="32" fill="var(--red)"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="14" fill="var(--white)">04</text>
+            <text class="lbl" x="0" y="34" text-anchor="middle" fill="var(--red)">GRU · NOW</text>
+          </g>
+          <!-- 关键：更大 + 红描边 -->
+          <g class="node-g" transform="translate(440,170)">
+            <rect class="node-rect" x="-20" y="-20" width="40" height="40" fill="var(--white)" stroke="var(--red)" stroke-width="3"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="16" fill="var(--ink)">05</text>
+            <text class="lbl" x="0" y="40" text-anchor="middle" fill="var(--red)">★ ATTENTION</text>
+          </g>
+          <g class="node-g" transform="translate(540,100)">
+            <rect class="node-rect" x="-16" y="-16" width="32" height="32" fill="var(--ink)"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="14" fill="var(--white)">06</text>
+            <text class="lbl" x="0" y="34" text-anchor="middle" fill="var(--ink)">FORMER</text>
+          </g>
+          <g class="node-g" transform="translate(540,240)">
+            <rect class="node-rect" x="-16" y="-16" width="32" height="32" fill="var(--ink)"/>
+            <text x="0" y="5" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="14" fill="var(--white)">07</text>
+            <text class="lbl" x="0" y="34" text-anchor="middle" fill="var(--ink)">POS.ENC</text>
+          </g>
+          <!-- 休眠 -->
+          <g class="node-g" transform="translate(200,320)" opacity="0.4">
+            <rect class="node-rect" x="-13" y="-13" width="26" height="26" fill="var(--white)" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 3"/>
+            <text x="0" y="3" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="var(--ink)">Z</text>
+            <text class="lbl" x="0" y="30" text-anchor="middle" fill="var(--mute)">DORMANT</text>
+          </g>
+
+          <!-- 角标 -->
+          <text x="20" y="346" font-family="JetBrains Mono" font-size="9" fill="var(--mute)" letter-spacing="0.1em">FIG. 01 — MAP OF PROGRESS</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="panel" style="display:flex;flex-direction:column">
+      <div class="panel-header">
+        <span class="num">02 / PROFILE</span>
+        <span class="nm">RADAR</span>
+        <span class="meta">6 AXES · V3.2</span>
+      </div>
+      <div class="radar-area">
+        <svg class="radar-svg" viewBox="-100 -100 200 200">
+          <g>
+            <polygon points="0,-80 69,-40 69,40 0,80 -69,40 -69,-40" fill="none" stroke="var(--ink)" stroke-width="1.5"/>
+            <polygon points="0,-60 52,-30 52,30 0,60 -52,30 -52,-30" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <polygon points="0,-40 35,-20 35,20 0,40 -35,20 -35,-20" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <polygon points="0,-20 17,-10 17,10 0,20 -17,10 -17,-10" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <line x1="0" y1="-80" x2="0" y2="80" stroke="var(--ink)" stroke-width="1"/>
+            <line x1="-80" y1="0" x2="80" y2="0" stroke="var(--ink)" stroke-width="1"/>
+            <line x1="-69" y1="-40" x2="69" y2="40" stroke="var(--ink)" stroke-width="1"/>
+            <line x1="-69" y1="40" x2="69" y2="-40" stroke="var(--ink)" stroke-width="1"/>
+          </g>
+          <polygon points="0,-62 52,-30 52,22 0,52 -45,26 -55,-32" fill="var(--ink)" fill-opacity="0.15" stroke="var(--red)" stroke-width="2"/>
+          <circle cx="0" cy="-62" r="4" fill="var(--red)"/>
+          <circle cx="52" cy="-30" r="4" fill="var(--red)"/>
+          <circle cx="52" cy="22" r="4" fill="var(--red)"/>
+          <circle cx="0" cy="52" r="4" fill="var(--red)"/>
+          <circle cx="-45" cy="26" r="4" fill="var(--red)"/>
+          <circle cx="-55" cy="-32" r="4" fill="var(--red)"/>
+        </svg>
+        <div class="rb-list">
+          <div class="rb r1"><span>Understand</span><span class="bar"></span><span class="v">78</span></div>
+          <div class="rb r2"><span>Reason</span><span class="bar"></span><span class="v">62</span></div>
+          <div class="rb r3"><span>Express</span><span class="bar"></span><span class="v">55</span></div>
+          <div class="rb r4 feature"><span>Apply</span><span class="bar"></span><span class="v">70</span></div>
+          <div class="rb r5"><span>Transfer</span><span class="bar"></span><span class="v">74</span></div>
+          <div class="rb r6"><span>Create</span><span class="bar"></span><span class="v">48</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右 -->
+  <section class="right">
+    <div class="cal-area" style="display:flex;flex-direction:column">
+      <div class="panel-header">
+        <span class="num">03 / CALENDAR</span>
+        <span class="nm">JULY MMXXVI</span>
+        <span class="meta">STREAK · 32 DAYS</span>
+      </div>
+      <div class="cal-body">
+        <div class="cal-grid">
+          <div class="cal-h">M</div><div class="cal-h">T</div><div class="cal-h">W</div>
+          <div class="cal-h">T</div><div class="cal-h">F</div><div class="cal-h">S</div><div class="cal-h">S</div>
+          <div class="cal-c empty"></div><div class="cal-c empty"></div>
+          <div class="cal-c"><span>01</span><span class="heat">·</span></div>
+          <div class="cal-c"><span>02</span><span class="heat">··</span></div>
+          <div class="cal-c"><span>03</span><span class="heat">·</span></div>
+          <div class="cal-c"><span>04</span><span class="heat">···</span></div>
+          <div class="cal-c"><span>05</span><span class="heat">··</span></div>
+          <div class="cal-c"><span>06</span><span class="heat">···</span></div>
+          <div class="cal-c"><span>07</span><span class="heat">···</span></div>
+          <div class="cal-c"><span>08</span><span class="heat">···</span></div>
+          <div class="cal-c"><span>09</span><span class="heat">····</span></div>
+          <div class="cal-c is-today"><span>10</span><span class="heat">····</span></div>
+          <div class="cal-c future"><span>11</span></div>
+          <div class="cal-c future"><span>12</span></div>
+        </div>
+        <div class="cal-side">
+          <div class="cal-stat">
+            <div class="l">Σ MONTH</div>
+            <div class="v">4:32</div>
+          </div>
+          <div class="cal-stat red">
+            <div class="l">STREAK</div>
+            <div class="v">× 32</div>
+          </div>
+          <div id="ckBtn">
+            <div class="l">CHECK-IN</div>
+            <div class="v" id="ckVal">⊕</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="task-area">
+      <div class="panel-header">
+        <span class="num">04 / TASKS</span>
+        <span class="nm">TODAY</span>
+        <span class="meta">2 / 4 IN PROGRESS</span>
+      </div>
+      <div class="task-list">
+        <div class="task-row done">
+          <span class="ck">✓</span><span class="ttl">READ · SELF-ATTENTION § 03</span><div class="bar"></div><span class="eta">12'</span>
+        </div>
+        <div class="task-row doing t1">
+          <span class="ck">▷</span><span class="ttl">DRILL · Q / K / V TRINITY</span><div class="bar"></div><span class="eta">~ 8'</span>
+        </div>
+        <div class="task-row doing t2">
+          <span class="ck">▷</span><span class="ttl">CODE · SCALED DOT-PRODUCT</span><div class="bar"></div><span class="eta">~ 15'</span>
+        </div>
+        <div class="task-row">
+          <span class="ck"></span><span class="ttl">CHALLENGE · ATTENTION CHAT</span><div class="bar"></div><span class="eta">~ 20'</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="dock">
+  <div class="dock-item active"><span class="num">01</span><span class="nm">MAP</span></div>
+  <div class="dock-item"><span class="num">02</span><span class="nm">AI</span></div>
+  <div class="dock-item"><span class="num">03</span><span class="nm">DOC</span></div>
+  <div class="dock-item"><span class="num">04</span><span class="nm">EX.</span></div>
+  <div class="dock-item"><span class="num">05</span><span class="nm">CODE</span></div>
+  <div class="dock-item"><span class="num">06</span><span class="nm">NOTE</span></div>
+  <div class="dock-item"><span class="num">07</span><span class="nm">MIND</span></div>
+  <div class="dock-item"><span class="num">08</span><span class="nm">RES</span></div>
+  <div class="dock-item"><span class="num">09</span><span class="nm">DASH</span></div>
+</nav>
+
+<aside class="chat">
+  <div class="chat-title">
+    <span class="nm">AI ASSISTANT</span>
+    <span class="tag">ALWAYS ON</span>
+  </div>
+  <div class="chat-body" id="cb">
+    <div class="bubble ai">You've been reading for 30 minutes. Want a question on Q/K/V intuition?</div>
+  </div>
+  <div class="chat-input">
+    <input placeholder="Type a question…" id="ci">
+    <button onclick="sc()">SEND</button>
+  </div>
+</aside>
+
+<script>
+  document.querySelectorAll('.tool').forEach(t => {
+    t.addEventListener('click', () => {
+      const sib = Array.from(t.parentElement.children).filter(x => x.dataset[t.dataset.m !== undefined ? 'm' : 'l'] !== undefined);
+      sib.forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+
+  const ckBtn = document.getElementById('ckBtn');
+  const ckVal = document.getElementById('ckVal');
+  let ckd = false;
+  ckBtn.addEventListener('click', () => {
+    ckd = !ckd;
+    ckVal.textContent = ckd ? '✓ 23\'' : '⊕';
+    ckBtn.querySelector('.l').textContent = ckd ? 'CHECKED' : 'CHECK-IN';
+    ckBtn.classList.toggle('active', ckd);
+  });
+
+  function sc() {
+    const i = document.getElementById('ci');
+    const v = i.value.trim();
+    if (!v) return;
+    const cb = document.getElementById('cb');
+    const u = document.createElement('div');
+    u.className = 'bubble user'; u.textContent = v;
+    cb.appendChild(u);
+    i.value = '';
+    cb.scrollTop = cb.scrollHeight;
+    setTimeout(() => {
+      const r = document.createElement('div');
+      r.className = 'bubble ai';
+      r.textContent = 'Think of Q as the query, K as the key, V as the value. They form a trinity.';
+      cb.appendChild(r);
+      cb.scrollTop = cb.scrollHeight;
+    }, 500);
+  }
+  document.getElementById('ci').addEventListener('keydown', e => e.key === 'Enter' && sc());
+</script>
+</body>
+</html>

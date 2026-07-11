@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Style 01 · The New Yorker Editorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* ─── 调色板 ─── */
+  :root {
+    --paper:    #F4F1EA;   /* 米白纸张 */
+    --ink:      #1A1A1A;   /* 油墨 */
+    --ink-soft: #1A1A1A;
+    --red:      #D62828;   /* 编辑红 */
+    --green:    #1B4332;   /* 深绿 */
+    --fade:     rgba(26,26,26,0.45);
+    --hair:     rgba(26,26,26,0.85);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'EB Garamond', Georgia, serif;
+    font-size: 14px;
+    line-height: 1.55;
+    /* 极淡纸纹 */
+    background-image:
+      radial-gradient(rgba(26,26,26,0.025) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+
+  /* ─── 顶部：杂志刊头 ─── */
+  .masthead {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 14px 32px 10px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .masthead .date { font-family: 'IBM Plex Mono'; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .masthead .price { font-family: 'IBM Plex Mono'; font-size: 11px; letter-spacing: 0.12em; text-align: right; text-transform: uppercase; }
+  .masthead h1 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-style: italic;
+    font-size: 38px;
+    letter-spacing: -0.01em;
+    text-align: center;
+    line-height: 1;
+  }
+  .masthead h1 small {
+    display: block;
+    font-family: 'IBM Plex Mono';
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    font-weight: 400;
+    text-transform: uppercase;
+    margin-top: 4px;
+    font-style: normal;
+  }
+  .masthead-tagline {
+    border-top: 1px solid var(--hair);
+    border-bottom: 1px solid var(--hair);
+    padding: 4px 32px;
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  /* ─── 桌面网格 ─── */
+  .desktop {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.6fr);
+    gap: 24px;
+    padding: 24px 32px 0;
+    height: calc(100vh - 132px - 84px);
+    min-height: 0;
+  }
+
+  /* ─── 卡片：杂志专栏 ─── */
+  .col {
+    background: transparent;
+    border: none;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .col-head {
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .col-head .kicker {
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .col-head .num {
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--fade);
+  }
+
+  /* ─── 章节分隔 ─── */
+  .ornament {
+    text-align: center;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: var(--ink);
+    margin: 14px 0;
+    letter-spacing: 1.2em;
+    font-size: 14px;
+  }
+  .ornament::before { content: '§ § §'; }
+
+  /* ─── 顶部模式 + 布局 ─── */
+  .tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 32px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .pill-group {
+    display: inline-flex;
+    border: 1px solid var(--ink);
+    font-family: 'IBM Plex Mono';
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  .pill {
+    padding: 6px 14px;
+    border-right: 1px solid var(--ink);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .pill:last-child { border-right: none; }
+  .pill:hover { background: var(--ink); color: var(--paper); }
+  .pill.active { background: var(--red); color: var(--paper); border-color: var(--red); }
+  .user-mark {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 14px;
+  }
+
+  /* ─── 藏宝图 ─── */
+  .map-wrap {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid var(--ink);
+    position: relative;
+    background: var(--paper);
+  }
+  .map-svg { width: 100%; height: 100%; display: block; }
+
+  /* ─── 雷达 ─── */
+  .radar-wrap {
+    margin-top: 18px;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 12px 0;
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 14px;
+  }
+  .radar-svg { width: 160px; height: 160px; }
+  .radar-list { display: flex; flex-direction: column; justify-content: center; gap: 4px; font-size: 12px; }
+  .radar-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 32px;
+    gap: 8px;
+    align-items: center;
+    border-bottom: 1px dotted rgba(26,26,26,0.3);
+    padding: 2px 0;
+  }
+  .radar-row .lbl {
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .radar-row .bar {
+    height: 2px;
+    background: var(--ink);
+  }
+  .radar-row .val {
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .radar-row.is-feature .lbl { color: var(--red); }
+
+  /* ─── 右侧：日历 ─── */
+  .right { display: flex; flex-direction: column; gap: 0; min-height: 0; }
+  .cal-block { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 180px; border: 1px solid var(--ink); }
+  .cal-grid-wrap { padding: 14px; border-right: 1px solid var(--ink); }
+  .cal-head-row {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    font-family: 'IBM Plex Mono'; font-size: 10px; text-align: center;
+    border-bottom: 1px solid var(--ink); padding-bottom: 6px; margin-bottom: 6px;
+    letter-spacing: 0.12em;
+  }
+  .cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; }
+  .cal-cell {
+    border-right: 1px dotted rgba(26,26,26,0.2);
+    border-bottom: 1px dotted rgba(26,26,26,0.2);
+    aspect-ratio: 1.05;
+    padding: 4px;
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .cal-cell:nth-child(7n) { border-right: none; }
+  .cal-cell .dn { color: var(--fade); }
+  .cal-cell .heat {
+    align-self: flex-end;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .cal-cell.is-today { background: var(--red); color: var(--paper); }
+  .cal-cell.is-today .dn { color: var(--paper); font-weight: 700; }
+  .cal-cell.is-today .heat { color: var(--paper); }
+  .cal-side {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  .cal-stat .v {
+    font-family: 'Playfair Display';
+    font-style: italic;
+    font-size: 32px;
+    line-height: 1;
+    margin: 4px 0 12px;
+  }
+  .cal-stat .lbl {
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fade);
+  }
+  .checkin {
+    border: 1px solid var(--ink);
+    padding: 10px 12px;
+    text-align: center;
+    font-family: 'IBM Plex Mono';
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .checkin:hover { background: var(--ink); color: var(--paper); }
+  .checkin.done { background: var(--red); color: var(--paper); border-color: var(--red); }
+
+  /* ─── 任务 ─── */
+  .tasks-block {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--ink);
+    flex: 0 0 auto;
+  }
+  .task-row {
+    display: grid;
+    grid-template-columns: 14px 22px 1fr 70px 56px;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dotted rgba(26,26,26,0.3);
+    font-size: 13px;
+  }
+  .task-row .nm {
+    font-family: 'IBM Plex Mono';
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--fade);
+  }
+  .task-row .ttl { font-family: 'EB Garamond', serif; }
+  .task-row .bar { height: 1px; background: var(--ink); position: relative; }
+  .task-row .bar::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--paper);
+    transform-origin: left;
+  }
+  .task-row.done .ttl { font-style: italic; color: var(--fade); text-decoration: line-through; }
+  .task-row.doing .bar { background: var(--red); }
+
+  /* ─── Dock ─── */
+  .dock {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 84px;
+    background: var(--paper);
+    border-top: 2px solid var(--ink);
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+    gap: 12px;
+  }
+  .dock-label {
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fade);
+    margin-right: 14px;
+  }
+  .dock-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .dock-item:hover { transform: translateY(-3px); }
+  .dock-item.active { border-bottom-color: var(--red); }
+  .dock-glyph {
+    font-family: 'Playfair Display';
+    font-style: italic;
+    font-size: 22px;
+    line-height: 1;
+  }
+  .dock-name {
+    font-family: 'IBM Plex Mono';
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .dock-spacer { flex: 1; }
+  .dock-by {
+    font-family: 'Playfair Display';
+    font-style: italic;
+    font-size: 13px;
+    color: var(--fade);
+  }
+
+  /* ─── AI 浮窗 ─── */
+  .chat {
+    position: fixed;
+    right: 32px;
+    bottom: 110px;
+    width: 320px;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    z-index: 9999;
+    box-shadow: 6px 6px 0 var(--ink);
+  }
+  .chat-title {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 8px 14px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .chat-title .nm {
+    font-family: 'Playfair Display';
+    font-style: italic;
+    font-size: 16px;
+  }
+  .chat-title .role {
+    font-family: 'IBM Plex Mono';
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .chat-body {
+    padding: 14px;
+    height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bubble {
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.55;
+    border: 1px solid var(--ink);
+  }
+  .bubble.ai {
+    background: var(--paper);
+    border-color: var(--ink);
+  }
+  .bubble.ai::before {
+    content: '小书 写道 ——';
+    display: block;
+    font-family: 'IBM Plex Mono';
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fade);
+    margin-bottom: 4px;
+  }
+  .bubble.user {
+    background: var(--ink);
+    color: var(--paper);
+    font-style: italic;
+    text-align: right;
+  }
+  .bubble.user::after {
+    content: '—— 你';
+    display: block;
+    font-family: 'IBM Plex Mono';
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-top: 4px;
+  }
+  .chat-input {
+    border-top: 1px solid var(--ink);
+    display: flex;
+  }
+  .chat-input input {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 14px;
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+  .chat-input button {
+    padding: 8px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'IBM Plex Mono';
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
+
+  /* ─── 节点样式（NY 编辑式：粗描边 + 衬线编号） ─── */
+  .node text { font-family: 'Playfair Display', serif; font-style: italic; }
+  .node .label { font-size: 11px; fill: var(--ink); }
+  .node .num { font-family: 'IBM Plex Mono'; font-style: normal; font-size: 9px; letter-spacing: 0.1em; fill: var(--fade); }
+
+  /* 首字下沉（drop cap）—— 用在藏宝图标题 */
+  .drop-cap::first-letter {
+    font-family: 'Playfair Display';
+    font-size: 48px;
+    float: left;
+    line-height: 0.85;
+    padding: 4px 8px 0 0;
+    color: var(--red);
+    font-weight: 900;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<!-- 杂志刊头 -->
+<header class="masthead">
+  <div class="date">Vol. CII · No. 02</div>
+  <h1>The Self Learner<small>— An Independent Study —</small></h1>
+  <div class="price">$0.00 · Free</div>
+</header>
+<div class="masthead-tagline">
+  <span>Artificially Intelligent</span>
+  <span style="font-style:italic;font-family:'Playfair Display';font-size:11px">·  for the curious  ·</span>
+  <span>July 10, 2026</span>
+</div>
+
+<!-- 模式 + 布局 -->
+<div class="tools">
+  <div style="display:flex;gap:14px;align-items:center">
+    <div class="pill-group">
+      <div class="pill active">⊙ MASTER</div>
+      <div class="pill">◯ EXPLORE</div>
+    </div>
+    <div class="pill-group">
+      <div class="pill active">A · Reading</div>
+      <div class="pill">B · Practice</div>
+      <div class="pill">C · Coding</div>
+    </div>
+  </div>
+  <div class="user-mark">xiaoming, <span style="color:var(--fade)">reader</span></div>
+</div>
+
+<!-- 桌面 -->
+<main class="desktop">
+
+  <!-- 左栏：藏宝图 + 雷达 -->
+  <section class="col">
+    <div class="col-head">
+      <span class="kicker">§ I  The Map</span>
+      <span class="num">— 14 STATIONS · 02 DORMANT —</span>
+    </div>
+
+    <h3 class="drop-cap" style="font-family:'Playfair Display';font-style:italic;font-size:24px;line-height:1.15;margin-bottom:10px">
+      A path through the land of language models, drawn in ink and recompense.
+    </h3>
+
+    <div class="map-wrap">
+      <svg class="map-svg" viewBox="0 0 1000 380" preserveAspectRatio="xMidYMid meet">
+        <!-- 边 -->
+        <g stroke="var(--ink)" stroke-width="1" fill="none">
+          <path d="M120,90 L240,150" />
+          <path d="M240,150 L380,110" />
+          <path d="M240,150 L380,230" />
+          <path d="M380,110 L540,170" />
+          <path d="M380,230 L540,170" />
+          <path d="M540,170 L700,110" />
+          <path d="M540,170 L700,250" />
+          <path d="M700,110 L860,180" />
+          <path d="M700,250 L860,180" />
+          <path d="M540,170 L540,340" stroke-dasharray="3 3" opacity="0.45" />
+          <path d="M240,150 L240,330" stroke-dasharray="3 3" opacity="0.45" />
+          <path d="M240,330 L380,400" stroke-dasharray="3 3" opacity="0.45" />
+        </g>
+
+        <!-- 节点（NY 编辑式：细线圆 + 衬线编号 + 小装饰点） -->
+        <g class="node">
+          <!-- done -->
+          <g transform="translate(120,90)">
+            <circle r="9" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.4"/>
+            <path d="M-3.5,0 L-1,2.5 L3.5,-2.5" stroke="var(--ink)" stroke-width="1.4" fill="none"/>
+            <text class="num" x="14" y="-6">N° 01</text>
+            <text class="label" x="14" y="6">Word Embedding</text>
+          </g>
+          <g transform="translate(240,150)">
+            <circle r="9" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.4"/>
+            <path d="M-3.5,0 L-1,2.5 L3.5,-2.5" stroke="var(--ink)" stroke-width="1.4" fill="none"/>
+            <text class="num" x="14" y="-6">N° 02</text>
+            <text class="label" x="14" y="6">Recurrent Nets</text>
+          </g>
+          <g transform="translate(380,110)">
+            <circle r="9" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.4"/>
+            <path d="M-3.5,0 L-1,2.5 L3.5,-2.5" stroke="var(--ink)" stroke-width="1.4" fill="none"/>
+            <text class="num" x="14" y="-6">N° 03</text>
+            <text class="label" x="14" y="6">LSTM</text>
+          </g>
+          <!-- current（朱红环 + 中心点） -->
+          <g transform="translate(380,230)">
+            <circle r="11" fill="none" stroke="var(--red)" stroke-width="1.6"/>
+            <circle r="3" fill="var(--red)"/>
+            <text class="num" x="14" y="-6" style="fill:var(--red)">NOW</text>
+            <text class="label" x="14" y="6">GRU</text>
+          </g>
+          <!-- key -->
+          <g transform="translate(540,170)">
+            <rect x="-9" y="-9" width="18" height="18" fill="var(--red)" stroke="var(--ink)" stroke-width="1"/>
+            <text x="0" y="3" text-anchor="middle" fill="var(--paper)" font-family="Playfair Display" font-size="11" font-style="italic" font-weight="700">§</text>
+            <text class="num" x="14" y="-6" style="fill:var(--red)">N° 05</text>
+            <text class="label" x="14" y="6">Self-Attention</text>
+          </g>
+          <g transform="translate(700,110)">
+            <circle r="9" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.4"/>
+            <text class="num" x="14" y="-6">N° 06</text>
+            <text class="label" x="14" y="6">Transformer</text>
+          </g>
+          <g transform="translate(700,250)">
+            <circle r="9" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.4"/>
+            <text class="num" x="14" y="-6">N° 07</text>
+            <text class="label" x="14" y="6">Positional Encoding</text>
+          </g>
+          <g transform="translate(860,180)">
+            <circle r="9" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>
+            <text class="num" x="14" y="-6" style="opacity:0.5">N° 08</text>
+            <text class="label" x="14" y="6" style="opacity:0.5">Multi-Head</text>
+          </g>
+          <g transform="translate(540,340)">
+            <circle r="9" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>
+            <text class="num" x="14" y="-6" style="opacity:0.5">N° 09</text>
+            <text class="label" x="14" y="6" style="opacity:0.5">Seq2Seq</text>
+          </g>
+          <!-- 休眠分支 -->
+          <g transform="translate(240,330)" opacity="0.55">
+            <circle r="9" fill="none" stroke="var(--fade)" stroke-width="1" stroke-dasharray="3 3"/>
+            <text x="0" y="3" text-anchor="middle" font-family="Playfair Display" font-style="italic" font-size="10" fill="var(--fade)">z</text>
+            <text class="num" x="14" y="-6" fill="var(--fade)">DORMANT</text>
+            <text class="label" x="14" y="6" fill="var(--fade)">Classical ML</text>
+          </g>
+        </g>
+
+        <!-- 装饰：右下角"图章" -->
+        <g transform="translate(940,350)">
+          <circle r="22" fill="none" stroke="var(--red)" stroke-width="1.4"/>
+          <text x="0" y="-2" text-anchor="middle" font-family="IBM Plex Mono" font-size="6" letter-spacing="0.1em" fill="var(--red)">· IN PROGRESS ·</text>
+          <text x="0" y="9" text-anchor="middle" font-family="Playfair Display" font-style="italic" font-size="9" fill="var(--red)">DRAFT</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="radar-wrap">
+      <svg class="radar-svg" viewBox="0 0 160 160">
+        <!-- 6 维雷达 -->
+        <g transform="translate(80,80)">
+          <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill="none" stroke="var(--fade)" stroke-width="0.5"/>
+          <polygon points="0,-29 25,-15 25,15 0,29 -25,15 -25,-15" fill="none" stroke="var(--fade)" stroke-width="0.5"/>
+          <line x1="0" y1="-58" x2="0" y2="58" stroke="var(--fade)" stroke-width="0.5"/>
+          <line x1="-50" y1="-29" x2="50" y2="29" stroke="var(--fade)" stroke-width="0.5"/>
+          <line x1="-50" y1="29" x2="50" y2="-29" stroke="var(--fade)" stroke-width="0.5"/>
+          <!-- 数据 -->
+          <polygon points="0,-44 38,-22 38,22 0,42 -32,18 -38,-22" fill="var(--red)" fill-opacity="0.18" stroke="var(--red)" stroke-width="1.2"/>
+        </g>
+      </svg>
+      <div class="radar-list">
+        <div class="radar-row is-feature"><span class="lbl">UNDERSTAND</span><span class="bar"></span><span class="val">78</span></div>
+        <div class="radar-row"><span class="lbl">REASON</span><span class="bar"></span><span class="val">62</span></div>
+        <div class="radar-row"><span class="lbl">EXPRESS</span><span class="bar"></span><span class="val">55</span></div>
+        <div class="radar-row is-feature"><span class="lbl">APPLY</span><span class="bar"></span><span class="val">70</span></div>
+        <div class="radar-row"><span class="lbl">TRANSFER</span><span class="bar"></span><span class="val">74 ↑</span></div>
+        <div class="radar-row"><span class="lbl">CREATE</span><span class="bar"></span><span class="val">48</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右栏：日历 + 任务 -->
+  <section class="right">
+    <div class="col-head">
+      <span class="kicker">§ II  The Almanac</span>
+      <span class="num">— JULY MMXXVI —</span>
+    </div>
+
+    <div class="cal-block">
+      <div class="cal-grid-wrap">
+        <div class="cal-head-row">
+          <div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div>
+        </div>
+        <div class="cal-row">
+          <div class="cal-cell"></div><div class="cal-cell"></div>
+          <div class="cal-cell"><span class="dn">1</span><span class="heat" style="color:#A8C9B5">░</span></div>
+          <div class="cal-cell"><span class="dn">2</span><span class="heat" style="color:var(--ink)">▓</span></div>
+          <div class="cal-cell"><span class="dn">3</span><span class="heat" style="color:#A8C9B5">▒</span></div>
+          <div class="cal-cell"><span class="dn">4</span><span class="heat" style="color:var(--ink)">█</span></div>
+          <div class="cal-cell"><span class="dn">5</span><span class="heat" style="color:#A8C9B5">▒</span></div>
+        </div>
+        <div class="cal-row">
+          <div class="cal-cell"><span class="dn">6</span><span class="heat" style="color:var(--ink)">█</span></div>
+          <div class="cal-cell"><span class="dn">7</span><span class="heat" style="color:#A8C9B5">▒</span></div>
+          <div class="cal-cell"><span class="dn">8</span><span class="heat" style="color:var(--ink)">▓</span></div>
+          <div class="cal-cell"><span class="dn">9</span><span class="heat" style="color:var(--ink)">█</span></div>
+          <div class="cal-cell is-today"><span class="dn">10</span><span class="heat">█</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">11</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">12</span></div>
+        </div>
+        <div class="cal-row">
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">13</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">14</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">15</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">16</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">17</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">18</span></div>
+          <div class="cal-cell" style="opacity:0.4"><span class="dn">19</span></div>
+        </div>
+      </div>
+      <div class="cal-side">
+        <div>
+          <div class="cal-stat">
+            <div class="lbl">— Σ this month —</div>
+            <div class="v">4 h 32 m</div>
+          </div>
+          <div class="cal-stat">
+            <div class="lbl">— a streak —</div>
+            <div class="v" style="color:var(--red)">× 32 d</div>
+          </div>
+        </div>
+        <div class="checkin" id="checkin">⊕  TODAY'S CHECK-IN</div>
+        <div style="font-family:'IBM Plex Mono';font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--fade);text-align:center">
+          heat  ░ · ▒ · ▓ · █
+        </div>
+      </div>
+    </div>
+
+    <div class="tasks-block">
+      <div class="col-head">
+        <span class="kicker">§ III  Today's Work</span>
+        <span class="num">— 02 / 04 IN PROGRESS —</span>
+      </div>
+      <div class="task-row done">
+        <span class="nm">✓</span><span>📖</span><span class="ttl">Read: Self-Attention, chapter the third</span><div class="bar"></div><span class="nm">12 MIN</span>
+      </div>
+      <div class="task-row doing">
+        <span class="nm">▷</span><span>🤖</span><span class="ttl">Drill: the trinity of Q, K, and V</span><div class="bar" style="background:var(--red)"></div><span class="nm">~ 8 MIN</span>
+      </div>
+      <div class="task-row doing">
+        <span class="nm">▷</span><span>💻</span><span class="ttl">Implement: scaled dot-product attention</span><div class="bar" style="background:var(--red)"></div><span class="nm">~ 15 MIN</span>
+      </div>
+      <div class="task-row">
+        <span class="nm">○</span><span>🎯</span><span class="ttl">Challenge: an attention interview</span><div class="bar"></div><span class="nm">~ 20 MIN</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- AI 浮窗 -->
+<aside class="chat">
+  <div class="chat-title">
+    <span class="nm">Letters from 小书</span>
+    <span class="role">— ALWAYS ON —</span>
+  </div>
+  <div class="chat-body" id="chatBody">
+    <div class="bubble ai">
+      You have been reading for half an hour. Perhaps a question on the formula's intuition would help?
+    </div>
+  </div>
+  <div class="chat-input">
+    <input placeholder="Write a letter…" id="chatInput">
+    <button onclick="sendChat()">SEND</button>
+  </div>
+</aside>
+
+<!-- Dock -->
+<nav class="dock">
+  <div class="dock-label">— Index —</div>
+  <div class="dock-item active"><span class="dock-glyph">M</span><span class="dock-name">Map</span></div>
+  <div class="dock-item"><span class="dock-glyph">A</span><span class="dock-name">AI</span></div>
+  <div class="dock-item"><span class="dock-glyph">D</span><span class="dock-name">Doc</span></div>
+  <div class="dock-item"><span class="dock-glyph">E</span><span class="dock-name">Ex.</span></div>
+  <div class="dock-item"><span class="dock-glyph">C</span><span class="dock-name">Code</span></div>
+  <div class="dock-item"><span class="dock-glyph">N</span><span class="dock-name">Note</span></div>
+  <div class="dock-item"><span class="dock-glyph">M</span><span class="dock-name">Mind</span></div>
+  <div class="dock-item"><span class="dock-glyph">R</span><span class="dock-name">Res</span></div>
+  <div class="dock-item"><span class="dock-glyph">D</span><span class="dock-name">Dash</span></div>
+  <div class="dock-spacer"></div>
+  <div class="dock-by">— A SELFLEARN PUBLICATION —</div>
+</nav>
+
+<script>
+  // 假打卡
+  const ck = document.getElementById('checkin');
+  let checked = false;
+  ck.addEventListener('click', () => {
+    checked = !checked;
+    ck.classList.toggle('done', checked);
+    ck.textContent = checked ? '✓  CHECKED · 23 MIN' : '⊕  TODAY\'S CHECK-IN';
+  });
+
+  // 假聊天
+  function sendChat() {
+    const inp = document.getElementById('chatInput');
+    const body = document.getElementById('chatBody');
+    const txt = inp.value.trim();
+    if (!txt) return;
+    const u = document.createElement('div');
+    u.className = 'bubble user';
+    u.textContent = txt;
+    body.appendChild(u);
+    inp.value = '';
+    body.scrollTop = body.scrollHeight;
+
+    setTimeout(() => {
+      const reply = 'Quite so. The trinity Q, K, V is best read as query, key, value — a question, an index, a payload.';
+      const r = document.createElement('div');
+      r.className = 'bubble ai';
+      r.textContent = reply;
+      body.appendChild(r);
+      body.scrollTop = body.scrollHeight;
+    }, 600);
+  }
+  document.getElementById('chatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendChat();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+.layout-icons {
+  display: inline-flex; gap: 6px;
+  margin-left: 8px;
+}
+.layout-icons button {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--card);
+  color: var(--mute);
+  font-size: 14px;
+  transition: all 160ms ease;
+}
+.layout-icons button:hover { color: var(--indigo); border-color: var(--indigo); }
+.layout-icons button.on { background: var(--indigo-soft); border-color: var(--indigo); color: var(--indigo); }
