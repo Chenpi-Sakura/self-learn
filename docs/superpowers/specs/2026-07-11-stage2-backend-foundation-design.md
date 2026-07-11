@@ -48,6 +48,8 @@
 | **LLM Gateway** | OpenAI 兼容适配器（DeepSeek / 通义千问）+ 熔断器 |
 | **REST 路由（M1）** | `/healthz` `/readyz` + smoke 路由 `/api/profile/init` + 状态查询 |
 | **PingAgent（smoke）** | 自研 Agent 实现 `skill.ping.reply`：调 1 次 LLM + 回复 pong |
+| **LLM 抽象层** | `BaseLLMAdapter` 抽象基类 + `LLMRegistry` provider 注册表；OpenAI 兼容实现 + mock 实现（默认） |
+| **SSE 骨架** | `/api/profile/init/{trace_id}/stream` 端点 + `chat_stream()` 异步生成器接口；流式分块逻辑留到 Stage 3 |
 | **Smoke 闭环** | `scripts/smoke.sh` 端到端跑通 curl → gateway → broker → worker → LLM → reply |
 | **可观测性** | OTel + Jaeger，smoke 调用链可视化 |
 | **文档** | `backend/README.md` + Stage 2 验收报告 |
@@ -58,11 +60,12 @@
 | --- | --- |
 | 其他 23 张表（v4 § 5.3.2） | Stage 3 按领域服务分批建 |
 | 17 个 REST 端点完整实现 | Stage 3 起按 `routes/` 目录逐文件落地 |
-| 7 类 WebSocket 事件 | Stage 3 起；Stage 2 只走 polling 状态查询 |
+| 7 类 WebSocket 事件 | Stage 3 起；Stage 2 走 SSE 骨架（端点契约 + 接口保留） |
 | 8 个内容子 Agent（文档 / 导图 / 习题 / 代码 / 评审 / 画像 / 规划 / 总监） | Stage 3 按业务闭环分批实现 |
 | Skill 全集（v4 § 2.1.4） | Stage 3+ 按 `@skill()` 装饰器逐个补 |
 | MCP Tool 全集 | Stage 3+ |
-| 讯飞星火适配器 | Stage 5（凭据依赖） |
+| 讯飞星火适配器 | Stage 5（凭据依赖）；Stage 2 仅留 `ifly_spark.py` 空壳 |
+| **SSE 流式分块 + 重连机制** | Stage 3 业务接入时实现；Stage 2 端点收到请求立即返回完成结果（兼容客户端 polling） |
 | OAuth / JWT / 登录 / 会话 | **永远不做**——项目级约束（参见 [[no-auth-no-login]]） |
 | 关卡资源生成 / 评审 / 业务编排 | Stage 3 |
 | TTS / ASR（讯飞） | Stage 5 |
@@ -96,6 +99,8 @@
 | 6 | 容器化 | **docker-compose** | k8s / supervisord | 单机一键起 6 服务最直观 |
 | 7 | ORM | **SQLAlchemy 2.x async + Alembic** | SQLModel / asyncpg 手写 | v4 § 5.3.2 表多关系重；2.x 的 `Mapped[]` 类型提示 + Alembic 迁移为事实标准 |
 | 8 | 监控 | **OTel + Jaeger** | Prometheus / Sentry | v4 § 2.2.1 明文要求每条 Agent 消息带 TraceID |
+| 9 | LLM 抽象 | **BaseLLMAdapter 抽象基类 + Provider 注册表**（继承自 S3 提前） | 直连 OpenAI SDK | Stage 3+ 多 Provider（讯飞 / 本地）切换零改动；接口固定可测 |
+| 10 | SSE | **Stage 2 留骨架（端点 + 流式接口）；流式逻辑推到 Stage 3** | 不做 / 一步到位 Stage 3 | 端点契约早定避免后期 API 破坏性变更 |
 
 **关联选型**（不在 8 项决策里但已确定）：
 - 包管理 / 运行：**uv**（轻量、快）
@@ -235,6 +240,130 @@ CREATE INDEX idx_profiles_student ON profiles(student_id);
 
 **注意**：v4 § 5.3.2 完整 `students` 表带更多字段（`current_subject_id`、`lifecycle_state` 等），Stage 2 只取最小字段集。完整字段在 Stage 3 按需 ALTER。
 
+### 3.5 LLM 抽象层（提前重构）
+
+LLM 抽象层是 Stage 2 必须落实的**基础设施**，不是 Stage 3 业务。具体内容：
+
+**`src/selflearn/llm/base.py` —— 抽象基类**：
+
+```python
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+
+@dataclass
+class ChatMessage:
+    role: str  # "system" | "user" | "assistant" | "tool"
+    content: str
+    name: str | None = None
+
+@dataclass
+class ChatRequest:
+    messages: list[ChatMessage]
+    model: str | None = None       # None 时用 provider 默认
+    temperature: float = 0.7
+    max_tokens: int | None = None
+    stop: list[str] | None = None
+    metadata: dict = field(default_factory=dict)  # trace_id 等
+
+@dataclass
+class ChatChunk:
+    delta: str                     # 本次增量
+    finish_reason: str | None = None   # "stop" | "length" | null
+    usage: dict | None = None      # 仅最后一个 chunk 填
+
+class BaseLLMAdapter(ABC):
+    """所有 LLM provider 必须实现的接口。"""
+
+    provider_name: str  # 子类填，例如 "openai_compat" / "ifly_spark" / "mock"
+
+    @abstractmethod
+    async def chat(self, req: ChatRequest) -> str:
+        """非流式：返回完整文本。"""
+
+    @abstractmethod
+    async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatChunk]:
+        """流式：异步生成器，每个 yield 是 ChatChunk。
+        Stage 2 必须实现（即使 mock 也走流式），为 Stage 3 SSE 接入留接口。"""
+        if False:  # pragma: no cover —— 让 type checker 知道这是生成器
+            yield ChatChunk(delta="")
+
+    @abstractmethod
+    async def health(self) -> bool:
+        """探活：能 ping 到上游即返回 True。"""
+```
+
+**`src/selflearn/llm/registry.py` —— Provider 注册表**：
+
+```python
+class LLMRegistry:
+    """按 provider_name 单例缓存，避免每次 new。"""
+
+    def __init__(self):
+        self._adapters: dict[str, BaseLLMAdapter] = {}
+
+    def register(self, adapter: BaseLLMAdapter) -> None: ...
+    def get(self, name: str) -> BaseLLMAdapter: ...
+    def default(self) -> BaseLLMAdapter: ...  # 读 config.LLM_DEFAULT_PROVIDER
+```
+
+**Stage 2 必须实现的 provider**：
+
+| Provider | 类 | 默认启用 | 实现要点 |
+| --- | --- | --- | --- |
+| `mock` | `MockLLMAdapter` | ✅ | 不走网络，按 prompt 长度返回 deterministic 文本；用于 CI / 离线测试 |
+| `openai_compat` | `OpenAICompatAdapter` | ✅ | 适配 DeepSeek / 通义千问；统一 base_url / api_key 注入 |
+| `ifly_spark` | `IflySparkAdapter` | ❌ 空壳 | 仅占位 + `health()` 返回 False；Stage 5 凭据到位后实装 |
+
+**Stage 2 单元测试**：
+- `test_llm_base.py` — 抽象方法签名校验（用 `MockLLMAdapter` 跑 happy path）
+- `test_llm_registry.py` — 注册 / 查询 / 默认 provider
+- `test_llm_adapter.py` — OpenAI 兼容协议 mock 重放（respx）
+
+**Stage 3+ 增量**：
+- 新增 provider 只需实现 `BaseLLMAdapter` 三方法 + `register()`
+- `chat_stream` 接口已固定，SSE 接入只需把 `chat_stream` 的输出喂给 `StreamingResponse`
+
+### 3.6 SSE 端点骨架（提前落地）
+
+SSE 端点的**契约**必须在 Stage 2 定下来，Stage 3 业务接入时**不破坏 API**。
+
+**`src/selflearn/gateway/routes/profile.py` —— 新增端点**：
+
+```python
+from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+
+@router.get("/api/profile/init/{trace_id}/stream")
+async def stream_init(trace_id: str) -> EventSourceResponse:
+    """SSE 骨架。
+    Stage 2 行为：收到请求后立刻发送一条 "completed" 事件（含 reply），然后关闭。
+    Stage 3 接入：worker 推进 envelope 状态时通过 Redis Pub/Sub 推流。
+    """
+    async def event_gen():
+        # 查 Redis 拿当前状态
+        status = await redis.get(f"trace:{trace_id}")
+        yield {"event": "status", "data": status or "running"}
+        # Stage 2 fallback：1s 后推 completed
+        await asyncio.sleep(1.0)
+        yield {"event": "completed", "data": json.dumps({"reply": "pong"})}
+
+    return EventSourceResponse(event_gen())
+```
+
+**关键约束**：
+- **路径固定**：`/api/profile/init/{trace_id}/stream`，Stage 3 不得改
+- **事件名固定**：`status` / `chunk` / `completed` / `error`（Stage 2 只用 `status` + `completed`）
+- **Content-Type**：`text/event-stream`（由 sse-starlette 自动设置）
+- **断线**：客户端断开时 `event_gen` 必须能优雅退出（用 `try/finally` 包 Redis 订阅清理）
+
+**Stage 2 验证**：客户端用 `curl -N` 能连上，1s 内收到一条 `completed` 事件后连接关闭。
+
+**Stage 3 业务接入**：
+- Worker 端 `chat_stream()` 输出 → Redis Stream (`stream:{trace_id}`)
+- Gateway 端 `event_gen` 订阅 Redis Stream → 转发为 SSE `chunk` 事件
+- envelope.action = `skill.completed` → 推 `completed` 事件 + 关闭连接
+
 ---
 
 ## 4. 消息流与 smoke 闭环
@@ -303,7 +432,8 @@ agents/worker.py 消费
    │      → 命中 PingAgent（smoke 阶段注册唯一）
    │ 2. PingAgent.run(envelope)
    │      ├─ registry.update_heartbeat()
-   │      ├─ llm.chat([{role:"user", content: "ping"}])  ← OpenAI 兼容
+   │      ├─ llm_registry.default().chat(req)  ← 走 BaseLLMAdapter 抽象层
+   │      │   （smoke 默认 mock provider；可由 env LLM_PROVIDER=openai_compat 切真模型）
    │      └─ publish reply envelope { action="skill.completed",
    │                                  target={type:"gateway", id:"smoke"},
    │                                  payload={ reply: "...pong..." } }
@@ -312,6 +442,10 @@ agents/worker.py 消费
 gateway 轮询路由 /api/profile/init/{trace_id}/status
    │ 4. Redis 查 status:trace_id → completed / running / failed
    │ 5. 返回 { status, reply, ... }
+   │
+   ▼ 客户端走 SSE 路径（可选）：
+   │ GET /api/profile/init/{trace_id}/stream
+   │ 1s 内收到 status + completed 事件后连接关闭
 ```
 
 ### 4.4 路由表
@@ -321,9 +455,10 @@ gateway 轮询路由 /api/profile/init/{trace_id}/status
 | GET | `/healthz` | liveness（仅返回 200） |
 | GET | `/readyz` | readiness（检查 PG/Redis/RabbitMQ 连接） |
 | POST | `/api/profile/init` | 触发 smoke skill，返回 trace_id |
-| GET | `/api/profile/init/{trace_id}/status` | 状态查询 |
+| GET | `/api/profile/init/{trace_id}/status` | 状态查询（polling 兼容） |
+| GET | `/api/profile/init/{trace_id}/stream` | SSE 流式（Stage 2 仅推 status + completed 事件；流式分块 Stage 3 接入） |
 
-**Stage 2 暂不实现**：SSE / WebSocket 流式推送（推到 Stage 3）。
+**Stage 2 暂不实现**：WebSocket 流式推送（推到 Stage 3）。
 
 ---
 
@@ -379,8 +514,11 @@ class AppError(Exception):
 - `test_envelope.py` — 信封序列化 / 反序列化 / trace_id 生成
 - `test_skill_routing.py` — SkillBasedScheduler 按 skill 名匹配
 - `test_registry.py` — Agent 注册 / 心跳 / 下线 / discover
+- `test_llm_base.py` — `BaseLLMAdapter` 三方法签名 + MockLLMAdapter happy path
+- `test_llm_registry.py` — register / get / default provider
 - `test_llm_adapter.py` — OpenAI 兼容协议 mock 重放（respx / httpx mock）
 - `test_circuit_breaker.py` — 熔断 open/half-open/close 转换
+- `test_sse_endpoint.py` — SSE 端点骨架：发请求收 2 事件后正常关闭
 
 **集成测试**：
 - `test_smoke.py` — 起真实 RabbitMQ + Redis + Postgres（testcontainers），跑 ping/pong 端到端
@@ -420,19 +558,23 @@ class AppError(Exception):
   - POST /api/profile/init 拿到 trace_id
   - GET /api/profile/init/{trace_id}/status 轮询（每 500ms 一次，硬超时 10s）内收到 completed
   - reply 字段非空且包含 "pong"
+- [ ] **LLM 抽象层**：`LLMRegistry` 默认注册 `mock` + `openai_compat` 两个 provider；`BaseLLMAdapter.chat_stream()` 接口在 mock 下产出 ≥ 2 个 chunk
+- [ ] **SSE 端点**：`curl -N /api/profile/init/{trace_id}/stream` 1s 内收到 `status` + `completed` 两条事件后正常关闭
 - [ ] Jaeger UI 上能看到 smoke 完整 trace
 - [ ] `uv run mypy src` 0 错误（strict 模式）
 - [ ] `uv run pytest tests/unit -q` 全绿
 - [ ] `uv run pytest tests/integration/test_smoke.py -q` 全绿
-- [ ] `backend/README.md` 写明启动步骤 + smoke 用法 + 决策表
+- [ ] `backend/README.md` 写明启动步骤 + smoke 用法 + 决策表 + LLM provider 切换方式
 
 ### 6.2 不允许出现
 
 - ❌ 任何鉴权 / 登录 / Token / JWT / OAuth 代码（参见 [[no-auth-no-login]]）
 - ❌ 业务逻辑实现（关卡 / 画像生成算法 / 藏宝图生成 / 评审）—— Stage 3+ 范畴
-- ❌ WebSocket / SSE 流式推送 —— Stage 3 范畴
+- ❌ WebSocket 流式推送 —— Stage 3 范畴
+- ❌ **SSE 端点的真实流式分块业务逻辑**（仅留骨架与契约） —— Stage 3 范畴
 - ❌ 17 个 REST 端点的非 smoke 部分 —— Stage 3+ 范畴
 - ❌ 业务表（除 students + profiles）—— Stage 3+ 范畴
+- ❌ 直连 OpenAI SDK 绕过 `BaseLLMAdapter` —— 必须走 LLMRegistry
 
 ### 6.3 风险与应对
 
