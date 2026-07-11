@@ -12,6 +12,8 @@
     height 220ms cubic-bezier(0.4, 0, 0.2, 1),
     top 220ms cubic-bezier(0.4, 0, 0.2, 1),
     left 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 220ms cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 200ms ease;
 }
 .win.dragging { transition: none; }
@@ -19,10 +21,7 @@
 .win.focused { box-shadow: var(--shadow-2); }
 .win.minimized { opacity: 0; pointer-events: none; }
 .win.maximized {
-  position: absolute;
   border-radius: 0;
-  border-left: 0;
-  border-right: 0;
   z-index: 5000;
 }
 .win-title {
@@ -83,25 +82,12 @@
   left: 0; bottom: 0;
   cursor: nesw-resize;
 }
-/* 让 handle 上有一条小斜杠指示 */
-.resize-handle.rh-br::after {
-  content: '';
-  position: absolute;
-  right: 3px; bottom: 3px;
-  width: 6px; height: 6px;
-  border-right: 1.5px solid var(--mute);
-  border-bottom: 1.5px solid var(--mute);
-  opacity: 0.6;
-  pointer-events: none;
+/* 删除原 ::after 小斜杠：resize 图标不再显示，但保留拖边功能（v4 附录 A 用户偏好） */
+
+/* 可访问性：用户开启"减少动效"时全部 transition 缩为 0ms */
+@media (prefers-reduced-motion: reduce) {
+  .win, .win *, .dock-item * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
-.resize-handle.rh-bl::after {
-  content: '';
-  position: absolute;
-  left: 3px; bottom: 3px;
-  width: 6px; height: 6px;
-  border-left: 1.5px solid var(--mute);
-  border-bottom: 1.5px solid var(--mute);
-  opacity: 0.6;
-  pointer-events: none;
-}
-.resize-handle:hover::after { opacity: 1; border-color: var(--indigo); }
