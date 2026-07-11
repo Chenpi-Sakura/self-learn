@@ -38,12 +38,12 @@ export const mapEdges: Edge[] = [
 export const profile = {
   student: '林知遥',
   dimensions: [
-    { key: 'understanding', label: '理解', value: 78 },
-    { key: 'reasoning',     label: '推理', value: 62 },
-    { key: 'expression',    label: '表达', value: 55 },
-    { key: 'application',   label: '应用', value: 70 },
-    { key: 'transfer',      label: '迁移', value: 74, pulsing: true },
-    { key: 'creation',      label: '创造', value: 48 }
+    { key: 'understanding_depth', label: '理解深度', value: 78 },
+    { key: 'reasoning_accuracy',  label: '推理准确', value: 62 },
+    { key: 'expression_clarity',  label: '表达清晰', value: 55 },
+    { key: 'application_breadth', label: '应用广度', value: 70 },
+    { key: 'transfer_ability',    label: '迁移能力', value: 74, pulsing: true },
+    { key: 'creativity',          label: '创造力',   value: 48 }
   ]
 };
 
