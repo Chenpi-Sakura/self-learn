@@ -1,11 +1,11 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; padding: 0; }
 body {
-  font-family: var(--font-serif-cn), var(--font-serif-en);
+  font-family: var(--font-body);
   color: var(--ink);
   background: var(--paper);
-  font-size: 18px;
-  line-height: 1.6;
+  font-size: var(--fs-body);
+  line-height: var(--line-height);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;

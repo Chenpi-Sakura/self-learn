@@ -32,6 +32,17 @@
   --s-7: 48px;
 
   /* Heights */
-  --topbar-h: 56px;
-  --dock-h: 76px;
+  --topbar-h: 52px;
+  --dock-h: 72px;
+
+  /* Typography — 单一调控点 */
+  --fs-body: 16px;
+  --fs-secondary: 14px;
+  --fs-tertiary: 13px;
+  --fs-small: 12px;
+  --fs-tiny: 11px;
+  --fs-title: 18px;
+  --fs-title-lg: 20px;
+  --fs-title-xl: 22px;
+  --line-height: 1.55;
 }

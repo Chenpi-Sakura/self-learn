@@ -27,3 +27,6 @@ npm-debug.log*
 
 # test snapshots (just in case)
 *.shot.png
+
+# development screenshots
+demo-serif-*.png

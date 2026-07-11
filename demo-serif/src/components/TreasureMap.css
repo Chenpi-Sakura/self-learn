@@ -6,12 +6,12 @@
   display: flex; justify-content: space-between; align-items: baseline;
   margin-bottom: 8px;
 }
-.tm-head .h { font-size: 24px; color: var(--ink); }
-.tm-head .s { font-size: 16px; color: var(--mute); }
+.tm-head .h { font-size: var(--fs-title-xl); color: var(--ink); }
+.tm-head .s { font-size: var(--fs-secondary); color: var(--mute); }
 .tm-svg { flex: 1; min-height: 0; }
 .tm .node-g { transition: transform 200ms ease; }
 .tm .node-g:hover { transform: scale(1.05); }
 .tm .node-rect { transition: stroke 160ms ease; }
 .tm .node-g:hover .node-rect { stroke: var(--vermilion); stroke-width: 2; }
-.tm .node-lbl { font-size: 16px; fill: var(--ink); pointer-events: none; }
-.tm .node-num { font-size: 12px; fill: var(--mute); pointer-events: none; }
+.tm .node-lbl { font-size: var(--fs-body); fill: var(--ink); pointer-events: none; }
+.tm .node-num { font-size: var(--fs-tertiary); fill: var(--mute); pointer-events: none; }

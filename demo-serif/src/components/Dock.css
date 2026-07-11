@@ -15,7 +15,7 @@
   z-index: 100;
 }
 .dock-item {
-  width: 60px; height: 64px;
+  width: 56px; height: 60px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 2px;
@@ -26,5 +26,5 @@
 }
 .dock-item:hover { background: var(--hover); color: var(--ink); }
 .dock-item.active { background: var(--indigo-soft); color: var(--indigo); }
-.dock-item .ic { font-size: 22px; line-height: 1; }
-.dock-item .lb { font-size: 12px; letter-spacing: 0.06em; }
+.dock-item .ic { font-size: var(--fs-title); line-height: 1; }
+.dock-item .lb { font-size: var(--fs-small); letter-spacing: 0.06em; }

@@ -10,8 +10,8 @@
 .mode button {
   position: relative;
   z-index: 1;
-  padding: 6px 18px;
-  font-size: 18px;
+  padding: 4px 14px;
+  font-size: var(--fs-body);
   border-radius: var(--r-pill);
   color: var(--mute);
   transition: color 180ms ease;

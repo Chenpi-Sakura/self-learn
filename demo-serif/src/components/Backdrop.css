@@ -12,25 +12,3 @@
   background-size: 24px 24px;
   pointer-events: none;
 }
-.backdrop-mountain {
-  position: absolute;
-  left: 0; bottom: 0;
-  width: 540px; height: 220px;
-  opacity: 0.08;
-  pointer-events: none;
-}
-.backdrop-seal {
-  position: absolute;
-  right: 60px; top: 120px;
-  width: 92px; height: 92px;
-  border: 2px solid var(--vermilion);
-  border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--vermilion);
-  font-size: 14px;
-  letter-spacing: 0.2em;
-  transform: rotate(-6deg);
-  opacity: 0.65;
-  pointer-events: none;
-  font-family: var(--font-serif-cn);
-}

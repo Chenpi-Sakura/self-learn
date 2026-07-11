@@ -1,21 +1,21 @@
+/* 楷体：中文（CJK 范围） */
 @font-face {
-  font-family: 'FlyFlower';
-  src:
-    url('/fonts/FlyFlowerSong-OTF.otf') format('opentype'),
-    url('/fonts/FlyFlowerSong-TTF.ttf') format('truetype');
+  font-family: 'DemoKai';
+  src: url('/fonts/simkai.ttf') format('truetype');
   font-display: swap;
-  unicode-range: U+4E00-9FFF;
+  unicode-range: U+4E00-9FFF, U+3000-303F, U+FF00-FFEF;
 }
 
+/* Times New Roman：拉丁字符（数字、字母、标点） */
 @font-face {
-  font-family: 'Hedvig';
-  src:
-    url('/fonts/HedvigLettersSerif-Regular.otf') format('opentype'),
-    url('/fonts/HedvigLettersSerif-Regular.ttf') format('truetype');
+  font-family: 'DemoTimes';
+  src: url('/fonts/times.ttf') format('truetype');
   font-display: swap;
+  unicode-range: U+0020-007F, U+00A0-00FF;
 }
 
 :root {
-  --font-serif-cn: 'FlyFlower', 'Songti SC', 'STSong', serif;
-  --font-serif-en: 'Hedvig', 'Iowan Old Style', 'Georgia', serif;
+  --font-cn: 'DemoKai', '楷体', 'Kaiti SC', 'STKaiti', serif;
+  --font-en: 'DemoTimes', 'Times New Roman', Cambria, Georgia, serif;
+  --font-body: var(--font-en), var(--font-cn);
 }

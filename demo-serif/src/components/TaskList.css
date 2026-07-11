@@ -1,11 +1,11 @@
 .tl { display: flex; flex-direction: column; height: 100%; }
 .tl-head { margin-bottom: 8px; }
-.tl-head .h { font-size: 22px; color: var(--ink); }
-.tl-head .s { font-size: 16px; color: var(--mute); }
+.tl-head .h { font-size: var(--fs-title-xl); color: var(--ink); }
+.tl-head .s { font-size: var(--fs-secondary); color: var(--mute); }
 .tl-list { display: flex; flex-direction: column; gap: 6px; }
 .tl-row {
-  display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center;
-  padding: 8px 10px;
+  display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: center;
+  padding: 7px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   background: var(--card);
@@ -13,16 +13,16 @@
 }
 .tl-row:hover { background: var(--hover); }
 .tl-row .ck {
-  width: 18px; height: 18px;
+  width: 16px; height: 16px;
   border: 1.5px solid var(--border);
   border-radius: var(--r-btn);
   display: flex; align-items: center; justify-content: center;
   color: var(--card);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .tl-row.doing .ck { background: var(--indigo); border-color: var(--indigo); }
 .tl-row.done .ck { background: var(--indigo); border-color: var(--indigo); }
-.tl-row .ttl { font-size: 18px; color: var(--ink); }
+.tl-row .ttl { font-size: var(--fs-body); color: var(--ink); }
 .tl-row.done .ttl { color: var(--mute); text-decoration: line-through; }
 .tl-row.doing .ttl { color: var(--indigo); }
-.tl-row .m  { font-size: 14px; color: var(--mute); }
+.tl-row .m  { font-size: var(--fs-tertiary); color: var(--mute); }

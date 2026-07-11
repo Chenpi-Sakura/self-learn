@@ -6,35 +6,35 @@
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center;
-  padding: 0 24px;
-  gap: 24px;
+  padding: 0 20px;
+  gap: 20px;
   z-index: 5000;
 }
 .topbar .logo {
-  font-size: 20px; font-weight: 600;
+  font-size: var(--fs-title-lg); font-weight: 600;
   color: var(--indigo);
   letter-spacing: 0.04em;
 }
-.topbar nav { display: flex; gap: 20px; }
+.topbar nav { display: flex; gap: 18px; }
 .topbar nav a {
-  font-size: 18px;
+  font-size: var(--fs-body);
   color: var(--ink);
   transition: color 180ms ease;
 }
 .topbar nav a:hover { color: var(--indigo); }
 .topbar nav a.active { color: var(--indigo); border-bottom: 1px solid var(--indigo); padding-bottom: 2px; }
-.topbar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.topbar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .topbar .cmdk {
-  font-size: 15px; color: var(--mute);
+  font-size: var(--fs-tertiary); color: var(--mute);
   border: 1px solid var(--border);
-  padding: 4px 10px; border-radius: var(--r-btn);
+  padding: 3px 10px; border-radius: var(--r-btn);
   background: var(--card);
 }
 .topbar .avatar {
-  width: 32px; height: 32px;
+  width: 30px; height: 30px;
   border-radius: var(--r-pill);
   background: var(--indigo);
   color: var(--card);
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
+  font-size: var(--fs-body);
 }

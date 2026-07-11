@@ -13,7 +13,7 @@
 .win.focused { box-shadow: var(--shadow-2); }
 .win.minimized { opacity: 0; pointer-events: none; }
 .win-title {
-  height: 44px;
+  height: 38px;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center;
   padding: 0 14px;
@@ -24,24 +24,24 @@
 }
 .win-title:active { cursor: grabbing; }
 .win-title .dot {
-  width: 10px; height: 10px; border-radius: 50%;
+  width: 8px; height: 8px; border-radius: 50%;
   background: var(--border);
 }
 .win-title .dot.key { background: var(--vermilion); }
 .win-title .name {
   flex: 1;
-  font-size: 18px;
+  font-size: var(--fs-title);
   color: var(--ink);
   letter-spacing: 0.02em;
 }
-.win-title .ctrls { display: flex; gap: 6px; }
+.win-title .ctrls { display: flex; gap: 4px; }
 .win-title .ctrl {
-  width: 22px; height: 22px;
+  width: 20px; height: 20px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--r-btn);
   color: var(--mute);
-  font-size: 12px;
+  font-size: var(--fs-tertiary);
 }
 .win-title .ctrl:hover { background: var(--hover); color: var(--ink); }
 .win-title .ctrl.close:hover { background: var(--vermilion); color: var(--card); }
-.win-body { flex: 1; overflow: auto; padding: 16px; }
+.win-body { flex: 1; overflow: auto; padding: 14px; }
