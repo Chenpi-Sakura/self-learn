@@ -12,7 +12,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-type ResizeDir = 'br' | 'bl';
+type ResizeDir = 'br' | 'bl' | 'l' | 'r';
 
 export function Window({ win, title, isKey, children }: Props) {
   const moveWindow = useWorkspace((s) => s.moveWindow);
@@ -126,6 +126,12 @@ export function Window({ win, title, isKey, children }: Props) {
       } else if (resizing === 'bl') {
         // 左下角：左边缩进 → x 增加，宽度同步减少
         resizeWindow(win.id, { x: s.winX + dx, w: s.winW - dx, h: s.winH + dy });
+      } else if (resizing === 'l') {
+        // 左边缘：x 与 w 联动，右边沿固定
+        resizeWindow(win.id, { x: s.winX + dx, w: s.winW - dx });
+      } else if (resizing === 'r') {
+        // 右边缘：只改 w，左边沿固定
+        resizeWindow(win.id, { w: s.winW + dx });
       }
     };
     const handleMouseUp = () => setResizing(null);
@@ -179,6 +185,8 @@ export function Window({ win, title, isKey, children }: Props) {
     win.maximized ? 'maximized' : '',
     resizing === 'br' ? 'resizing-br' : '',
     resizing === 'bl' ? 'resizing-bl' : '',
+    resizing === 'l' ? 'resizing-l' : '',
+    resizing === 'r' ? 'resizing-r' : '',
   ].filter(Boolean).join(' ');
 
   const dotCls = 'dot' + (isKey ? ' key' : '');
@@ -270,6 +278,8 @@ export function Window({ win, title, isKey, children }: Props) {
         <div className="win-body">{children}</div>
         {!win.maximized && !win.minimized && (
           <>
+            <span className="resize-edge rh-l" onMouseDown={handleResizeDown('l')} title="拖拽改变大小" />
+            <span className="resize-edge rh-r" onMouseDown={handleResizeDown('r')} title="拖拽改变大小" />
             <span className="resize-handle rh-br" onMouseDown={handleResizeDown('br')} title="拖拽改变大小" />
             <span className="resize-handle rh-bl" onMouseDown={handleResizeDown('bl')} title="拖拽改变大小" />
           </>
