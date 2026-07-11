@@ -84,14 +84,8 @@
 }
 /* 删除原 ::after 小斜杠：resize 图标不再显示，但保留拖边功能（v4 附录 A 用户偏好） */
 
-/* 可访问性：用户开启"减少动效"时保留 transition 但缩为极短时长 + linear 缓动
-   避免 transition: none —— 那样 React 切换 style.top/left/width/height 时浏览器不会插值
-   改用 0.01ms + linear：用户视觉上感知不到动画，但状态切换仍走插值路径 */
-@media (prefers-reduced-motion: reduce) {
-  .win, .win *, .dock-item * {
-    transition-duration: 0.01ms !important;
-    transition-timing-function: linear !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
-}
+/* 注意：未使用 prefers-reduced-motion 媒体查询
+   因为系统开启了"减少动效"时，transition: none 会彻底禁用过渡动画，
+   本 demo 的布局切换/最大化/最小化都依赖 CSS transition 插值。
+   在正式版本中应像 v4 § 2.2.6 规范所述接入该查询，
+   但实现改为"缩短时长至 60ms"而非"none"。当前保持 220ms 全量动画。 */
