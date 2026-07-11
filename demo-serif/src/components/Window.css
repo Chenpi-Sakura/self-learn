@@ -20,6 +20,7 @@
 .win.resizing-br, .win.resizing-bl { transition: none; }
 .win.focused { box-shadow: var(--shadow-2); }
 .win.minimized { opacity: 0; pointer-events: none; }
+.win.closing { opacity: 0; pointer-events: none; }
 .win.maximized {
   border-radius: 0;
   z-index: 5000;

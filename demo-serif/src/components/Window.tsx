@@ -28,14 +28,13 @@ export function Window({ win, title, isKey, children }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [isNew, setIsNew] = useState(true);
 
-  // 关闭动画：防止重复触发
+  // 关闭动画：防止重复触发。纯淡出，不经过 toggleMinimize（避免飞 Dock 动画）
   const [closing, setClosing] = useState(false);
   const handleClose = useCallback(() => {
     if (closing) return;
     setClosing(true);
-    if (!win.minimized) toggleMinimize(win.id);
     setTimeout(() => closeWindow(win.id), 220);
-  }, [closing, win.minimized, win.id, toggleMinimize, closeWindow]);
+  }, [closing, win.id, closeWindow]);
 
   useEffect(() => {
     if (!isNew) return;
@@ -49,10 +48,12 @@ export function Window({ win, title, isKey, children }: Props) {
       el.style.opacity = '0';
       el.style.transform = `translate(${fromX}px, ${fromY}px) scale(${scale})`;
       // 下帧切到目标值触发 transition
+      // 注意：不能用 el.style.transform = '' 清空，因为此时 React 已通过 setIsNew(false)
+      // 重新渲染并提交了 style.transform = translate(win.x, win.y)，直接清空会破坏 React 的 inline 值
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           el.style.opacity = '';
-          el.style.transform = '';
+          el.style.transform = `translate(${win.x}px, ${win.y}px)`;
         });
       });
     }
@@ -187,6 +188,7 @@ export function Window({ win, title, isKey, children }: Props) {
   const cls = [
     'win',
     focused ? 'focused' : '',
+    closing ? 'closing' : '',
     win.minimized ? 'minimized' : '',
     (dragging || resizing) ? 'dragging' : '',
     win.maximized ? 'maximized' : '',
@@ -203,7 +205,15 @@ export function Window({ win, title, isKey, children }: Props) {
   const style: React.CSSProperties = {
     zIndex: win.maximized ? 15000 : win.z,
   };
-  if (win.minimized) {
+  if (closing) {
+    // 关闭淡出：保持当前位置，仅降低不透明度
+    style.width = win.w;
+    style.height = win.h;
+    style.left = 0;
+    style.top = 0;
+    style.transform = `translate(${win.x}px, ${win.y}px)`;
+    style.opacity = 0;
+  } else if (win.minimized) {
     if (dockTarget) {
       // 收 Dock：把 transform 拉到 Dock 图标位置 + 缩小
       const targetCx = dockTarget.x + dockTarget.w / 2;
