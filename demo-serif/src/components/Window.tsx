@@ -199,8 +199,9 @@ export function Window({ win, title, isKey, children }: Props) {
   // 最大化状态：仍走 x/y/w/h + transform，让 CSS transition 接管插值（v4 § 2.2.2）
   const TOPBAR_H = 52;
   const DOCK_H = 72;
+  // 最大化时 z-index 升至 15000，高于 TopBar(5000)、always 桶(11000)、ContextMenu(10000)
   const style: React.CSSProperties = {
-    zIndex: win.z,
+    zIndex: win.maximized ? 15000 : win.z,
   };
   if (win.minimized) {
     if (dockTarget) {
