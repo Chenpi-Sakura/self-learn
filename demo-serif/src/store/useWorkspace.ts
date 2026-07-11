@@ -224,13 +224,16 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       const key = existingKey || `win_${appId}_${Date.now()}`;
       const maxZ = Math.max(...Object.values(s.windows).map((w) => w.z));
       const def = DEFAULT_WIN[key];
+      const TOPBAR_H = 52;
+      const initW = def?.w ?? 600;
+      const initH = def?.h ?? 400;
       const newWin: WindowState = {
         id: key,
         appId,
-        x: def?.x ?? 100,
-        y: def?.y ?? 100,
-        w: def?.w ?? 600,
-        h: def?.h ?? 400,
+        x: Math.max(0, (window.innerWidth - initW) / 2),
+        y: Math.max(0, (window.innerHeight - TOPBAR_H - initH) / 2),
+        w: initW,
+        h: initH,
         z: maxZ + 1,
         pinLevel: appId === 'chat' ? 'always' : 'none'
       };
