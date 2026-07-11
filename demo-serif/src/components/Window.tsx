@@ -11,6 +11,8 @@ interface Props {
   children: React.ReactNode;
 }
 
+type ResizeDir = 'br' | 'bl';
+
 export function Window({ win, title, isKey, children }: Props) {
   const moveWindow = useWorkspace((s) => s.moveWindow);
   const focusWindow = useWorkspace((s) => s.focusWindow);
@@ -18,9 +20,11 @@ export function Window({ win, title, isKey, children }: Props) {
   const toggleMaximize = useWorkspace((s) => s.toggleMaximize);
   const togglePin = useWorkspace((s) => s.togglePin);
   const closeWindow = useWorkspace((s) => s.closeWindow);
+  const resizeWindow = useWorkspace((s) => s.resizeWindow);
   const focusedId = useWorkspace((s) => s.focusedId);
 
   const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState<ResizeDir | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const dragStart = useRef({ x: 0, y: 0 });
   const winStart = useRef({ x: 0, y: 0 });
@@ -51,6 +55,55 @@ export function Window({ win, title, isKey, children }: Props) {
     };
   }, [dragging, win.id, moveWindow]);
 
+  // ---- Resize 拖拽 ----
+  const resizeStart = useRef({
+    mouseX: 0,
+    mouseY: 0,
+    winX: 0,
+    winY: 0,
+    winW: 0,
+    winH: 0,
+  });
+
+  const handleResizeDown = (dir: ResizeDir) => (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if (win.maximized) return; // 最大化时不允许 resize
+    e.stopPropagation();
+    e.preventDefault();
+    focusWindow(win.id);
+    resizeStart.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      winX: win.x,
+      winY: win.y,
+      winW: win.w,
+      winH: win.h,
+    };
+    setResizing(dir);
+  };
+
+  useEffect(() => {
+    if (!resizing) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const s = resizeStart.current;
+      const dx = e.clientX - s.mouseX;
+      const dy = e.clientY - s.mouseY;
+      if (resizing === 'br') {
+        resizeWindow(win.id, { w: s.winW + dx, h: s.winH + dy });
+      } else if (resizing === 'bl') {
+        // 左下角：左边缩进 → x 增加，宽度同步减少
+        resizeWindow(win.id, { x: s.winX + dx, w: s.winW - dx, h: s.winH + dy });
+      }
+    };
+    const handleMouseUp = () => setResizing(null);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing, win.id, resizeWindow]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -61,6 +114,11 @@ export function Window({ win, title, isKey, children }: Props) {
     e.stopPropagation();
     action();
   }, []);
+
+  const handleTitleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleMaximize(win.id);
+  }, [toggleMaximize, win.id]);
 
   const pinIcon = win.pinLevel === 'always' ? '🔒' : win.pinLevel === 'normal' ? '📌' : null;
 
@@ -79,8 +137,10 @@ export function Window({ win, title, isKey, children }: Props) {
     'win',
     focused ? 'focused' : '',
     win.minimized ? 'minimized' : '',
-    dragging ? 'dragging' : '',
+    (dragging || resizing) ? 'dragging' : '',
     win.maximized ? 'maximized' : '',
+    resizing === 'br' ? 'resizing-br' : '',
+    resizing === 'bl' ? 'resizing-bl' : '',
   ].filter(Boolean).join(' ');
 
   const dotCls = 'dot' + (isKey ? ' key' : '');
@@ -114,6 +174,7 @@ export function Window({ win, title, isKey, children }: Props) {
         <div
           className="win-title"
           onMouseDown={handleTitleMouseDown}
+          onDoubleClick={handleTitleDoubleClick}
           onContextMenu={handleContextMenu}
         >
           {pinIcon ? (
@@ -129,6 +190,12 @@ export function Window({ win, title, isKey, children }: Props) {
           </div>
         </div>
         <div className="win-body">{children}</div>
+        {!win.maximized && !win.minimized && (
+          <>
+            <span className="resize-handle rh-br" onMouseDown={handleResizeDown('br')} title="拖拽改变大小" />
+            <span className="resize-handle rh-bl" onMouseDown={handleResizeDown('bl')} title="拖拽改变大小" />
+          </>
+        )}
       </div>
       {ctxMenu && (
         <ContextMenu

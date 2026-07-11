@@ -65,6 +65,7 @@ interface WorkspaceState {
   togglePin: (id: string) => void;
   closeWindow: (id: string) => void;
   openWindow: (appId: WindowState['appId']) => void;
+  resizeWindow: (id: string, size: { w?: number; h?: number; x?: number; y?: number }) => void;
   toggleTask: (id: string) => void;
   sendChat: (text: string) => void;
 }
@@ -224,6 +225,21 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       return {
         windows: { ...s.windows, [key]: newWin },
         focusedId: key
+      };
+    }),
+
+  resizeWindow: (id, size) =>
+    set((s) => {
+      const w = s.windows[id];
+      if (!w) return s;
+      const MIN_W = 240, MIN_H = 160;
+      const MAX_W = 1280, MAX_H = 900;
+      const newW = size.w !== undefined ? Math.max(MIN_W, Math.min(MAX_W, size.w)) : w.w;
+      const newH = size.h !== undefined ? Math.max(MIN_H, Math.min(MAX_H, size.h)) : w.h;
+      const newX = size.x !== undefined ? size.x : w.x;
+      const newY = size.y !== undefined ? size.y : w.y;
+      return {
+        windows: { ...s.windows, [id]: { ...w, w: newW, h: newH, x: newX, y: newY } }
       };
     }),
 
