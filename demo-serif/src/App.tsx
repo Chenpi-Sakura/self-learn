@@ -1,4 +1,5 @@
 import './App.css';
+import { useEffect } from 'react';
 import { Backdrop } from './components/Backdrop';
 import { TopBar } from './components/TopBar';
 import { Dock } from './components/Dock';
@@ -8,6 +9,7 @@ import { TaskList } from './components/TaskList';
 import { ProfileRadar } from './components/ProfileRadar';
 import { ChatFloat } from './components/ChatFloat';
 import { useWorkspace } from './store/useWorkspace';
+import { shortcutManager, parseKeyEvent, registerSystemShortcuts } from './lib/shortcuts';
 import type { WindowState } from './types/window';
 import type { ReactNode } from 'react';
 
@@ -32,6 +34,21 @@ function renderBody(appId: string, win: WindowState): ReactNode {
 
 export default function App() {
   const windows = useWorkspace((s) => s.windows);
+
+  useEffect(() => {
+    registerSystemShortcuts();
+    const handler = (e: KeyboardEvent) => {
+      // 忽略输入框/文本域内按键（避免与文字输入冲突）
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const combo = parseKeyEvent(e);
+      if (shortcutManager.fire(combo)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const entries: [WindowState, WinDef][] = [];
   for (const w of Object.values(windows)) {
