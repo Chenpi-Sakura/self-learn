@@ -1,0 +1,40 @@
+.ctx-menu {
+  position: fixed;
+  min-width: 170px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 6px 0;
+  box-shadow: 0 4px 20px rgba(27, 59, 111, 0.12);
+  z-index: 10000;
+  font-size: var(--fs-body);
+  user-select: none;
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 14px;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink);
+  text-align: left;
+  font-size: var(--fs-body);
+}
+
+.ctx-item:hover { background: var(--hover); }
+.ctx-item.disabled { color: var(--mute); cursor: default; }
+.ctx-item.danger { color: var(--vermilion); }
+
+.ctx-ic { width: 18px; text-align: center; font-size: var(--fs-secondary); }
+.ctx-lb { flex: 1; }
+.ctx-sc { color: var(--mute); font-size: var(--fs-tertiary); margin-left: 12px; }
+
+.ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 8px;
+}

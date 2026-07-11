@@ -9,9 +9,15 @@
   transition: box-shadow 200ms ease, transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .win.dragging { transition: none; }
-}
 .win.focused { box-shadow: var(--shadow-2); }
 .win.minimized { opacity: 0; pointer-events: none; }
+.win.maximized {
+  position: absolute;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  z-index: 5000;
+}
 .win-title {
   height: 38px;
   border-bottom: 1px solid var(--border);
@@ -26,15 +32,24 @@
 .win-title .dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--border);
+  flex-shrink: 0;
 }
 .win-title .dot.key { background: var(--vermilion); }
+.win-title .pin-icon {
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
 .win-title .name {
   flex: 1;
   font-size: var(--fs-title);
   color: var(--ink);
   letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.win-title .ctrls { display: flex; gap: 4px; }
+.win-title .ctrls { display: flex; gap: 4px; flex-shrink: 0; }
 .win-title .ctrl {
   width: 20px; height: 20px;
   display: flex; align-items: center; justify-content: center;

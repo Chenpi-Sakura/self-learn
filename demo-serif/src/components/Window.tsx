@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WindowState } from '../store/useWorkspace';
 import { useWorkspace } from '../store/useWorkspace';
+import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import './Window.css';
 
 interface Props {
@@ -13,14 +14,21 @@ interface Props {
 export function Window({ win, title, isKey, children }: Props) {
   const moveWindow = useWorkspace((s) => s.moveWindow);
   const focusWindow = useWorkspace((s) => s.focusWindow);
+  const toggleMinimize = useWorkspace((s) => s.toggleMinimize);
+  const toggleMaximize = useWorkspace((s) => s.toggleMaximize);
+  const togglePin = useWorkspace((s) => s.togglePin);
+  const closeWindow = useWorkspace((s) => s.closeWindow);
   const focusedId = useWorkspace((s) => s.focusedId);
+
   const [dragging, setDragging] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const dragStart = useRef({ x: 0, y: 0 });
   const winStart = useRef({ x: 0, y: 0 });
 
   const focused = focusedId === win.id;
 
   const handleTitleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // 左键
     dragStart.current = { x: e.clientX, y: e.clientY };
     winStart.current = { x: win.x, y: win.y };
     setDragging(true);
@@ -43,39 +51,93 @@ export function Window({ win, title, isKey, children }: Props) {
     };
   }, [dragging, win.id, moveWindow]);
 
-  const cls = ['win', focused ? 'focused' : '', win.minimized ? 'minimized' : '', dragging ? 'dragging' : ''].filter(Boolean).join(' ');
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleCtrlClick = useCallback((e: React.MouseEvent, action: () => void) => {
+    e.stopPropagation();
+    action();
+  }, []);
+
+  const pinIcon = win.pinLevel === 'always' ? '🔒' : win.pinLevel === 'normal' ? '📌' : null;
+
+  const menuItems: ContextMenuItem[] = [
+    ...(win.pinLevel === 'normal'
+      ? [{ type: 'action' as const, label: '取消置顶', icon: '📍', action: () => togglePin(win.id) }]
+      : [{ type: 'action' as const, label: '置顶窗口', icon: '📌', action: () => togglePin(win.id) }]
+    ),
+    { type: 'separator' as const },
+    { type: 'action' as const, label: '最小化', icon: '—', action: () => toggleMinimize(win.id) },
+    { type: 'action' as const, label: win.maximized ? '还原' : '最大化', icon: win.maximized ? '❐' : '□', action: () => toggleMaximize(win.id) },
+    { type: 'action' as const, label: '关闭窗口', icon: '✕', danger: true, action: () => closeWindow(win.id) },
+  ];
+
+  const cls = [
+    'win',
+    focused ? 'focused' : '',
+    win.minimized ? 'minimized' : '',
+    dragging ? 'dragging' : '',
+    win.maximized ? 'maximized' : '',
+  ].filter(Boolean).join(' ');
+
   const dotCls = 'dot' + (isKey ? ' key' : '');
 
+  // 最大化状态下，铺满 windows-layer
   const style: React.CSSProperties = {
     zIndex: win.z,
-    width: win.w,
-    height: win.h,
-    left: 0,
-    top: 0
   };
-  if (!win.minimized) {
+  if (win.maximized && !win.minimized) {
+    style.top = 0;
+    style.left = 0;
+    style.right = 0;
+    style.bottom = 0;
+    style.width = undefined;
+    style.height = undefined;
+  } else if (!win.minimized) {
+    style.width = win.w;
+    style.height = win.h;
+    style.left = 0;
+    style.top = 0;
     style.transform = `translate(${win.x}px, ${win.y}px)`;
   }
 
   return (
-    <div
-      className={cls}
-      style={style}
-      onMouseDown={() => focusWindow(win.id)}
-    >
+    <>
       <div
-        className="win-title"
-        onMouseDown={handleTitleMouseDown}
+        className={cls}
+        style={style}
+        onMouseDown={() => focusWindow(win.id)}
       >
-        <span className={dotCls} />
-        <span className="name">{title}</span>
-        <div className="ctrls">
-          <button className="ctrl" title="最小化">—</button>
-          <button className="ctrl" title="最大化">□</button>
-          <button className="ctrl close" title="关闭">×</button>
+        <div
+          className="win-title"
+          onMouseDown={handleTitleMouseDown}
+          onContextMenu={handleContextMenu}
+        >
+          {pinIcon ? (
+            <span className="pin-icon" title={win.pinLevel === 'always' ? '系统置顶' : '已置顶'}>{pinIcon}</span>
+          ) : (
+            <span className={dotCls} />
+          )}
+          <span className="name">{title}</span>
+          <div className="ctrls">
+            <button className="ctrl" title="最小化" onClick={(e) => handleCtrlClick(e, () => toggleMinimize(win.id))}>—</button>
+            <button className="ctrl" title={win.maximized ? '还原' : '最大化'} onClick={(e) => handleCtrlClick(e, () => toggleMaximize(win.id))}>□</button>
+            <button className="ctrl close" title="关闭" onClick={(e) => handleCtrlClick(e, () => closeWindow(win.id))}>×</button>
+          </div>
         </div>
+        <div className="win-body">{children}</div>
       </div>
-      <div className="win-body">{children}</div>
-    </div>
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={menuItems}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+    </>
   );
 }

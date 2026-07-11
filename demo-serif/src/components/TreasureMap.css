@@ -9,8 +9,11 @@
 .tm-head .h { font-size: var(--fs-title-xl); color: var(--ink); }
 .tm-head .s { font-size: var(--fs-secondary); color: var(--mute); }
 .tm-svg { flex: 1; min-height: 0; }
-.tm .node-g { transition: transform 200ms ease; }
-.tm .node-g:hover { transform: scale(1.05); }
+.tm .node-g {
+  cursor: pointer;
+}
+.tm .node-g:hover .node-rect { stroke: var(--vermilion); stroke-width: 2.5; }
+.tm .node-rect { transition: stroke 120ms ease, stroke-width 120ms ease; }
 .tm .node-rect { transition: stroke 160ms ease; }
 .tm .node-g:hover .node-rect { stroke: var(--vermilion); stroke-width: 2; }
 .tm .node-lbl { font-size: var(--fs-body); fill: var(--ink); pointer-events: none; }

@@ -1,32 +1,68 @@
-import { useState } from 'react';
+import { useWorkspace } from '../store/useWorkspace';
 import './Dock.css';
 
-const items = [
-  { ic: '◇', lb: 'Map' },
-  { ic: '✦', lb: 'AI' },
-  { ic: '□', lb: 'Doc' },
-  { ic: '≡', lb: 'Ex' },
-  { ic: '⌨', lb: 'Code' },
-  { ic: '✎', lb: 'Note' },
-  { ic: '◈', lb: 'Mind' },
-  { ic: '❐', lb: 'Res' },
-  { ic: '▣', lb: 'Dash' }
+interface DockItem {
+  appId: string;
+  ic: string;
+  lb: string;
+}
+
+const items: DockItem[] = [
+  { appId: 'treasure_map', ic: '◇', lb: 'Map' },
+  { appId: 'chat',         ic: '✦', lb: 'AI' },
+  { appId: 'doc',          ic: '□', lb: 'Doc' },
+  { appId: 'exercise',     ic: '≡', lb: 'Ex' },
+  { appId: 'code_editor',  ic: '⌨', lb: 'Code' },
+  { appId: 'note',         ic: '✎', lb: 'Note' },
+  { appId: 'mind_map',     ic: '◈', lb: 'Mind' },
+  { appId: 'resource_library', ic: '❐', lb: 'Res' },
+  { appId: 'dashboard',    ic: '▣', lb: 'Dash' },
 ];
 
+// 当前已映射的窗口 id → appId
+const WIN_APP_IDS = new Set(['treasure_map', 'today', 'profile', 'calendar']);
+
 export function Dock() {
-  const [active, setActive] = useState(0);
+  const windows = useWorkspace((s) => s.windows);
+  const focusedId = useWorkspace((s) => s.focusedId);
+  const openWindow = useWorkspace((s) => s.openWindow);
+  const focusWindow = useWorkspace((s) => s.focusWindow);
+
+  const openAppIds = new Set(Object.values(windows).map((w) => w.appId));
+  const focusedAppId = focusedId ? windows[focusedId]?.appId : null;
+
   return (
     <nav className="dock">
-      {items.map((it, i) => (
-        <button
-          key={it.lb}
-          className={`dock-item ${active === i ? 'active' : ''}`}
-          onClick={() => setActive(i)}
-        >
-          <span className="ic">{it.ic}</span>
-          <span className="lb">{it.lb}</span>
-        </button>
-      ))}
+      {items.map((it) => {
+        const isOpen = openAppIds.has(it.appId as any);
+        const isFocused = focusedAppId === it.appId;
+        const active = isOpen || isFocused;
+        return (
+          <button
+            key={it.appId}
+            className={`dock-item${active ? ' active' : ''}`}
+            onClick={() => {
+              if (WIN_APP_IDS.has(it.appId)) {
+                // 已映射的窗口 → 聚焦/取消最小化
+                const winEntry = Object.entries(windows).find(
+                  ([, v]) => v.appId === it.appId
+                );
+                if (winEntry) {
+                  focusWindow(winEntry[0]);
+                } else {
+                  openWindow(it.appId as any);
+                }
+              } else {
+                openWindow(it.appId as any);
+              }
+            }}
+            title={it.lb}
+          >
+            <span className="ic">{it.ic}</span>
+            <span className="lb">{it.lb}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
