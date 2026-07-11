@@ -57,19 +57,10 @@ export function Window({ win, title, isKey, children }: Props) {
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState<ResizeDir | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
-  const [dockTarget, setDockTarget] = useState<DockRect | null>(null);
+  // 同步读取 Dock 位置，避免 useEffect 延迟一帧的问题
+  const dockTarget: DockRect | null = win.minimized ? dockApi.getDockPosition(win.appId) : null;
   const dragStart = useRef({ x: 0, y: 0 });
   const winStart = useRef({ x: 0, y: 0 });
-
-  // 最小化时拉取 Dock 目标位置（v4 § 2.2.4 收 Dock 动画）
-  useEffect(() => {
-    if (win.minimized) {
-      const pos = dockApi.getDockPosition(win.appId);
-      if (pos) setDockTarget(pos);
-    } else {
-      setDockTarget(null);
-    }
-  }, [win.minimized, win.appId, dockApi]);
 
   const focused = focusedId === win.id;
 
@@ -294,3 +285,4 @@ export function Window({ win, title, isKey, children }: Props) {
     </>
   );
 }
+
