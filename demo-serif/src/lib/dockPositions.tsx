@@ -58,13 +58,20 @@ export function useDockPositions(): DockPositionsApi {
 
 /**
  * 给 Dock 按钮调用：注册 ref 与 appId 映射
+ * 用法：const setRef = useDockRef(appId); <button ref={setRef} ... />
  */
 export function useDockRef(appId: AppId) {
   const api = useDockPositions();
-  return (el: HTMLElement | null) => {
-    useLayoutEffect(() => {
-      api.register(appId, el);
+  const [node, setNode] = useState<HTMLElement | null>(null);
+
+  // 在 hook 顶层注册/反注册（不放在 ref callback 里，避免违反 Rules of Hooks）
+  useLayoutEffect(() => {
+    if (node) {
+      api.register(appId, node);
       return () => api.register(appId, null);
-    }, [appId, el]);
-  };
+    }
+  }, [appId, node, api]);
+
+  // 返回 ref callback：把 DOM 节点存到 state
+  return setNode;
 }
