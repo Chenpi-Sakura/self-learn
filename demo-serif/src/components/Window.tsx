@@ -146,18 +146,23 @@ export function Window({ win, title, isKey, children }: Props) {
 
   const dotCls = 'dot' + (isKey ? ' key' : '');
 
-  // 最大化状态下，铺满 windows-layer
+  // 最大化状态：仍走 x/y/w/h + transform，让 CSS transition 接管插值（v4 § 2.2.2）
+  const TOPBAR_H = 52;
+  const DOCK_H = 72;
   const style: React.CSSProperties = {
     zIndex: win.z,
   };
-  if (win.maximized && !win.minimized) {
-    style.top = 0;
+  if (win.minimized) {
+    // Task 14 会替换为 Dock 位置拉拽逻辑
+    style.opacity = 0;
+    style.pointerEvents = 'none';
+  } else if (win.maximized) {
     style.left = 0;
-    style.right = 0;
-    style.bottom = 0;
-    style.width = undefined;
-    style.height = undefined;
-  } else if (!win.minimized) {
+    style.top = 0;
+    style.width = '100%';
+    style.height = `calc(100vh - ${TOPBAR_H}px - ${DOCK_H}px)`;
+    style.transform = `translate(0, ${TOPBAR_H}px)`;
+  } else {
     style.width = win.w;
     style.height = win.h;
     style.left = 0;
@@ -187,7 +192,11 @@ export function Window({ win, title, isKey, children }: Props) {
           <div className="ctrls">
             <button className="ctrl" title="最小化" onClick={(e) => handleCtrlClick(e, () => toggleMinimize(win.id))}>—</button>
             <button className="ctrl" title={win.maximized ? '还原' : '最大化'} onClick={(e) => handleCtrlClick(e, () => toggleMaximize(win.id))}>□</button>
-            <button className="ctrl close" title="关闭" onClick={(e) => handleCtrlClick(e, () => closeWindow(win.id))}>×</button>
+            <button className="ctrl close" title="关闭" onClick={(e) => handleCtrlClick(e, () => {
+              // 关闭动画：先设 minimized 触发淡出，220ms 后才真正关闭
+              if (!win.minimized) toggleMinimize(win.id);
+              setTimeout(() => closeWindow(win.id), 220);
+            })}>×</button>
           </div>
         </div>
         <div className="win-body">{children}</div>
