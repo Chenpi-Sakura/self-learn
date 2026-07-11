@@ -188,11 +188,14 @@ export function Window({ win, title, isKey, children }: Props) {
       style.pointerEvents = 'none';
     }
   } else if (win.maximized) {
+    // v4 § 2.2.2：最大化走 top/left/width/height 路径
+    // .windows-layer 自身已经从 top=52px 开始，所以 box 的 top 相对该容器是 0
+    // height 扣除 dock 占的纵向空间（72 + 20 bottom 偏移 = 92px）
     style.left = 0;
     style.top = 0;
     style.width = '100%';
-    style.height = `calc(100vh - ${TOPBAR_H}px - ${DOCK_H}px)`;
-    style.transform = `translate(0, ${TOPBAR_H}px)`;
+    style.height = `calc(100% - ${DOCK_H}px - 20px)`;
+    style.transform = 'none';
   } else {
     style.width = win.w;
     style.height = win.h;
