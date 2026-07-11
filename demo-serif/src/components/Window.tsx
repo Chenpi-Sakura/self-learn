@@ -122,16 +122,17 @@ export function Window({ win, title, isKey, children }: Props) {
 
   const pinIcon = win.pinLevel === 'always' ? '🔒' : win.pinLevel === 'normal' ? '📌' : null;
 
-  const menuItems: ContextMenuItem[] = [
-    ...(win.pinLevel === 'normal'
-      ? [{ type: 'action' as const, label: '取消置顶', icon: '📍', action: () => togglePin(win.id) }]
-      : [{ type: 'action' as const, label: '置顶窗口', icon: '📌', action: () => togglePin(win.id) }]
-    ),
-    { type: 'separator' as const },
-    { type: 'action' as const, label: '最小化', icon: '—', action: () => toggleMinimize(win.id) },
-    { type: 'action' as const, label: win.maximized ? '还原' : '最大化', icon: win.maximized ? '❐' : '□', action: () => toggleMaximize(win.id) },
-    { type: 'action' as const, label: '关闭窗口', icon: '✕', danger: true, action: () => closeWindow(win.id) },
-  ];
+  const menuItems: ContextMenuItem[] = [];
+  if (win.pinLevel === 'normal') {
+    menuItems.push({ type: 'action' as const, label: '取消置顶', icon: '📍', action: () => togglePin(win.id) });
+  } else if (win.pinLevel === 'none') {
+    menuItems.push({ type: 'action' as const, label: '置顶窗口', icon: '📌', action: () => togglePin(win.id) });
+  }
+  // always 类（chat 等）不显示置顶项
+  if (menuItems.length > 0) menuItems.push({ type: 'separator' as const });
+  menuItems.push({ type: 'action' as const, label: '最小化', icon: '—', action: () => toggleMinimize(win.id) });
+  menuItems.push({ type: 'action' as const, label: win.maximized ? '还原' : '最大化', icon: win.maximized ? '❐' : '□', action: () => toggleMaximize(win.id) });
+  menuItems.push({ type: 'action' as const, label: '关闭窗口', icon: '✕', danger: true, action: () => closeWindow(win.id) });
 
   const cls = [
     'win',

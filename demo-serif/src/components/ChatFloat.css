@@ -1,12 +1,9 @@
 .chat {
-  position: fixed; right: 24px; bottom: 100px;
-  width: 340px; height: 440px;
+  /* v4 附录 A #9：ChatFloat 改为真窗口，作为 Window 的 body 渲染 */
+  position: relative;
+  width: 100%; height: 100%;
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-2);
   display: flex; flex-direction: column;
-  z-index: 9999;
   overflow: hidden;
 }
 .chat-head {
