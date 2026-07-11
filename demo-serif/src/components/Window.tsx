@@ -38,18 +38,12 @@ export function Window({ win, title, isKey, children }: Props) {
 
   useEffect(() => {
     if (!isNew) return;
-    // 第一帧拉取 Dock 位置，设 opacity=0 + scale=0
-    const pos = dockApi.getDockPosition(win.appId);
-    if (pos && wrapRef.current) {
-      const el = wrapRef.current;
-      const fromX = pos.x + pos.w / 2 - (win.x + win.w / 2);
-      const fromY = pos.y + pos.h / 2 - (win.y + win.h / 2);
-      const scale = Math.max(0.05, Math.min(pos.w / win.w, pos.h / win.h));
+    // 开启动画：从 scale(0.3) + opacity(0) 在自身位置膨胀淡入
+    const el = wrapRef.current;
+    if (el) {
       el.style.opacity = '0';
-      el.style.transform = `translate(${fromX}px, ${fromY}px) scale(${scale})`;
-      // 下帧切到目标值触发 transition
-      // 注意：不能用 el.style.transform = '' 清空，因为此时 React 已通过 setIsNew(false)
-      // 重新渲染并提交了 style.transform = translate(win.x, win.y)，直接清空会破坏 React 的 inline 值
+      el.style.transform = `translate(${win.x}px, ${win.y}px) scale(0.3)`;
+      // 下帧切到目标值 → CSS transition 接管插值
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           el.style.opacity = '';
@@ -206,12 +200,12 @@ export function Window({ win, title, isKey, children }: Props) {
     zIndex: win.maximized ? 15000 : win.z,
   };
   if (closing) {
-    // 关闭淡出：保持当前位置，仅降低不透明度
+    // 关闭淡出缩小：在自身位置缩小 + 淡出，与开启动画对称
     style.width = win.w;
     style.height = win.h;
     style.left = 0;
     style.top = 0;
-    style.transform = `translate(${win.x}px, ${win.y}px)`;
+    style.transform = `translate(${win.x}px, ${win.y}px) scale(0.3)`;
     style.opacity = 0;
   } else if (win.minimized) {
     if (dockTarget) {
