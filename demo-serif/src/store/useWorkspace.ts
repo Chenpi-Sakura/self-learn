@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AppId, WindowState, PinLevel } from '../types/window';
+import { SINGLETON_APP_IDS } from '../types/window';
 import { mapNodes, mapEdges, profile, tasks, initialChat, mockAiReplies } from '../data/sample';
 
 export type Mode = 'proficiency' | 'exploration';
@@ -187,7 +188,18 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
 
   openWindow: (appId) =>
     set((s) => {
-      // 检查该 appId 是否已打开
+      // 单实例 appId 列表（v4 § 3.11.1）：第二次打开只聚焦
+      if (SINGLETON_APP_IDS.has(appId)) {
+        const existing = Object.values(s.windows).find((w) => w.appId === appId);
+        if (existing) {
+          const maxZ = Math.max(...Object.values(s.windows).map((w) => w.z));
+          return {
+            windows: { ...s.windows, [existing.id]: { ...existing, minimized: false, z: maxZ + 1 } },
+            focusedId: existing.id,
+          };
+        }
+      }
+      // 检查该 appId 是否已打开（多实例）
       const existingKey = APP_TO_ID[appId];
       if (existingKey && s.windows[existingKey]) {
         // 已存在 → 聚焦 + 取消最小化
