@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WindowState } from '../store/useWorkspace';
 import { useWorkspace } from '../store/useWorkspace';
+import { useDockPositions, type DockRect } from '../lib/dockPositions';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import './Window.css';
 
@@ -22,12 +23,24 @@ export function Window({ win, title, isKey, children }: Props) {
   const closeWindow = useWorkspace((s) => s.closeWindow);
   const resizeWindow = useWorkspace((s) => s.resizeWindow);
   const focusedId = useWorkspace((s) => s.focusedId);
+  const dockApi = useDockPositions();
 
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState<ResizeDir | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [dockTarget, setDockTarget] = useState<DockRect | null>(null);
   const dragStart = useRef({ x: 0, y: 0 });
   const winStart = useRef({ x: 0, y: 0 });
+
+  // 最小化时拉取 Dock 目标位置（v4 § 2.2.4 收 Dock 动画）
+  useEffect(() => {
+    if (win.minimized) {
+      const pos = dockApi.getDockPosition(win.appId);
+      if (pos) setDockTarget(pos);
+    } else {
+      setDockTarget(null);
+    }
+  }, [win.minimized, win.appId, dockApi]);
 
   const focused = focusedId === win.id;
 
@@ -130,7 +143,10 @@ export function Window({ win, title, isKey, children }: Props) {
   }
   // always 类（chat 等）不显示置顶项
   if (menuItems.length > 0) menuItems.push({ type: 'separator' as const });
-  menuItems.push({ type: 'action' as const, label: '最小化', icon: '—', action: () => toggleMinimize(win.id) });
+  menuItems.push({ type: 'action' as const, label: '最小化', icon: '—', action: () => {
+    dockApi.highlight(win.appId);
+    setTimeout(() => toggleMinimize(win.id), 80);
+  } });
   menuItems.push({ type: 'action' as const, label: win.maximized ? '还原' : '最大化', icon: win.maximized ? '❐' : '□', action: () => toggleMaximize(win.id) });
   menuItems.push({ type: 'action' as const, label: '关闭窗口', icon: '✕', danger: true, action: () => closeWindow(win.id) });
 
@@ -153,9 +169,24 @@ export function Window({ win, title, isKey, children }: Props) {
     zIndex: win.z,
   };
   if (win.minimized) {
-    // Task 14 会替换为 Dock 位置拉拽逻辑
-    style.opacity = 0;
-    style.pointerEvents = 'none';
+    if (dockTarget) {
+      // 收 Dock：把 transform 拉到 Dock 图标位置 + 缩小
+      const targetCx = dockTarget.x + dockTarget.w / 2;
+      const targetCy = dockTarget.y + dockTarget.h / 2;
+      const winCx = win.x + win.w / 2;
+      const winCy = win.y + win.h / 2;
+      const scale = Math.max(0.05, Math.min(dockTarget.w / win.w, dockTarget.h / win.h));
+      style.left = 0;
+      style.top = 0;
+      style.width = win.w;
+      style.height = win.h;
+      style.transform = `translate(${targetCx - winCx}px, ${targetCy - winCy}px) scale(${scale})`;
+      style.opacity = 0;
+      style.pointerEvents = 'none';
+    } else {
+      style.opacity = 0;
+      style.pointerEvents = 'none';
+    }
   } else if (win.maximized) {
     style.left = 0;
     style.top = 0;
@@ -190,7 +221,10 @@ export function Window({ win, title, isKey, children }: Props) {
           )}
           <span className="name">{title}</span>
           <div className="ctrls">
-            <button className="ctrl" title="最小化" onClick={(e) => handleCtrlClick(e, () => toggleMinimize(win.id))}>—</button>
+            <button className="ctrl" title="最小化" onClick={(e) => handleCtrlClick(e, () => {
+              dockApi.highlight(win.appId);
+              setTimeout(() => toggleMinimize(win.id), 80);
+            })}>—</button>
             <button className="ctrl" title={win.maximized ? '还原' : '最大化'} onClick={(e) => handleCtrlClick(e, () => toggleMaximize(win.id))}>□</button>
             <button className="ctrl close" title="关闭" onClick={(e) => handleCtrlClick(e, () => {
               // 关闭动画：先设 minimized 触发淡出，220ms 后才真正关闭

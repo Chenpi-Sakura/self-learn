@@ -111,12 +111,23 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         return {
           windows: {
             ...s.windows,
-            [id]: { ...w, maximized: false, _prev: undefined, x: prev?.x ?? w.x, y: prev?.y ?? w.y, w: prev?.w ?? w.w, h: prev?.h ?? w.h, minimized: true }
+            [id]: { ...w, maximized: false, x: prev?.x ?? w.x, y: prev?.y ?? w.y, w: prev?.w ?? w.w, h: prev?.h ?? w.h, minimized: true, _prev: { x: prev?.x ?? w.x, y: prev?.y ?? w.y, w: prev?.w ?? w.w, h: prev?.h ?? w.h } }
           }
         };
       }
+      if (w.minimized) {
+        // 恢复：用 _prev 还原（v4 § 2.2.4）
+        const prev = w._prev;
+        return {
+          windows: {
+            ...s.windows,
+            [id]: { ...w, minimized: false, _prev: undefined, x: prev?.x ?? w.x, y: prev?.y ?? w.y, w: prev?.w ?? w.w, h: prev?.h ?? w.h }
+          }
+        };
+      }
+      // 最小化：保存 _prev 以便恢复
       return {
-        windows: { ...s.windows, [id]: { ...w, minimized: !w.minimized } }
+        windows: { ...s.windows, [id]: { ...w, minimized: true, _prev: { x: w.x, y: w.y, w: w.w, h: w.h } } }
       };
     }),
 
