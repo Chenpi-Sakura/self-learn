@@ -1,12 +1,17 @@
-export type NodeStatus = 'completed' | 'current' | 'key' | 'locked' | 'interest' | 'sleeping';
+import type { LevelStatus, BranchStatus, LevelSubtype } from '../types/window';
+
+export type NodeStatus = LevelStatus | 'key';  // 'key' 是 demo 用法，等同 unlocked + visual.badge='key'
 
 export interface MapNode {
   id: string;
   x: number; y: number;
   label: string;
-  status: NodeStatus;
+  status: LevelStatus;
+  branchStatus?: BranchStatus;
   minutes: number;
   branch?: 'up' | 'down' | null;
+  subtype?: LevelSubtype;
+  visual?: { badge?: 'star' | 'sprint' | 'new' | 'key' | null };
 }
 
 export interface Edge {
@@ -15,14 +20,14 @@ export interface Edge {
 }
 
 export const mapNodes: MapNode[] = [
-  { id: 'n1', x: 60,  y: 110, label: '词嵌入',     status: 'completed', minutes: 30 },
-  { id: 'n2', x: 180, y: 110, label: 'RNN',        status: 'completed', minutes: 45 },
-  { id: 'n3', x: 300, y: 110, label: 'LSTM',       status: 'completed', minutes: 50 },
-  { id: 'n4', x: 420, y: 110, label: '自注意力',   status: 'current',   minutes: 45 },
-  { id: 'n5', x: 540, y: 110, label: 'Transformer', status: 'key',      minutes: 60 },
-  { id: 'n6', x: 660, y: 50,  label: '视觉 Transformer', status: 'interest', minutes: 40, branch: 'up' },
-  { id: 'n7', x: 660, y: 170, label: '经典 RNN',       status: 'interest', minutes: 35, branch: 'down' },
-  { id: 'n8', x: 300, y: 200, label: '序列建模回顾',  status: 'sleeping', minutes: 25, branch: 'down' }
+  { id: 'n1', x: 60,  y: 110, label: '词嵌入',     status: 'completed',   minutes: 30 },
+  { id: 'n2', x: 180, y: 110, label: 'RNN',        status: 'completed',   minutes: 45 },
+  { id: 'n3', x: 300, y: 110, label: 'LSTM',       status: 'completed',   minutes: 50 },
+  { id: 'n4', x: 420, y: 110, label: '自注意力',   status: 'in_progress', minutes: 45, subtype: 'reading_tutor' },
+  { id: 'n5', x: 540, y: 110, label: 'Transformer', status: 'unlocked',    minutes: 60, subtype: 'reading_tutor', visual: { badge: 'key' } },
+  { id: 'n6', x: 660, y: 50,  label: '视觉 Transformer', status: 'unlocked', minutes: 40, branchStatus: 'active', branch: 'up',   subtype: 'coding_lab' },
+  { id: 'n7', x: 660, y: 170, label: '经典 RNN',        status: 'unlocked', minutes: 35, branchStatus: 'active', branch: 'down', subtype: 'reading_practice' },
+  { id: 'n8', x: 300, y: 200, label: '序列建模回顾',   status: 'unlocked', minutes: 25, branchStatus: 'sleeping', branch: 'down', subtype: 'reading_practice' }
 ];
 
 export const mapEdges: Edge[] = [

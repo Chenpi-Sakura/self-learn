@@ -2,12 +2,28 @@ import { useWorkspace } from '../store/useWorkspace';
 import './TreasureMap.css';
 
 const STATUS_FILL: Record<string, string> = {
-  completed: '#F4F4F0', current: '#1B3B6F', key: '#BC4749',
-  locked: '#F4F4F0', interest: '#FFFFFF', sleeping: 'transparent'
+  completed:   '#F4F4F0',
+  in_progress: '#DBEAFE',
+  unlocked:    '#FFFFFF',
+  locked:      '#F4F4F0',
+  mastered:    '#D1FAE5',
+  // demo 兜底：
+  current:     '#1B3B6F',
+  key:         '#BC4749',
+  interest:    '#FFFFFF',
+  sleeping:    'transparent',
 };
 const STATUS_TEXT: Record<string, string> = {
-  completed: '#1A1A1A', current: '#FFFFFF', key: '#FFFFFF',
-  locked: '#A1A1AA', interest: '#1B3B6F', sleeping: '#A1A1AA'
+  completed:   '#1A1A1A',
+  in_progress: '#1A1A1A',
+  unlocked:    '#1A1A1A',
+  locked:      '#A1A1AA',
+  mastered:    '#1A1A1A',
+  // demo 兜底：
+  current:     '#FFFFFF',
+  key:         '#FFFFFF',
+  interest:    '#1B3B6F',
+  sleeping:    '#A1A1AA',
 };
 
 export function TreasureMap() {
@@ -38,21 +54,23 @@ export function TreasureMap() {
         {nodes.map((n) => {
           const fill = STATUS_FILL[n.status];
           const txt = STATUS_TEXT[n.status];
-          const stroke = n.status === 'key' ? 'var(--vermilion)' :
-            n.status === 'sleeping' ? 'var(--mute)' :
-            n.status === 'interest' ? 'var(--indigo)' :
-            n.status === 'current' ? 'var(--indigo)' : 'var(--border)';
-          const strokeDash = n.status === 'sleeping' ? '3 3' : n.status === 'interest' ? '4 3' : '';
-          const op = n.status === 'sleeping' ? 0.55 : 1;
+          // v4 § 3.14.1：key 通过 visual.badge 标识；sleeping/interest 通过 branchStatus
+          const isKey = n.visual?.badge === 'key';
+          const stroke = isKey ? 'var(--vermilion)' :
+            n.branchStatus === 'sleeping' ? 'var(--mute)' :
+            n.status === 'unlocked' ? 'var(--indigo)' :
+            n.status === 'in_progress' ? 'var(--indigo)' : 'var(--border)';
+          const strokeDash = n.branchStatus === 'sleeping' ? '3 3' : n.branchStatus === 'active' ? '4 3' : '';
+          const op = n.branchStatus === 'sleeping' ? 0.55 : 1;
           return (
             <g key={n.id} className="node-g" transform={`translate(${n.x}, ${n.y})`} opacity={op}>
               <rect className="node-rect" x="0" y="0" width="100" height="40" rx="6"
                     fill={fill} stroke={stroke}
-                    strokeWidth={n.status === 'key' || n.status === 'current' ? 1.5 : 1}
+                    strokeWidth={isKey || n.status === 'in_progress' ? 1.5 : 1}
                     strokeDasharray={strokeDash} />
               <text className="node-num" x="8" y="14" fill={txt}>№{n.id.slice(1)} · {n.minutes}min</text>
               <text className="node-lbl" x="50" y="30" textAnchor="middle" fill={txt}>{n.label}</text>
-              {n.status === 'current' && (
+              {n.status === 'in_progress' && (
                 <circle cx="100" cy="0" r="6" fill="var(--indigo)">
                   <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
                   <animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite" />
