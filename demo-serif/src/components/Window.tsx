@@ -200,17 +200,18 @@ export function Window({ win, title, isKey, children }: Props) {
     style.opacity = 0;
   } else if (win.minimized) {
     if (dockTarget) {
-      // 收 Dock：把 transform 拉到 Dock 图标位置 + 缩小
-      const targetCx = dockTarget.x + dockTarget.w / 2;
-      const targetCy = dockTarget.y + dockTarget.h / 2;
-      const winCx = win.x + win.w / 2;
-      const winCy = win.y + win.h / 2;
+      // 收 Dock：transform 是相对于元素正常位置（left:0;top:0 在 windows-layer 原点）
+      // dx = Dock 中心 X - 窗口自身宽度的一半（translate 作用于左上角，因此要偏移半宽以对齐中心）
+      // dy 同理，但 dockTarget.y 是视口坐标系，减去 TopBar 得到 windows-layer 坐标系
+      const TOPBAR_H = 52;
+      const dx = dockTarget.x + dockTarget.w / 2 - win.w / 2;
+      const dy = dockTarget.y + dockTarget.h / 2 - TOPBAR_H - win.h / 2;
       const scale = Math.max(0.05, Math.min(dockTarget.w / win.w, dockTarget.h / win.h));
       style.left = 0;
       style.top = 0;
       style.width = win.w;
       style.height = win.h;
-      style.transform = `translate(${targetCx - winCx}px, ${targetCy - winCy}px) scale(${scale})`;
+      style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
       style.opacity = 0;
       style.pointerEvents = 'none';
     } else {
