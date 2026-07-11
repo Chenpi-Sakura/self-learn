@@ -97,9 +97,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
 
   focusWindow: (id) =>
     set((s) => {
-      const maxZ = Math.max(...Object.values(s.windows).map((w) => w.z));
       const w = s.windows[id];
       if (!w) return s;
+      const all = Object.values(s.windows);
+      const sameTier = all.filter((x) => x.pinLevel === w.pinLevel && x.id !== id);
+      const maxZ = sameTier.length > 0 ? Math.max(...sameTier.map((x) => x.z)) : w.z;
       return {
         windows: {
           ...s.windows,
