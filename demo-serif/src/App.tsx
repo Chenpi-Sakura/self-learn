@@ -2,26 +2,38 @@ import './App.css';
 import { Backdrop } from './components/Backdrop';
 import { TopBar } from './components/TopBar';
 import { Dock } from './components/Dock';
-import { ChatFloat } from './components/ChatFloat';
 import { Window } from './components/Window';
 import { TreasureMap } from './components/TreasureMap';
 import { TaskList } from './components/TaskList';
 import { ProfileRadar } from './components/ProfileRadar';
-import { Calendar } from './components/Calendar';
+import { ChatFloat } from './components/ChatFloat';
 import { useWorkspace } from './store/useWorkspace';
-import type { WindowState } from './store/useWorkspace';
+import type { WindowState } from './types/window';
+import type { ReactNode } from 'react';
 
-const WIN_CONTENT: Record<string, { title: string; isKey?: boolean; comp: React.ReactNode }> = {
-  treasure_map: { title: '深度学习路径', isKey: true, comp: <TreasureMap /> },
-  today:        { title: '今日学习',                  comp: <TaskList /> },
-  profile:      { title: '六维画像',                  comp: <ProfileRadar /> },
-  calendar:     { title: '本月打卡',                  comp: <Calendar /> },
+type WinDef = { title: string; isKey?: boolean };
+
+const WIN_CONTENT: Record<string, WinDef> = {
+  treasure_map: { title: '深度学习路径', isKey: true },
+  task_list:    { title: '今日学习' },
+  profile:      { title: '六维画像' },
+  chat:         { title: '小书' },
 };
+
+function renderBody(appId: string, win: WindowState): ReactNode {
+  switch (appId) {
+    case 'treasure_map': return <TreasureMap />;
+    case 'task_list':    return <TaskList />;
+    case 'profile':      return <ProfileRadar />;
+    case 'chat':         return <ChatFloat win={win} />;
+    default:             return null;
+  }
+}
 
 export default function App() {
   const windows = useWorkspace((s) => s.windows);
 
-  const entries: [WindowState, typeof WIN_CONTENT[string]][] = [];
+  const entries: [WindowState, WinDef][] = [];
   for (const w of Object.values(windows)) {
     const def = WIN_CONTENT[w.appId];
     if (def) entries.push([w, def]);
@@ -34,12 +46,11 @@ export default function App() {
       <div className="windows-layer">
         {entries.map(([win, def]) => (
           <Window key={win.id} win={win} title={def.title} isKey={def.isKey}>
-            {def.comp}
+            {renderBody(win.appId, win)}
           </Window>
         ))}
       </div>
       <Dock />
-      <ChatFloat />
     </div>
   );
 }

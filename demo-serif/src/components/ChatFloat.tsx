@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useWorkspace } from '../store/useWorkspace';
+import type { WindowState } from '../types/window';
 import './ChatFloat.css';
 
-export function ChatFloat() {
+interface Props {
+  win: WindowState;
+}
+
+export function ChatFloat({ win: _win }: Props) {
   const chat = useWorkspace((s) => s.chat);
   const sendChat = useWorkspace((s) => s.sendChat);
   const [draft, setDraft] = useState('');
@@ -20,7 +25,7 @@ export function ChatFloat() {
   };
 
   return (
-    <aside className="chat">
+    <div className="chat">
       <div className="chat-head">
         <span className="av">书</span>
         <span className="name">小书</span>
@@ -40,6 +45,6 @@ export function ChatFloat() {
         />
         <button onClick={submit}>↑</button>
       </div>
-    </aside>
+    </div>
   );
 }

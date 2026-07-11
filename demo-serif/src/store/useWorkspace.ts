@@ -1,43 +1,33 @@
 import { create } from 'zustand';
-import { mapNodes, mapEdges, profile, calendar, tasks, initialChat, mockAiReplies } from '../data/sample';
+import type { AppId, WindowState, PinLevel } from '../types/window';
+import { mapNodes, mapEdges, profile, tasks, initialChat, mockAiReplies } from '../data/sample';
 
 export type Mode = 'proficiency' | 'exploration';
 export type LayoutId = 'reading' | 'practice' | 'coding';
-
-export interface WindowState {
-  id: string;
-  appId: 'treasure_map' | 'today' | 'profile' | 'calendar' | 'doc' | 'exercise' | 'note';
-  x: number; y: number;
-  w: number; h: number;
-  z: number;
-  minimized?: boolean;
-  maximized?: boolean;
-  pinLevel: 'none' | 'normal' | 'always';
-  /** 保存最大化前的位置大小，用于还原 */
-  _prev?: { x: number; y: number; w: number; h: number };
-}
+export type { AppId, WindowState, PinLevel };
 
 interface ChatMsg { role: 'user' | 'ai'; text: string }
 
 const DEFAULT_WIN: Record<string, Omit<WindowState, 'pinLevel'>> = {
   map:      { id: 'map',      appId: 'treasure_map', x: 80,  y: 80,  w: 720, h: 360, z: 1000 },
-  today:    { id: 'today',    appId: 'today',        x: 820, y: 80,  w: 420, h: 360, z: 1001 },
+  today:    { id: 'today',    appId: 'task_list',    x: 820, y: 80,  w: 420, h: 360, z: 1001 },
   profile:  { id: 'profile',  appId: 'profile',      x: 80,  y: 460, w: 720, h: 300, z: 1002 },
-  calendar: { id: 'calendar', appId: 'calendar',     x: 820, y: 460, w: 420, h: 300, z: 1003 }
+  chat:     { id: 'chat',     appId: 'chat',         x: 1000, y: 460, w: 280, h: 320, z: 1003 },
 };
 
 /** 同一个 appId→id 的映射 */
 const APP_TO_ID: Record<string, string> = {
   treasure_map: 'map',
-  today: 'today',
+  task_list: 'today',
   profile: 'profile',
-  calendar: 'calendar',
+  chat: 'chat',
 };
 
 function initWindows(): Record<string, WindowState> {
   const w: Record<string, WindowState> = {};
   for (const [k, v] of Object.entries(DEFAULT_WIN)) {
-    w[k] = { ...v, pinLevel: 'none' };
+    const pinLevel: PinLevel = k === 'chat' ? 'always' : 'none';
+    w[k] = { ...v, pinLevel };
   }
   return w;
 }
@@ -51,7 +41,6 @@ interface WorkspaceState {
   nodes: typeof mapNodes;
   edges: typeof mapEdges;
   profile: typeof profile;
-  calendar: typeof calendar;
   tasks: typeof tasks;
   chat: ChatMsg[];
   focusedId: string | null;
@@ -77,7 +66,6 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   nodes: mapNodes,
   edges: mapEdges,
   profile,
-  calendar,
   tasks,
   chat: initialChat,
   focusedId: 'map',
@@ -159,6 +147,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set((s) => {
       const w = s.windows[id];
       if (!w) return s;
+      if (w.pinLevel === 'always') return s; // 系统置顶（chat 等），用户不可改
       const nextPin: 'none' | 'normal' = w.pinLevel === 'none' ? 'normal' : 'none';
       const windows: Record<string, WindowState> = { ...s.windows, [id]: { ...w, pinLevel: nextPin } };
       // 重新分配 z-index：桶排序

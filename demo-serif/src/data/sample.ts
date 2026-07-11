@@ -48,15 +48,11 @@ export const profile = {
 };
 
 const cell = (day: number, intensity: 0|1|2|3|4) => ({ day, intensity });
+// calendar 已并入 dashboard，本期移除（v4 § 3.15 + 附录 A #1）
+// 保留空 export 防止连锁引用错误
 export const calendar: { rows: { cells: ReturnType<typeof cell>[] }[]; today: number } = {
   today: 18,
-  rows: [
-    { cells: [cell(1,0),cell(2,0),cell(3,2),cell(4,1),cell(5,3),cell(6,2),cell(7,0)] },
-    { cells: [cell(8,1),cell(9,3),cell(10,4),cell(11,3),cell(12,2),cell(13,0),cell(14,1)] },
-    { cells: [cell(15,2),cell(16,3),cell(17,4),cell(18,4),cell(19,3),cell(20,1),cell(21,0)] },
-    { cells: [cell(22,0),cell(23,2),cell(24,3),cell(25,4),cell(26,2),cell(27,1),cell(28,0)] },
-    { cells: [cell(29,0),cell(30,1),cell(31,2),cell(1,0),cell(2,0),cell(3,0),cell(4,0)] }
-  ]
+  rows: [{ cells: [] as ReturnType<typeof cell>[] }],
 };
 
 export const tasks = [
