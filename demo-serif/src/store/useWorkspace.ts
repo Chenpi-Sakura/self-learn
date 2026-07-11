@@ -249,12 +249,16 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       if (!w) return s;
       const MIN_W = 240, MIN_H = 160;
       const MAX_W = 1280, MAX_H = 900;
-      const newW = size.w !== undefined ? Math.max(MIN_W, Math.min(MAX_W, size.w)) : w.w;
-      const newH = size.h !== undefined ? Math.max(MIN_H, Math.min(MAX_H, size.h)) : w.h;
-      const newX = size.x !== undefined ? size.x : w.x;
-      const newY = size.y !== undefined ? size.y : w.y;
+      // 对 w/h 单独钳制
+      const reqW = size.w !== undefined ? Math.max(MIN_W, Math.min(MAX_W, size.w)) : w.w;
+      const reqH = size.h !== undefined ? Math.max(MIN_H, Math.min(MAX_H, size.h)) : w.h;
+      // x/y 与 w/h 联动钳制：
+      // 调用方传入的 size.x/y 是"想要的目标左边沿位置"，
+      // 当 w 被钳制变化时，同步补偿 x，使右/下边沿保持不变。
+      const newX = size.x !== undefined ? size.x + (size.w! - reqW) : w.x;
+      const newY = size.y !== undefined ? size.y + (size.h! - reqH) : w.y;
       return {
-        windows: { ...s.windows, [id]: { ...w, w: newW, h: newH, x: newX, y: newY } }
+        windows: { ...s.windows, [id]: { ...w, w: reqW, h: reqH, x: newX, y: newY } }
       };
     }),
 
