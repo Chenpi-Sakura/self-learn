@@ -5,14 +5,14 @@
 
 import mitt, { type Emitter } from 'mitt';
 import type { MapNode, Edge } from '../data/sample';
+import type { WindowState } from '../types/window';
 
 export type Profile = unknown; // 占位：v4 § 5.1 结构
 
-// TODO(Task 4): 把 any[] / WindowState 替换为 types/window.ts 的强类型
 export interface LayoutSnapshot {
   id: string;
   label: string;
-  windows: any[];
+  windows: WindowState[];
 }
 
 export interface LevelCompletionMetrics {
@@ -23,7 +23,7 @@ export interface LevelCompletionMetrics {
 
 type Events = {
   // window
-  'window.opened': any;  // WindowState
+  'window.opened': WindowState;
   'window.closed': { windowId: string };
   'window.focused': { windowId: string; pinLevel: string };
   'layout.changed': LayoutSnapshot;
