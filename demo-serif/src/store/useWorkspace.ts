@@ -232,7 +232,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         w: def?.w ?? 600,
         h: def?.h ?? 400,
         z: maxZ + 1,
-        pinLevel: 'none'
+        pinLevel: appId === 'chat' ? 'always' : 'none'
       };
       return {
         windows: { ...s.windows, [key]: newWin },

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { WindowState } from '../store/useWorkspace';
 import { useWorkspace } from '../store/useWorkspace';
+import type { WindowState } from '../types/window';
 import { useDockPositions, type DockRect } from '../lib/dockPositions';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import './Window.css';
@@ -24,6 +24,40 @@ export function Window({ win, title, isKey, children }: Props) {
   const resizeWindow = useWorkspace((s) => s.resizeWindow);
   const focusedId = useWorkspace((s) => s.focusedId);
   const dockApi = useDockPositions();
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [isNew, setIsNew] = useState(true);
+
+  // 关闭动画：防止重复触发
+  const [closing, setClosing] = useState(false);
+  const handleClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    if (!win.minimized) toggleMinimize(win.id);
+    setTimeout(() => closeWindow(win.id), 220);
+  }, [closing, win.minimized, win.id, toggleMinimize, closeWindow]);
+
+  useEffect(() => {
+    if (!isNew) return;
+    // 第一帧拉取 Dock 位置，设 opacity=0 + scale=0
+    const pos = dockApi.getDockPosition(win.appId);
+    if (pos && wrapRef.current) {
+      const el = wrapRef.current;
+      const fromX = pos.x + pos.w / 2 - (win.x + win.w / 2);
+      const fromY = pos.y + pos.h / 2 - (win.y + win.h / 2);
+      const scale = Math.max(0.05, Math.min(pos.w / win.w, pos.h / win.h));
+      el.style.opacity = '0';
+      el.style.transform = `translate(${fromX}px, ${fromY}px) scale(${scale})`;
+      // 下帧切到目标值触发 transition
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          el.style.opacity = '';
+          el.style.transform = '';
+        });
+      });
+    }
+    setIsNew(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState<ResizeDir | null>(null);
@@ -148,7 +182,7 @@ export function Window({ win, title, isKey, children }: Props) {
     setTimeout(() => toggleMinimize(win.id), 80);
   } });
   menuItems.push({ type: 'action' as const, label: win.maximized ? '还原' : '最大化', icon: win.maximized ? '❐' : '□', action: () => toggleMaximize(win.id) });
-  menuItems.push({ type: 'action' as const, label: '关闭窗口', icon: '✕', danger: true, action: () => closeWindow(win.id) });
+  menuItems.push({ type: 'action' as const, label: '关闭窗口', icon: '✕', danger: true, action: () => handleClose() });
 
   const cls = [
     'win',
@@ -188,14 +222,17 @@ export function Window({ win, title, isKey, children }: Props) {
       style.pointerEvents = 'none';
     }
   } else if (win.maximized) {
-    // v4 § 2.2.2：最大化铺满整个视口（无视 topbar/dock，盖住一切）
-    style.position = 'fixed';
-    style.inset = 0;
-    style.width = undefined;
-    style.height = undefined;
+    // 保持 position: absolute，用 top/left/width/height 铺满
+    // top: -52(windows-layer 已偏移 TopBar) 回到 viewport 顶部
+    // 这样 left/top/width/height/border-radius 全部可被 CSS transition 插值
+    const ww = window.innerWidth;
+    const wh = window.innerHeight;
+    style.left = 0;
+    style.top = -TOPBAR_H;
+    style.width = ww;
+    style.height = wh;
     style.transform = 'none';
     style.borderRadius = 0;
-    style.zIndex = 9999;
   } else {
     style.width = win.w;
     style.height = win.h;
@@ -208,6 +245,7 @@ export function Window({ win, title, isKey, children }: Props) {
     <>
       <div
         className={cls}
+        ref={wrapRef}
         style={style}
         onMouseDown={() => focusWindow(win.id)}
       >
@@ -229,11 +267,7 @@ export function Window({ win, title, isKey, children }: Props) {
               setTimeout(() => toggleMinimize(win.id), 80);
             })}>—</button>
             <button className="ctrl" title={win.maximized ? '还原' : '最大化'} onClick={(e) => handleCtrlClick(e, () => toggleMaximize(win.id))}>□</button>
-            <button className="ctrl close" title="关闭" onClick={(e) => handleCtrlClick(e, () => {
-              // 关闭动画：先设 minimized 触发淡出，220ms 后才真正关闭
-              if (!win.minimized) toggleMinimize(win.id);
-              setTimeout(() => closeWindow(win.id), 220);
-            })}>×</button>
+            <button className="ctrl close" title="关闭" onClick={(e) => handleCtrlClick(e, handleClose)}>×</button>
           </div>
         </div>
         <div className="win-body">{children}</div>
