@@ -33,7 +33,7 @@ export function Window({ win, title, isKey, children }: Props) {
   const handleClose = useCallback(() => {
     if (closing) return;
     setClosing(true);
-    setTimeout(() => closeWindow(win.id), 220);
+    setTimeout(() => closeWindow(win.id), 350);
   }, [closing, win.id, closeWindow]);
 
   useEffect(() => {
