@@ -1,4 +1,6 @@
 import { useWorkspace } from '../store/useWorkspace';
+import { useDockRef, useDockPositions } from '../lib/dockPositions';
+import type { AppId } from '../types/window';
 import './Dock.css';
 
 interface DockItem {
@@ -10,59 +12,84 @@ interface DockItem {
 const items: DockItem[] = [
   { appId: 'treasure_map', ic: '◇', lb: 'Map' },
   { appId: 'chat',         ic: '✦', lb: 'AI' },
-  { appId: 'doc',          ic: '□', lb: 'Doc' },
+  { appId: 'document',     ic: '□', lb: 'Doc' },
   { appId: 'exercise',     ic: '≡', lb: 'Ex' },
   { appId: 'code_editor',  ic: '⌨', lb: 'Code' },
-  { appId: 'note',         ic: '✎', lb: 'Note' },
+  { appId: 'notebook',     ic: '✎', lb: 'Note' },
   { appId: 'mind_map',     ic: '◈', lb: 'Mind' },
   { appId: 'resource_library', ic: '❐', lb: 'Res' },
   { appId: 'dashboard',    ic: '▣', lb: 'Dash' },
+  { appId: 'settings',     ic: '⚙', lb: 'Set' },
+  { appId: 'task_list',    ic: '✓', lb: 'Today' },
+  { appId: 'profile',      ic: '◉', lb: 'Profile' },
 ];
-
-// 当前已映射的窗口 id → appId
-const WIN_APP_IDS = new Set(['treasure_map', 'today', 'profile', 'calendar']);
 
 export function Dock() {
   const windows = useWorkspace((s) => s.windows);
   const focusedId = useWorkspace((s) => s.focusedId);
   const openWindow = useWorkspace((s) => s.openWindow);
   const focusWindow = useWorkspace((s) => s.focusWindow);
+  const dockApi = useDockPositions();
 
   const openAppIds = new Set(Object.values(windows).map((w) => w.appId));
-  const focusedAppId = focusedId ? windows[focusedId]?.appId : null;
+  const focusedAppId = focusedId ? windows[focusedId]?.appId ?? null : null;
 
   return (
     <nav className="dock">
-      {items.map((it) => {
-        const isOpen = openAppIds.has(it.appId as any);
-        const isFocused = focusedAppId === it.appId;
-        const active = isOpen || isFocused;
-        return (
-          <button
-            key={it.appId}
-            className={`dock-item${active ? ' active' : ''}`}
-            onClick={() => {
-              if (WIN_APP_IDS.has(it.appId)) {
-                // 已映射的窗口 → 聚焦/取消最小化
-                const winEntry = Object.entries(windows).find(
-                  ([, v]) => v.appId === it.appId
-                );
-                if (winEntry) {
-                  focusWindow(winEntry[0]);
-                } else {
-                  openWindow(it.appId as any);
-                }
-              } else {
-                openWindow(it.appId as any);
-              }
-            }}
-            title={it.lb}
-          >
-            <span className="ic">{it.ic}</span>
-            <span className="lb">{it.lb}</span>
-          </button>
-        );
-      })}
+      {items.map((it) => (
+        <DockButton
+          key={it.appId}
+          item={it}
+          openAppIds={openAppIds}
+          focusedAppId={focusedAppId}
+          windows={windows}
+          openWindow={openWindow}
+          focusWindow={focusWindow}
+          dockApi={dockApi}
+        />
+      ))}
     </nav>
+  );
+}
+
+function DockButton({
+  item,
+  openAppIds,
+  focusedAppId,
+  windows,
+  openWindow,
+  focusWindow,
+  dockApi,
+}: {
+  item: DockItem;
+  openAppIds: Set<string>;
+  focusedAppId: string | null;
+  windows: any;
+  openWindow: (appId: AppId) => void;
+  focusWindow: (id: string) => void;
+  dockApi: ReturnType<typeof useDockPositions>;
+}) {
+  const setRef = useDockRef(item.appId as AppId);
+  const isOpen = openAppIds.has(item.appId);
+  const isFocused = focusedAppId === item.appId;
+  const active = isOpen || isFocused;
+  const isHighlight = dockApi.highlightAppId === item.appId;
+  return (
+    <button
+      ref={setRef}
+      className={`dock-item${active ? ' active' : ''}${isHighlight ? ' highlight' : ''}`}
+      onClick={() => {
+        if (isOpen) {
+          const winEntry = Object.entries(windows).find(([, v]) => (v as any).appId === item.appId);
+          if (winEntry) focusWindow(winEntry[0]);
+        } else {
+          openWindow(item.appId as AppId);
+        }
+      }}
+      title={item.lb}
+    >
+      <span className="ic">{item.ic}</span>
+      <span className="lb">{item.lb}</span>
+    </button>
   );
 }

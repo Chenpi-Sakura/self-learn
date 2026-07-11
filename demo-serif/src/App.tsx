@@ -10,6 +10,7 @@ import { ProfileRadar } from './components/ProfileRadar';
 import { ChatFloat } from './components/ChatFloat';
 import { useWorkspace } from './store/useWorkspace';
 import { shortcutManager, parseKeyEvent, registerSystemShortcuts } from './lib/shortcuts';
+import { DockPositionsProvider } from './lib/dockPositions';
 import type { WindowState } from './types/window';
 import type { ReactNode } from 'react';
 
@@ -57,17 +58,19 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <Backdrop />
-      <TopBar />
-      <div className="windows-layer">
-        {entries.map(([win, def]) => (
-          <Window key={win.id} win={win} title={def.title} isKey={def.isKey}>
-            {renderBody(win.appId, win)}
-          </Window>
-        ))}
+    <DockPositionsProvider>
+      <div className="app">
+        <Backdrop />
+        <TopBar />
+        <div className="windows-layer">
+          {entries.map(([win, def]) => (
+            <Window key={win.id} win={win} title={def.title} isKey={def.isKey}>
+              {renderBody(win.appId, win)}
+            </Window>
+          ))}
+        </div>
+        <Dock />
       </div>
-      <Dock />
-    </div>
+    </DockPositionsProvider>
   );
 }
