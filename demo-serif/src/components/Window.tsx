@@ -12,7 +12,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-type ResizeDir = 'br' | 'bl' | 'l' | 'r';
+type ResizeDir = 'br' | 'bl' | 'l' | 'r' | 'b';
 
 export function Window({ win, title, isKey, children }: Props) {
   const moveWindow = useWorkspace((s) => s.moveWindow);
@@ -132,6 +132,9 @@ export function Window({ win, title, isKey, children }: Props) {
       } else if (resizing === 'r') {
         // 右边缘：只改 w，左边沿固定
         resizeWindow(win.id, { w: s.winW + dx });
+      } else if (resizing === 'b') {
+        // 下边缘：只改 h，上边沿固定
+        resizeWindow(win.id, { h: s.winH + dy });
       }
     };
     const handleMouseUp = () => setResizing(null);
@@ -187,6 +190,7 @@ export function Window({ win, title, isKey, children }: Props) {
     resizing === 'bl' ? 'resizing-bl' : '',
     resizing === 'l' ? 'resizing-l' : '',
     resizing === 'r' ? 'resizing-r' : '',
+    resizing === 'b' ? 'resizing-b' : '',
   ].filter(Boolean).join(' ');
 
   const dotCls = 'dot' + (isKey ? ' key' : '');
@@ -280,6 +284,7 @@ export function Window({ win, title, isKey, children }: Props) {
           <>
             <span className="resize-edge rh-l" onMouseDown={handleResizeDown('l')} title="拖拽改变大小" />
             <span className="resize-edge rh-r" onMouseDown={handleResizeDown('r')} title="拖拽改变大小" />
+            <span className="resize-edge rh-b" onMouseDown={handleResizeDown('b')} title="拖拽改变大小" />
             <span className="resize-handle rh-br" onMouseDown={handleResizeDown('br')} title="拖拽改变大小" />
             <span className="resize-handle rh-bl" onMouseDown={handleResizeDown('bl')} title="拖拽改变大小" />
           </>
