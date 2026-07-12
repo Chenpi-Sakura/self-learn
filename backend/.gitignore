@@ -1,12 +1,38 @@
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+*.egg
+.eggs/
+build/
+dist/
 .venv/
-.env
+venv/
+env/
+
+# 测试 / 类型检查 / Lint 缓存
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
-dist/
-build/
+coverage.xml
+*.cover
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 编辑器 / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# uv 临时
+*.pyc
+
+# 注意：uv.lock 不要忽略（lock 文件必须 commit）
