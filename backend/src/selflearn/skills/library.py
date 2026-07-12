@@ -11,7 +11,7 @@ from selflearn.core.logging import get_logger
 
 log = get_logger("skills")
 
-SKILLS_DIR = Path(__file__).resolve().parents[4] / "docs" / "skills"
+SKILLS_DIR = Path(__file__).resolve().parents[3] / "docs" / "skills"
 
 
 @dataclass
