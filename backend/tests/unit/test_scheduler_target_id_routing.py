@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from selflearn.agents.base import AbstractAgent
 from selflearn.agents.scheduler import (
     _AGENT_FOR_SKILL,
     _resolve_agent_class,
@@ -74,3 +75,73 @@ def test_get_agent_class_for_skill_returns_none_for_unimplemented() -> None:
     """公开只读 API：未实现键返回 None，不抛错。"""
     assert get_agent_class_for_skill("skill.director.start") is None
     assert get_agent_class_for_skill("totally.unknown") is None
+
+
+def test_resolve_uses_agent_for_skill_when_populated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """正向 case：`_AGENT_FOR_SKILL[target.id]` 非 None 时，_resolve_agent_class 直接返回该类。
+
+    不走装饰器 fallback。验证 Rule #13 主路径在 Agent 类落地后真的能命中。
+    """
+    from selflearn.agents import scheduler as sched_mod
+
+    class FakeProfileAgent(AbstractAgent):
+        agent_id = "fake-profile-01"
+        agent_type = "profile"
+        skills: list[str] = []  # V1.3 deprecated 字段
+        queue = "agent.profile.work"
+
+        async def run(self, env: Envelope) -> Envelope:  # pragma: no cover - not invoked here
+            return env
+
+    monkeypatch.setitem(sched_mod._AGENT_FOR_SKILL, "skill.profile.build", FakeProfileAgent)
+
+    resolved = _resolve_agent_class("skill.profile.build")
+    assert resolved is FakeProfileAgent, (
+        "main path should return the Agent class directly when _AGENT_FOR_SKILL has it"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_instantiates_agent_class_for_skill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """正向 dispatch：_AGENT_FOR_SKILL 命中时，dispatch 实例化 Agent class 并调 .run(env)。
+
+    FakeProfileAgent.run 收到 envelope 后返回一个 Envelope，dispatch 应原样回传。
+    """
+    from selflearn.agents import scheduler as sched_mod
+
+    captured: dict[str, object] = {}
+
+    class FakeProfileAgent(AbstractAgent):
+        agent_id = "fake-profile-01"
+        agent_type = "profile"
+        skills: list[str] = []
+        queue = "agent.profile.work"
+
+        def __init__(self) -> None:
+            self.instantiated = True
+
+        async def run(self, env: Envelope) -> Envelope:
+            captured["env"] = env
+            captured["instantiated"] = self.instantiated
+            return Envelope(
+                action="skill.completed",
+                sender=env.target,
+                target=env.sender,
+                payload={"ok": True},
+            )
+
+    monkeypatch.setitem(sched_mod._AGENT_FOR_SKILL, "skill.profile.build", FakeProfileAgent)
+
+    env = Envelope(
+        action="skill.execute",
+        sender=ActorRef(type="gateway", id="test"),
+        target=ActorRef(type="skill", id="skill.profile.build"),
+        payload={"k": 1},
+    )
+    reply = await dispatch(env)
+
+    assert isinstance(reply, Envelope)
+    assert reply.action == "skill.completed"
+    assert reply.payload == {"ok": True}
+    assert captured["env"] is env
+    assert captured["instantiated"] is True

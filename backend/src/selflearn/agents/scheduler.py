@@ -16,12 +16,11 @@ from selflearn.core.envelope import Envelope
 from selflearn.skills.base import skill_registry
 
 if TYPE_CHECKING:
-    from selflearn.agents.builtin.profile_agent import ProfileAgent  # type: ignore[import-untyped, unused-ignore]  # noqa: F401  # Task 7
-    from selflearn.agents.builtin.plan_agent import PlanAgent  # type: ignore[import-untyped, unused-ignore]  # noqa: F401  # Task 8
-    from selflearn.agents.builtin.exercise_agent import ExerciseAgent  # type: ignore[import-untyped, unused-ignore]  # noqa: F401  # Task 9
-    from selflearn.agents.builtin.review_agent import ReviewAgent  # type: ignore[import-untyped, unused-ignore]  # noqa: F401  # Task 10
-    from selflearn.agents.builtin.director_agent import DirectorAgent  # type: ignore[import-untyped, unused-ignore]  # noqa: F401  # Task 11ignore]  # noqa: F401  # Task 10
-    from selflearn.agents.builtin.director_agent import DirectorAgent  # type: ignore[import-untyped, unused-ignore]  # noqa: F401  # Task 11
+    from selflearn.agents.builtin.profile_agent import ProfileAgent  # type: ignore[import-untyped]  # noqa: F401, TCH004  # Task 7
+    from selflearn.agents.builtin.plan_agent import PlanAgent  # type: ignore[import-untyped]  # noqa: F401, TCH004  # Task 8
+    from selflearn.agents.builtin.exercise_agent import ExerciseAgent  # type: ignore[import-untyped]  # noqa: F401, TCH004  # Task 9
+    from selflearn.agents.builtin.review_agent import ReviewAgent  # type: ignore[import-untyped]  # noqa: F401, TCH004  # Task 10
+    from selflearn.agents.builtin.director_agent import DirectorAgent  # type: ignore[import-untyped]  # noqa: F401, TCH004  # Task 11
 
 
 # Stage 3 routing map (Rule #13 第四子规则):
