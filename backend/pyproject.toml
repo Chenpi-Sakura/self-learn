@@ -2,7 +2,7 @@
 name = "selflearn-backend"
 version = "0.1.0"
 description = "Stage 2 后端地基"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
@@ -12,7 +12,7 @@ dependencies = [
     "asyncpg>=0.29",
     "alembic>=1.13",
     "redis>=5.0",
-    "qdrant-client[async]>=1.7",
+    "qdrant-client>=1.7",
     "minio>=7.2",
     "aio-pika>=9.4",
     "openai>=1.40",
