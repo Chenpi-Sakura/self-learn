@@ -127,7 +127,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: selflearn-gateway
-    command: ["uv", "run", "python", "-m", "selflearn.main", "--role=gateway"]
+    command: ["uv", "run", "uvicorn", "selflearn.gateway.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
     env_file: .env
     environment:
       # 覆盖 .env 中的 host，使容器内通过 compose 服务名互通
