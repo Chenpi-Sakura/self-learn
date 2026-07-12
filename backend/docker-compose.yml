@@ -4,6 +4,9 @@
 #   cp .env.example .env
 #   docker compose up -d                # 全部起
 #   docker compose up -d postgres ...   # 仅起基础设施
+#
+# 注意：.env 默认值面向 host（localhost）；
+# gateway/worker 在容器内通过下方 environment 覆盖为 compose 服务名。
 # ============================================================
 
 services:
@@ -127,9 +130,15 @@ services:
     command: ["uv", "run", "python", "-m", "selflearn.main", "--role=gateway"]
     env_file: .env
     environment:
-      # 覆盖 .env 中的 host，使外部可访问
+      # 覆盖 .env 中的 host，使容器内通过 compose 服务名互通
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: 8000
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      MINIO_ENDPOINT: minio:9000
+      RABBITMQ_URL: amqp://selflearn:selflearn_dev@rabbitmq:5672/
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:
       - "8000:8000"
     depends_on:
@@ -150,6 +159,14 @@ services:
     container_name: selflearn-worker
     command: ["uv", "run", "python", "-m", "selflearn.main", "--role=worker"]
     env_file: .env
+    environment:
+      # 覆盖 .env 中的 host，使容器内通过 compose 服务名互通
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      MINIO_ENDPOINT: minio:9000
+      RABBITMQ_URL: amqp://selflearn:selflearn_dev@rabbitmq:5672/
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     depends_on:
       postgres:
         condition: service_healthy
