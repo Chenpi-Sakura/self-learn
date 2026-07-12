@@ -1,1 +1,1 @@
-"""skills 包 — 声明式 Skill 注册。"""
+from selflearn.skills.library import Skill, load_all, get  # noqa: F401

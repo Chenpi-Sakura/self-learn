@@ -28,6 +28,7 @@ dependencies = [
     "structlog>=24.1",
     "jsonschema>=4.26.0",
     "types-jsonschema>=4.26.0.20260518",
+    "python-frontmatter>=1.1",
 ]
 
 [project.optional-dependencies]

@@ -39,10 +39,12 @@ async def run_worker() -> None:
     from selflearn.core.tracing import setup_tracing
     from selflearn.infra.rabbit import setup_topology
     from selflearn.skills.builtin.ping import agent_info, register as register_skill
+    from selflearn.skills.library import load_all
 
     s = get_settings()
     setup_logging(s.log_level)
     setup_tracing(s.otel_service_name + "-worker", s.otel_exporter_otlp_endpoint)
+    load_all()
     register_skill()
     await setup_topology()
     register_agent(agent_info())
