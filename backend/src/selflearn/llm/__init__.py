@@ -1,0 +1,1 @@
+"""llm 包 — BaseLLMAdapter 抽象 + Provider 实现。"""
