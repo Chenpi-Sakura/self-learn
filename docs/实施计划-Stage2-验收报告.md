@@ -8,25 +8,33 @@
 
 | # | 验收项 | 结果 |
 | --- | --- | --- |
-| 1 | `docker compose up -d` 启动 7 个服务（PG/Redis/Qdrant/MinIO/Jaeger/gateway/worker） | ⏳ 待人工 smoke.sh 验证 |
-| 2 | `alembic upgrade head` 创建 `students` + `profiles` 两张表 | ⏳ 待人工 smoke.sh 验证 |
-| 3 | `curl /healthz` 返回 200 | ✅（Task 11 实测 200） |
-| 4 | `curl /readyz` 返回 200（PG/Redis/RabbitMQ 连接正常） | ✅（Task 11 实测 200） |
-| 5 | `scripts/smoke.sh` 端到端通过（POST init → 轮询 status 收到 completed → reply 含 "pong"） | ⏳ 待人工 smoke.sh 验证 |
-| 6 | `LLMRegistry` 默认注册 `mock` + `openai_compat` 两个 provider | ✅（Task 14 / C2 修复后由单元测试覆盖） |
-| 7 | `MockLLMAdapter.chat_stream()` 产出 ≥ 2 个 chunk | ✅（Task 6 单测覆盖） |
-| 8 | SSE 端点 1s 内推 `status` + `completed` 后正常关闭 | ⏳ 待人工 smoke.sh 验证 |
-| 9 | Jaeger UI 能看到 smoke 完整 trace（gateway → broker → worker → llm → reply） | ⏳ 待人工 smoke.sh 验证 |
-| 10 | `uv run mypy src tests` strict 模式 0 错误 | ✅（Task 11/Task 14 实测 0 errors） |
-| 11 | `uv run pytest tests/unit -q` 全绿 | ✅（Task 11/Task 14 实测 24 passed） |
-| 12 | `uv run pytest tests/integration/test_smoke.py -q` 全绿 | ⏳ 待 Stage 3 验证（依赖 live docker） |
+| 1 | `docker compose up -d` 启动 7 个服务（PG/Redis/Qdrant/MinIO/Jaeger/gateway/worker） | ✅（6 个基础设施 healthy；gateway/worker host 本地跑） |
+| 2 | `alembic upgrade head` 创建 `students` + `profiles` 两张表 | ✅（2026-07-12 实跑成功） |
+| 3 | `curl /healthz` 返回 200 | ✅（多次实测 200） |
+| 4 | `curl /readyz` 返回 200（PG/Redis/RabbitMQ 连接正常） | ✅（实测 `all checks true`） |
+| 5 | `scripts/smoke.sh` 端到端通过（POST init → 轮询 status 收到 completed → reply 含 "pong"） | ✅（trace_id `07b8d4ce` 实测：status completed + 真通义千问 LLM 回复 /healthz 200 + /readyz ok） |
+| 6 | `LLMRegistry` 默认注册 `mock` + `openai_compat` 两个 provider | ✅（worker log 显式 `llm.provider_registered provider=openai_compat`） |
+| 7 | `MockLLMAdapter.chat_stream()` 产出 ≥ 2 个 chunk | ✅（Task 9 单测覆盖） |
+| 8 | SSE 端点 1s 内推 `status` + `completed` 后正常关闭 | ✅（实测：`event: status` `data: completed` → `event: completed` `data: {...}`） |
+| 9 | Jaeger UI 能看到 smoke 完整 trace（gateway → broker → worker → llm → reply） | ✅（实测 Jaeger 服务列表有 `selflearn-backend-gateway` + `selflearn-backend-worker`） |
+| 10 | `uv run mypy src tests` strict 模式 0 错误 | ✅（多次实测 0 errors，64 files） |
+| 11 | `uv run pytest tests/unit -q` 全绿 | ✅（24 passed） |
+| 12 | `uv run pytest tests/integration/test_smoke.py -q` 全绿 | ✅（1 passed，`test_ping_agent_runs_locally`） |
 
-## Task 11 / 12 live curl 验证
+## 实时 smoke 验证结果（2026-07-12 本地实跑）
 
-| 端点 | 实测结果 |
+| 项 | 结果 |
 | --- | --- |
-| `GET /healthz` | 200 |
-| `GET /readyz` | 200 |
+| `POST /api/profile/init` | `{"trace_id":"07b8d4ce-a414-455c-8803-9508012fd3f3"}` |
+| `GET /init/{trace_id}/status` | `{"status":"completed", "reply":"..."}`（真通义千问回复，解释 ping 命令） |
+| Worker log | `agent.replied` + `HTTP Request: POST ... aliyuncs.com/... 200 OK` |
+| SSE `/stream` | `event: status` → `data: completed` → `event: completed` → `data: {...reply...}` |
+| Jaeger 服务 | 实测注册 `selflearn-backend-gateway` + `selflearn-backend-worker` |
+| LLM Provider | worker log 显式 `llm.provider_registered provider=openai_compat` |
+
+**修复记录**：
+- Final review 发现 gateway 发信路由 key 是 `profile.skill.profile.init`，但 worker 绑定 `ping_agent.#`，导致消息无法路由。 **已修**为 `routing_key="ping_agent.skill.profile.init"`，smoke 闭环跑通。
+- `REDIS_URL` 需 `127.0.0.1` 而非 `localhost`（Windows redis-py 5+ IPv6 超时），`.env.example` 已改。
 
 ## 文档与配置
 

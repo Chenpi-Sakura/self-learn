@@ -39,7 +39,7 @@ async def init_profile(body: ProfileInitRequest) -> ProfileInitResponse:
     )
     r = get_redis()
     await r.set(f"trace:{env.trace_id}:status", "running", ex=60)
-    await publish_envelope(env, routing_key="profile.skill.profile.init")
+    await publish_envelope(env, routing_key="ping_agent.skill.profile.init")
     return ProfileInitResponse(trace_id=env.trace_id)
 
 
