@@ -327,7 +327,7 @@ class DirectorAgent(AbstractAgent):
     所以：任何异常必须捕获 → 推送 FAILED 进度 → 抛 AppError 让上层记录 trace。
     """
     agent_id = "director-01"
-    skills = ["skill.level.start"]
+    skills = ["skill.director.start"]
 
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
@@ -761,38 +761,43 @@ class ProfileRepository:
 - **生命周期**：进程启动时由 `skills/library.py` 读盘载入为 `Skill` 对象到 `skill_library` 单例
 - **调用**：Agent 通过 `skill_library.get("skill.exercise.generate")` 拿到 Skill 对象，**用 Skill.body 作为 system prompt**，用 Skill.output_schema / validation_rules 作为 LLM 输出的结构化校验
 
+**Skill markdown 文档 V1.2 约束**（重要）：
+
+1. Skill = 纯业务说明书 + LLM system prompt 源，**禁止**写入 Tool 调用指令 / 工具名提示 / `ToolRegistry.call(...)` 之类的内容。原因：Skill.body 直接喂给 LLM，LLM 没有 function_call 能力，写了只会污染输出、引发解析崩溃。
+2. Skill 仅描述：**意图 / 数据格式校验规则 / 输出 Schema / 业务硬约束**。
+3. Tool 的实际调用由 Agent.run() 用 Python `await ToolRegistry.call(...)` 硬编排，编排顺序写在 Agent 代码里，不写在 Skill 里。
+
 **示例 Skill 文档**（`docs/skills/skill.exercise.generate.md`）：
 
 ```markdown
 ---
 name: skill.exercise.generate
-description: Use when generating exercises from a knowledge point. Output must match exercise schema and pass tool.lint_json before persistence.
+description: Use when generating exercises from a knowledge point. Output must match the exercise schema and pass business validation rules.
 tags: [stage3, exercise, generation]
 output_schema: schemas/exercise.schema.json
 ---
 
 # Skill: 生成合规习题
 
-## Steps
-1. Call `tool.fetch_template(name="exercise_generation_v1")` to load prompt template.
-2. Build ChatRequest with `reasoning=True` and the template as system prompt.
-3. Parse LLM JSON output (may need extract-from-fence helper).
-4. Validate via `tool.lint_json(payload=parsed, schema="exercise")`. If fail: retry once, otherwise raise `EXERCISE_INVALID`.
-5. Return list of Exercise ORM objects.
+## Intent
+根据 knowledge_point 生成 N 道符合 difficulty 梯度与 schema 的习题。LLM 只负责按 schema 输出 JSON；不允许输出多余文字、不允许虚构字段。
 
 ## Output Schema
-See `schemas/exercise.schema.json` — required fields: exercise_type, prompt, options, correct_answer, difficulty (1-3), score.
+See `schemas/exercise.schema.json` — required fields: exercise_type, prompt, options, correct_answer, difficulty (1-3), score。
 
 ## Validation Rules
-- No duplicate prompts within one batch.
-- Difficulty must be in 1..3.
-- For `single_choice`: `options` length == 4 and exactly one matches `correct_answer`.
-- For `code`: `correct_answer` must contain a Python `def` or `class` definition.
+- 不允许 batch 内 prompt 重复。
+- difficulty 必须 ∈ {1, 2, 3}。
+- single_choice: `options` 长度 == 4，恰有 1 个 ∈ `correct_answer`。
+- fill_blank: `correct_answer` 非空，prompt 含恰好一个 "____"。
+- code: `correct_answer` 必须包含 Python `def` 或 `class` 定义。
 
 ## Common Mistakes
-- LLM returns prose around JSON — wrap parsing in try/except with fence extraction.
-- Difficulty gradient skipped — keep 1 (easy) / 2 (medium) / 3 (hard) in roughly even split.
+- LLM 返回夹杂散文 → 解析时必须用 extract-from-fence。
+- difficulty 全部相同 → 必须按 1/2/3 大致均匀分布。
 ```
+
+> 注：本 markdown 不写 `Call tool.fetch_template(...)` 这类 Tool 调用指令。所有 Tool 调用都在 Agent 代码中按固定顺序 `await` 完成。Skill 是"做什么 + 怎么算合法"，Agent 是"按这个流程硬编排"。
 
 **Agent 加载 Skill 的代码形态**：
 
@@ -838,7 +843,12 @@ def get(name: str) -> Skill:
     return _skill_library[name]
 ```
 
-**Agent 用 Skill 的代码形态**：
+**Agent 用 Skill 的代码形态**（**重要：Agent 不声明 skills = [...]**）：
+
+- Skill 由 Envelope 的 `target.id` 与 Markdown 文件名直接匹配（路由靠 target.id，不靠静态注册）
+- Agent 内**禁止**声明 `skills = [...]` 类属性或方法
+- Agent 在 `run()` 内需要 Skill 时直接调 `skill_library.get("skill.exercise.generate")` 拿 Skill 对象，再用 `Skill.body` 作为 system prompt
+- ToolRegistry 仅在 Agent 内显式调用，**不**出现在 Skill markdown 中
 
 ```python
 # agents/builtin/exercise_agent.py

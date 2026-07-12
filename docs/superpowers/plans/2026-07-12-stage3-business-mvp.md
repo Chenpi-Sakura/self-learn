@@ -31,7 +31,11 @@
 10. **JSONB 字段统一封装在 repo 层**：写入走整体赋值 或 `flag_modified`；不依赖 SQLAlchemy 就地 mutate。
 11. **Stage 2 不能破**：每 task 跑完必须 `pytest tests/integration/test_smoke.py` 仍绿（Stage 2 smoke 完整性）。
 12. **mypy strict 必过**：每 task 必跑 `uv run mypy src tests`，0 错。
-13. **Tool / Skill / Agent 三层不混合**：Tool 不注入 prompt，Skill 不调 ToolRegistry（Agent 在 Skill 流程的某一步 显式 调 Tool）。
+13. **Tool / Skill / Agent 三层不混合**：
+    - **Skill markdown 文档（`docs/skills/*.md`）V1.2 严禁写入 Tool 调用指令**：禁止出现 `tool.fetch_template` / `tool.lint_json` / `tool.store_kp` 等工具名提示、禁止 `Call ToolRegistry.call(...)` 之类的步骤、禁止任何把工具调用伪装成"业务步骤"的写法。Skill 只描述 **意图 + 数据格式校验规则 + 输出 Schema + 业务硬约束**。理由：Skill.body 直接喂给 LLM，LLM 没有 function_call 能力，写了只会污染 LLM 输出，引发 EXERCISE_INVALID 解析崩溃。
+    - **Tool 调用只能在 Agent.run() / run_sync() 中以 `await ToolRegistry.call(...)` 形式硬编排**：所有 fetch_template / lint_json / store_kp 必须在 Agent Python 代码里写死调用顺序，不写在 Skill 里。
+    - **Agent 类禁止声明 `skills = [...]` 类属性 / 方法**：Skill 与 Agent 的绑定完全靠 `Envelope.target.id` ↔ `docs/skills/<id>.md` 文件名匹配。Agent 在 run() 内需要时直接 `skill_library.get(...)`，不靠任何静态注册表。
+    - **SkillBasedScheduler 重构**：路由机制剥离对 Agent 静态属性或装饰器的依赖，强制仅认 `envelope.target.id`，与 markdown 文件名一一对应。
 14. **数据表严格 6 张**：本阶段不允许新增 / ALTER 表，最多 6 张 + Stage 2 已建的 2 张。
 
 ---
@@ -1472,50 +1476,51 @@ dependencies = [
 ```markdown
 ---
 name: skill.exercise.generate
-description: Use when generating exercises from a knowledge point. Output must match exercise schema and pass tool.lint_json before persistence.
+description: Use when generating exercises from a knowledge point. LLM must output JSON only; Agent is responsible for fetching prompt template and validating output.
 tags: [stage3, exercise, generation]
-output_schema: exercise
+output_schema: schemas/exercise.schema.json
 ---
 
 # Skill: 生成合规习题
 
-## Steps
-1. Call `tool.fetch_template(name="exercise_generation_v1")` to load prompt template.
-2. Build ChatRequest with `reasoning=True` and template content as system prompt; user message includes node_id and knowledge point title.
-3. Call LLM, parse JSON via `core.thinking.extract_json_from_fence`.
-4. Validate via `tool.lint_json(payload=parsed, schema="exercise")`. If fail: retry once with same template, otherwise raise `EXERCISE_INVALID`.
-5. Return list of Exercise ORM objects.
+## Intent
+根据 knowledge_point 生成 N 道习题，LLM 严格按 Output Schema 输出 JSON，不允许散文、不允许虚构字段。
+
+## Output Schema
+See `schemas/exercise.schema.json` — required fields: exercise_type, prompt, options, correct_answer, difficulty (1-3), score。
 
 ## Validation Rules
-- No duplicate prompts within one batch.
-- Difficulty must be in 1..3.
-- single_choice: options length == 4, exactly one matches correct_answer.
-- fill_blank: correct_answer non-empty, prompt contains exactly one "____".
-- code: correct_answer contains a Python `def` or `class` definition.
+- batch 内 prompt 不允许重复。
+- difficulty ∈ {1, 2, 3}。
+- single_choice: `options` 长度 == 4，恰有 1 个 ∈ `correct_answer`。
+- fill_blank: `correct_answer` 非空，prompt 含恰好一个 "____"。
+- code: `correct_answer` 必须包含 Python `def` 或 `class` 定义。
 
 ## Common Mistakes
-- LLM returns prose around JSON — always extract_json_from_fence.
-- Difficulty gradient skipped — keep 1/2/3 roughly even.
+- LLM 返回夹杂散文 → 解析时必须用 extract-from-fence。
+- difficulty 全部相同 → 必须按 1/2/3 大致均匀分布。
 ```
+
+> 注：本 markdown 不写 `Call tool.fetch_template(...)` 之类的 Tool 调用指令。Tool 调用由 Agent 代码 `await ToolRegistry.call(...)` 硬编排完成。
 
 #### `backend/docs/skills/skill.review.exercise.md`
 ```markdown
 ---
 name: skill.review.exercise
-description: Use when reviewing generated exercises. Output verdict ∈ {passed, needs_fix, rejected}.
+description: Use when reviewing a batch of generated exercises. Output verdict ∈ {passed, needs_fix, rejected}.
 tags: [stage3, review]
 ---
 
 # Skill: 评审习题集
 
-## Steps
-1. Call `tool.lint_json(payload=exercises, schema="exercise")`. If fail → verdict=rejected.
-2. Apply business rules:
-   - No duplicate `prompt` within batch.
-   - single_choice: `options` length == 4, exactly one in `options` matches `correct_answer`.
-   - code: `correct_answer` contains `def` or `class`.
-   - difficulty distribution: at least one of each difficulty 1/2/3 across the batch (if batch size ≥ 3).
-3. If any rule fails → verdict=needs_fix + `issues=[{rule, severity}]`. Else verdict=passed.
+## Intent
+对一批已生成的习题做业务规则审查；规则失败的逐条列出 issues，verdict 由 issues 严重度聚合得到。
+
+## Validation Rules
+- batch 内 prompt 不允许重复。
+- single_choice: `options` 长度 == 4，恰有 1 个 ∈ `correct_answer`。
+- code: `correct_answer` 必须包含 `def` 或 `class`。
+- difficulty 分布：batch size ≥ 3 时，1/2/3 三档各至少 1 道。
 
 ## Output
 - verdict: 'passed' | 'rejected' | 'needs_fix'
@@ -1523,71 +1528,82 @@ tags: [stage3, review]
 - issues: list of {rule, severity, message}
 ```
 
+> 注：具体 schema 校验（lint_json 工具调用）由 Agent.run() 内 `await ToolRegistry.call("tool.lint_json", ...)` 完成，不写在本 markdown 里。
+
 #### `backend/docs/skills/skill.profile.build.md`
 ```markdown
 ---
 name: skill.profile.build
-description: Use when building initial 6-dimension profile for a new student via conversational dialog.
+description: Use when building initial 6-dimension profile for a new student. Each dimension is a float in [0, 1].
 tags: [stage3, profile]
 ---
 
 # Skill: 画像构建
 
-## Steps
-1. 5-round dialog: ask 1 dimension at a time (knowledge_base / visual_preference / analytic_style / goal_employment / error_prone_type / focus_duration).
-2. After each answer, call LLM with `reasoning=True` to extract numeric [0, 1] for that dimension.
-3. After 5 rounds, write to profiles table (student_id × dimensions JSONB).
-4. Push progress(PROFILE, completed, payload={dimensions_summary}).
+## Intent
+对学生做 5 轮对话，每轮收集 1 个维度的 [0, 1] 数值；最终输出 6 个维度的完整画像。
+
+## Dimensions
+- knowledge_base, visual_preference, analytic_style
+- goal_employment, error_prone_type, focus_duration
 
 ## Validation Rules
-- Each dimension in [0, 1].
-- All 6 dimensions must be filled before write.
+- 每个 dimension ∈ [0, 1]。
+- 必须全部 6 个维度齐全后才能写入 profiles 表。
+
+## Common Mistakes
+- 任意维度缺失即触发 NEEDS_REINPUT。
+- 数值越界 (>1 或 <0) → LLM 必须重新抽取。
 ```
+
+> 注：5 轮对话内容已在 Gateway 收齐，Agent.run() 仅读 payload.dimensions；调 LLM 做合理性 sanity check 由 Agent 代码用 ChatRequest 走，不写在这里。
 
 #### `backend/docs/skills/skill.plan.generate.md`
 ```markdown
 ---
 name: skill.plan.generate
-description: Use when generating treasure map (MapNodes + KnowledgePoints) from a built profile.
+description: Use when generating treasure map (MapNodes + KnowledgePoints) from a built profile. Output is a list of map nodes with embedded KP info.
 tags: [stage3, plan]
 ---
 
 # Skill: 藏宝图生成
 
-## Steps
-1. Read student.profile.dimensions JSONB.
-2. Call tool.fetch_template(name="plan_generate_v1") for prompt template.
-3. LLM generates 5-10 nodes, each with kp_title / kp_description / difficulty / prerequisites.
-4. For each generated KP, call tool.store_kp → insert.
-5. Insert map_nodes rows for student, status='active'.
-6. Push progress(PLAN, completed, payload={node_count, kp_ids}).
+## Intent
+根据学生 profile.dimensions 生成 5-10 个 MapNode，每个 MapNode 携带一个 KnowledgePoint。
 
 ## Validation Rules
-- node_count in [5, 10]
-- prerequisites must reference existing KP ids (or be empty)
+- node_count ∈ [5, 10]。
+- 每个 node 必含 kp_title / kp_description / difficulty / prerequisites。
+- prerequisites 必须引用已存在的 KP id（允许空 list）。
+- difficulty ∈ {1, 2, 3}。
 ```
+
+> 注：KP 落库（store_kp 工具调用）由 Agent.run() 内 `await ToolRegistry.call("tool.store_kp", ...)` 完成，不写在本 markdown 里。
 
 #### `backend/docs/skills/skill.director.start.md`
 ```markdown
 ---
 name: skill.director.start
-description: Use when starting a level from the first active map node. Synchronously calls Exercise and Review agents.
+description: Use when starting a level from the first active map node. Director is the orchestrator; sub-agent calls are hardcoded in Agent code.
 tags: [stage3, director]
 ---
 
 # Skill: 关卡推进（Director）
 
-## Steps
-1. select_first_active_node(student_id) → 选第一个 status=active 的 MapNode。
-2. 调 ExerciseAgent.run_sync(env, node) → list[Exercise]。
-3. 调 ReviewAgent.run_sync(env, exercises) → Review。
-4. INSERT level + exercises + review_results。
-5. Push progress(COMPLETED, payload={level_id, exercises_count, review_verdict}).
+## Intent
+为学生选定当前第一个 status=active 的 MapNode，串起"出题 → 评审 → 入库"完整流程，写入 levels + exercises + review_results 表。
 
-## Failure Handling（V1.1 修复）
+## Validation Rules
+- 必须存在至少 1 个 active 节点，否则抛 NO_ACTIVE_NODE。
+- 必须完整跑完 出题 + 评审；任何阶段失败 → 整流程失败，不写库。
+- Exercise 必须通过 Review.verdict ∈ {passed, needs_fix}；verdict=rejected → 整流程失败。
+
+## Failure Handling
 - 任何异常必须 try/except 捕获 → push progress(FAILED, payload={code, message}) → 抛 AppError。
 - SSE 端点看到 FAILED 后关闭连接，前端可识别为中断。
 ```
+
+> 注：选节点 / 调 ExerciseAgent.run_sync / 调 ReviewAgent.review / 写库 这一串动作由 DirectorAgent.run() 用 Python 代码硬编排完成，不写在本 markdown 里。
 
 #### `backend/src/selflearn/skills/__init__.py`
 ```python
@@ -1738,7 +1754,7 @@ class ProfileAgent(AbstractAgent):
     """
 
     agent_id = "profile-01"
-    skills = ["skill.profile.build"]
+    # 注：Agent 类不声明 skills = [...]。Skill 在 run() 内通过 skill_library.get(...) 动态获取。
 
     DIMENSION_KEYS = [
         "knowledge_base", "visual_preference", "analytic_style",
@@ -1868,7 +1884,7 @@ from selflearn.skills.library import get as get_skill
 
 class PlanAgent(AbstractAgent):
     agent_id = "plan-01"
-    skills = ["skill.plan.generate"]
+    # 注：Agent 类不声明 skills = [...]。Skill 在 run() 内通过 skill_library.get(...) 动态获取。
 
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
@@ -2091,7 +2107,7 @@ from selflearn.tools.protocol import ToolRegistry
 
 class ExerciseAgent(AbstractAgent):
     agent_id = "exercise-01"
-    skills = ["skill.exercise.generate"]
+    # 注：Agent 类不声明 skills = [...]。Skill 在 run_sync() 内通过 skill_library.get(...) 动态获取。
 
     async def run(self, env: Envelope) -> Any: ...  # 满足抽象
 
@@ -2283,7 +2299,7 @@ class Review:
 
 class ReviewAgent(AbstractAgent):
     agent_id = "review-01"
-    skills = ["skill.review.exercise"]
+    # 注：Agent 类不声明 skills = [...]。Skill 在 review() 内通过 skill_library.get(...) 动态获取。
 
     async def run(self, env: Envelope) -> Envelope: ...  # 不被同步调，仅满足抽象
 
@@ -2399,7 +2415,7 @@ async def test_director_uncaught_exception_publishes_failed_and_raises():
             env = Envelope(
                 action="skill.execute",
                 sender=ActorRef(type="gateway", id="g"),
-                target=ActorRef(type="skill", id="skill.level.start"),
+                target=ActorRef(type="skill", id="skill.director.start"),
                 payload={"student_id": "00000000-0000-0000-0000-000000000002"},
                 trace_id="dir-test-1",
             )
@@ -2454,7 +2470,7 @@ from selflearn.agents.builtin import exercise_agent, review_agent  # noqa: E402
 
 class DirectorAgent(AbstractAgent):
     agent_id = "director-01"
-    skills = ["skill.level.start"]
+    # 注：Agent 类不声明 skills = [...]。Skill 在 _run_inner() 内通过 skill_library.get(...) 动态获取。
 
     async def run(self, env: Envelope) -> Envelope:
         """V1.1: 必须 try/except 包全部子调用，失败推 FAILED 后抛 AppError。"""
@@ -2795,10 +2811,10 @@ async def start_level(body: LevelStartRequest) -> dict:
     env = Envelope(
         action="skill.execute",
         sender=ActorRef(type="gateway", id="smoke"),
-        target=ActorRef(type="skill", id="skill.level.start"),
+        target=ActorRef(type="skill", id="skill.director.start"),
         payload={"student_id": str(body.student_id)},
     )
-    await publish_envelope(env, routing_key="director.skill.level.start")
+    await publish_envelope(env, routing_key="director.skill.director.start")
     return {"trace_id": env.trace_id}
 
 
