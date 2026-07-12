@@ -60,3 +60,8 @@ disable_error_code = ["misc", "no-any-return"]
 [[tool.mypy.overrides]]
 module = ["qdrant_client.*", "minio.*", "aio_pika.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+]
