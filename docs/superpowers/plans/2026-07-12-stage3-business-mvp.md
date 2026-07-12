@@ -1096,6 +1096,38 @@ uv run pytest tests/unit/test_progress_stream.py -v
 
 Expected: 2 passed。
 
+### Step 4.5: SkillBasedScheduler 路由改造（Rule #13 第四子规则）
+
+**目的**：Rule #13 第四子规则要求路由机制剥离对 Agent 静态属性或装饰器的依赖，强制仅认 `envelope.target.id`，与 markdown 文件名一一对应。本步改造 Stage 2 `SkillBasedScheduler` 与 Stage 3 新增 Skill 的衔接。
+
+**Files:**
+- Modify: `backend/src/selflearn/agents/scheduler.py`
+- Modify: `backend/src/selflearn/skills/library.py`（暴露 `get_agent_class_for_skill` 映射）
+- Create: `backend/tests/unit/test_scheduler_target_id_routing.py`
+
+**改造核心要点**：
+- `SkillBasedScheduler.match()` 仅看 `envelope.target.id`：
+  1. `skill = skill_library.get(env.target.id)` ——从 markdown 文件名拿 Skill 对象。
+  2. `_AGENT_FOR_SKILL: dict[str, type[AbstractAgent]]` ——顶层 hard-code 的 `skill_id → Agent class` 映射（5 条 lookup）。
+  3. 拿到 Agent class → 实例化 → `agent.run(env)`。
+- `_AGENT_FOR_SKILL` 初始内容（与 Plan Task 6/7-11 对齐）：
+  ```python
+  _AGENT_FOR_SKILL: dict[str, type[AbstractAgent]] = {
+      "skill.profile.build": ProfileAgent,
+      "skill.plan.generate": PlanAgent,
+      "skill.exercise.generate": ExerciseAgent,
+      "skill.review.exercise": ReviewAgent,
+      "skill.director.start": DirectorAgent,
+  }
+  ```
+- Stage 2 `skill.profile.init`（ping）保留 `skill_registry` 装饰器路径作 deprecated fallback，但 dispatch 主路径走 `_AGENT_FOR_SKILL`。
+- `tests/unit/test_skill_routing.py` 中 `@skill("skill.profile.init")` 装饰器路径保留（Stage 2 smoke 用），新 `test_scheduler_target_id_routing.py` 验证 Stage 3 路由改造路径。
+
+**验证**：
+- `uv run pytest tests/integration/test_smoke.py -q` 仍绿（Stage 2 走 skill_registry 装饰器 fallback）。
+- `uv run mypy src tests` strict 0 错。
+- 新增单测 `tests/unit/test_scheduler_target_id_routing.py`：mock 一个 envelope，验证 target.id="skill.director.start" 时拿到 DirectorAgent 类。
+
 ### Step 5: mypy + Stage 2 回归 + commit
 
 ```bash
