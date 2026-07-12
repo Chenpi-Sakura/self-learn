@@ -1736,47 +1736,92 @@ git commit -m "feat(skills): Skill markdown 文档 + library loader（5 份 Skil
 
 **Files:**
 - Create: `backend/src/selflearn/agents/builtin/profile_agent.py`
-- Test: `backend/tests/unit/test_exercise_agent.py`（先建空文件，准备 Task 9 复用）
+- Test: `backend/tests/unit/test_profile_agent.py`（独立文件，不与 ExerciseAgent 复用）
 
-### Step 1: 写失败的测试
+> **V1.3 Rule #13 第四子规则补救**：Stage 3 Agent 必须显式声明 `agent_type` + `queue` 类属性（满足 `AbstractAgent` 抽象 + 跨 Agent 一致性，便于 `SkillBasedScheduler` 路由 + worker 启动时注册 Agent 到 RabbitMQ topology）。
 
-创建 `backend/tests/unit/test_exercise_agent.py`（虽然叫 exercise agent 文件，但 Stage 3 我们先放共用 agent fixture）：
+### Step 1：写失败的测试
+
+`backend/tests/unit/test_profile_agent.py`：
+
 ```python
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_profile_agent_initializes_6_dimensions():
-    """ProfileAgent 第一轮对话后，dimensions 必须含 6 个 key。"""
+    """SkillLibrary 中 skill.profile.build 必须可加载（sanity check）。"""
     from selflearn.skills.library import load_all, get
     load_all()
     skill = get("skill.profile.build")
     assert skill.name == "skill.profile.build"
+
+
+async def test_profile_agent_run_writes_profile_and_returns_envelope():
+    """ProfileAgent.run() 必须：(1) 推 progress running → completed；(2) 写 profiles 表；(3) 返回 Envelope.payload 含 profile_id。"""
+    fake_uuid = "11111111-2222-3333-4444-555555555555"
+    fake_session = AsyncMock()
+    fake_session.commit = AsyncMock()
+    fake_session.refresh = AsyncMock(side_effect=lambda obj: setattr(obj, "profile_id", __import__("uuid").UUID(fake_uuid)))
+
+    async def fake_session_ctx(*_args, **_kwargs):
+        return fake_session
+
+    with patch("selflearn.agents.builtin.profile_agent.get_session_factory") as mock_factory, \
+         patch("selflearn.agents.builtin.profile_agent.progress_publish", new=AsyncMock()) as mock_pub:
+        # factory() 返回可调用，调用返回 async ctx manager → fake_session
+        mock_factory.return_value = MagicMock(**{"__call__.return_value.__aenter__": AsyncMock(return_value=fake_session),
+                                                  "__call__.return_value.__aexit__": AsyncMock(return_value=None)})
+
+        from selflearn.agents.builtin.profile_agent import ProfileAgent
+        from selflearn.core.envelope import ActorRef, Envelope
+
+        env = Envelope(
+            action="skill.execute",
+            sender=ActorRef(type="gateway", id="g"),
+            target=ActorRef(type="skill", id="skill.profile.build"),
+            payload={"student_id": "00000000-0000-0000-0000-000000000001",
+                     "dimensions": {k: 0.5 for k in ["knowledge_base", "visual_preference", "analytic_style",
+                                                     "goal_employment", "error_prone_type", "focus_duration"]},
+                     "tags": []},
+        )
+        reply = await ProfileAgent().run(env)
+
+        assert reply.action == "skill.completed"
+        assert "profile_id" in reply.payload
+        assert fake_session.add.called, "Profile 实例必须 add 到 session"
+        assert fake_session.commit.called, "commit 必须被调"
+        # 两次 publish：running + completed
+        assert mock_pub.call_count == 2
+        stages = [c.args[1].stage for c in mock_pub.call_args_list]
+        from selflearn.progress.stages import Stage
+        assert Stage.PROFILE in stages
 ```
 
-### Step 2: 跑测试确认失败
+### Step 2：跑测试确认失败
 
 ```bash
-uv run pytest tests/unit/test_exercise_agent.py -v
+cd backend && uv run pytest tests/unit/test_profile_agent.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'selflearn.agents.builtin'`。
 
-### Step 3: 最小实现
+### Step 3：最小实现
 
 #### `backend/src/selflearn/agents/builtin/profile_agent.py`
 ```python
 """ProfileAgent: 5 轮对话构建 6 维画像。"""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from uuid import UUID
 
 from selflearn.agents.base import AbstractAgent
 from selflearn.core.envelope import ActorRef, Envelope
 from selflearn.domain.profile import Profile
-from selflearn.llm.registry import llm_registry
+from selflearn.infra.db import get_session_factory
 from selflearn.progress.stream import progress_publish
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.skills.library import get as get_skill
@@ -1785,11 +1830,13 @@ from selflearn.skills.library import get as get_skill
 class ProfileAgent(AbstractAgent):
     """skill.profile.build: 对话式 6 维画像构建。
 
-    Stage 3 MVP: 跳过真 5 轮 UI 对话，直接 mock 5 轮问答（payload.dimensions 已给）→ 写 profiles 表。
+    Stage 3 MVP: 跳过真 5 轮 UI 对话，直接读 payload.dimensions（前端 5 轮问答已在 gateway 收齐）→ 写 profiles 表。
     """
 
     agent_id = "profile-01"
-    # 注：Agent 类不声明 skills = [...]。Skill 在 run() 内通过 skill_library.get(...) 动态获取。
+    agent_type = "profile"
+    queue = "agent.profile.work"
+    # V1.3 Rule #13 第三子规则：Agent 类不声明 skills = [...]。
 
     DIMENSION_KEYS = [
         "knowledge_base", "visual_preference", "analytic_style",
@@ -1798,33 +1845,29 @@ class ProfileAgent(AbstractAgent):
 
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
-        student_id = env.payload["student_id"]
+        student_id_raw = env.payload["student_id"]
+        student_id = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw
 
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.PROFILE, status="running",
-            payload={"student_id": student_id},
+            payload={"student_id": str(student_id)},
         ))
-
-        # MVP：直接读 payload 里的 dimensions（前端 5 轮问答结果已在 gateway 收齐）
-        dimensions = {k: env.payload.get("dimensions", {}).get(k, 0.5)
-                      for k in self.DIMENSION_KEYS}
 
         # 加载 Skill 做 sanity check（开发者文档：6 维必须全填）
         get_skill("skill.profile.build")
 
-        # 写库
-        # （实际写库通过 repo，由实现 agent 在 ProfileRepository 中实现）
-        # 这里仅示意调用；Task 10 引入 repo 层后会替换
-        from sqlalchemy.ext.asyncio import AsyncSession
-        from selflearn.infra.db import get_session_factory
+        # MVP：直接读 payload 里的 dimensions；任一缺失 → 默认 0.5
+        dimensions = {k: env.payload.get("dimensions", {}).get(k, 0.5)
+                      for k in self.DIMENSION_KEYS}
 
+        # 写库（Stage 3 MVP：直连 session。Stage 4 重构时引入 ProfileRepository）
         factory = get_session_factory()
         async with factory() as session:
             profile = Profile(
                 student_id=student_id,
                 dimensions=dimensions,
                 tags=env.payload.get("tags", []),
-                last_updated=datetime.utcnow(),
+                last_updated=datetime.now(timezone.utc),
             )
             session.add(profile)
             await session.commit()
@@ -1846,20 +1889,21 @@ class ProfileAgent(AbstractAgent):
         )
 ```
 
-### Step 4: 跑测试
+### Step 4：跑测试
 
 ```bash
-uv run pytest tests/unit/test_exercise_agent.py -v
+cd backend && uv run pytest tests/unit/test_profile_agent.py -v
 ```
 
-Expected: 1 passed（仅验证 skill 加载）。
+Expected: 2 passed。
 
-### Step 5: mypy + commit
+### Step 5：mypy + Stage 2 回归 + commit
 
 ```bash
-uv run mypy src tests
-git add src/selflearn/agents/builtin/profile_agent.py tests/unit/test_exercise_agent.py
-git commit -m "feat(agents): ProfileAgent MVP（5 维对话式画像构建）"
+cd backend && uv run mypy src tests
+cd backend && uv run pytest tests/integration/test_smoke.py -q
+git add backend/src/selflearn/agents/builtin/profile_agent.py backend/tests/unit/test_profile_agent.py
+git commit -m "feat(agents): ProfileAgent MVP（agent_type=profile, queue=agent.profile.work）"
 ```
 
 ---
@@ -1869,83 +1913,143 @@ git commit -m "feat(agents): ProfileAgent MVP（5 维对话式画像构建）"
 **Files:**
 - Create: `backend/src/selflearn/agents/builtin/plan_agent.py`
 - Create: `backend/scripts/seed_map.py`
+- Test: `backend/tests/unit/test_plan_agent.py`（独立文件，不复用 Task 7/9 test）
 
-### Step 1: 写失败的测试
+> **V1.3 Rule #13 第四子规则补救**：`PlanAgent` 同样显式 `agent_type = "plan"` + `queue = "agent.plan.work"`。
 
-往 `backend/tests/unit/test_exercise_agent.py` 追加：
+### Step 1：写失败的测试
+
+`backend/tests/unit/test_plan_agent.py`：
+
 ```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+pytestmark = pytest.mark.asyncio
+
+
 async def test_plan_agent_skill_loads():
+    """SkillLibrary 中 skill.plan.generate 必须可加载。"""
     from selflearn.skills.library import load_all, get
     load_all()
     skill = get("skill.plan.generate")
     assert skill.name == "skill.plan.generate"
 
 
-async def test_seed_map_writes_5_kps(tmp_path, monkeypatch):
-    """seed_map.py 至少要可独立插入 5 条 KP 用于开发与 smoke。"""
-    # 集成验证放到 Task 14 的 smoke_mvp.sh，这里只验证 seed_map 文件存在
+async def test_seed_map_file_exists():
+    """seed_map.py 必须存在（运行验证推到 Task 14 smoke_mvp.sh）。"""
     import os
     assert os.path.exists("scripts/seed_map.py"), "seed_map.py must exist"
+
+
+async def test_plan_agent_run_writes_map_nodes_and_returns_envelope():
+    """PlanAgent.run() 必须：(1) 推 progress running → completed；(2) 为 student 创建若干 MapNode（status=active, branch_type=main）；(3) 返回 Envelope.payload 含 node_count + node_ids。"""
+    # mock session：select KP 返回 3 个
+    fake_kps = []
+    for _ in range(3):
+        kp = MagicMock()
+        kp.kp_id = MagicMock(__str__=lambda s: "fake-kp-" + str(id(kp))[-4:])
+        fake_kps.append(kp)
+
+    fake_session = AsyncMock()
+    fake_session.commit = AsyncMock()
+    fake_session.flush = AsyncMock()
+    fake_session.execute = AsyncMock(return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=fake_kps)))))
+    fake_session.refresh = AsyncMock(side_effect=lambda obj: setattr(obj, "node_id", __import__("uuid").UUID("22222222-3333-4444-5555-666666666666")))
+
+    async def fake_session_ctx():
+        yield fake_session
+
+    with patch("selflearn.agents.builtin.plan_agent.get_session_factory") as mock_factory, \
+         patch("selflearn.agents.builtin.plan_agent.progress_publish", new=AsyncMock()) as mock_pub:
+        mock_factory.return_value = MagicMock(**{"__call__.return_value.__aenter__": AsyncMock(return_value=fake_session),
+                                                  "__call__.return_value.__aexit__": AsyncMock(return_value=None)})
+        # session.execute 查询 KP — 本次 fixture 中 session 是同一个对象，必须返回正常 KP list
+        from sqlalchemy import select
+        fake_session.execute = AsyncMock(
+            return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=fake_kps))))
+        )
+        from selflearn.agents.builtin.plan_agent import PlanAgent
+        from selflearn.core.envelope import ActorRef, Envelope
+
+        env = Envelope(
+            action="skill.execute",
+            sender=ActorRef(type="gateway", id="g"),
+            target=ActorRef(type="skill", id="skill.plan.generate"),
+            payload={"student_id": "00000000-0000-0000-0000-000000000001"},
+        )
+        reply = await PlanAgent().run(env)
+
+        assert reply.action == "skill.completed"
+        assert reply.payload["node_count"] == 3
+        assert len(reply.payload["node_ids"]) == 3
+        assert fake_session.add.call_count == 3, "3 个 MapNode 必须 add"
+        assert fake_session.commit.called
+        assert mock_pub.call_count == 2
 ```
 
-### Step 2: 跑测试确认失败
+### Step 2：跑测试确认失败
 
 ```bash
-uv run pytest tests/unit/test_exercise_agent.py -v
+cd backend && uv run pytest tests/unit/test_plan_agent.py -v
 ```
 
-Expected: FAIL with plan skill loading 部分（`load_all` 已经能加载 5 份，应过）+ plan_agent / seed_map 不存在。
+Expected: FAIL with `ModuleNotFoundError: No module named 'selflearn.agents.builtin.plan_agent'`。
 
-### Step 3: 最小实现
+### Step 3：最小实现
 
 #### `backend/src/selflearn/agents/builtin/plan_agent.py`
 ```python
 """PlanAgent: 根据 profile 生成 5-10 个 MapNode。"""
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import select
 
 from selflearn.agents.base import AbstractAgent
 from selflearn.core.envelope import ActorRef, Envelope
 from selflearn.domain.knowledge_point import KnowledgePoint
 from selflearn.domain.map_node import MapNode
 from selflearn.infra.db import get_session_factory
-from selflearn.llm.registry import llm_registry
 from selflearn.progress.stream import progress_publish
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.skills.library import get as get_skill
 
 
 class PlanAgent(AbstractAgent):
+    """skill.plan.generate: 根据 profile 调 LLM 生成 5-10 个 KP + MapNode。
+
+    Stage 3 MVP：不再调 LLM，直接复用 `scripts/seed_map.py` 已 seed 的 KP（取前 N 条），为每个 KP 创建一个 status=active / branch_type=main / position=(idx*100, 0) 的 MapNode。
+    """
+
     agent_id = "plan-01"
-    # 注：Agent 类不声明 skills = [...]。Skill 在 run() 内通过 skill_library.get(...) 动态获取。
+    agent_type = "plan"
+    queue = "agent.plan.work"
 
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
-        student_id = env.payload["student_id"]
+        student_id_raw = env.payload["student_id"]
+        student_id = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw
 
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.PLAN, status="running",
-            payload={"student_id": student_id},
+            payload={"student_id": str(student_id)},
         ))
 
+        # 加载 Skill 做 sanity check（Intent / Validation Rules 是开发者文档）
         skill = get_skill("skill.plan.generate")
-        # MVP：直接复用已 seed 的 KP，不再 LLM 生成
-        # （Stage 4 接真规划时再扩 LLM 调用）
         assert skill.name == "skill.plan.generate"
 
         factory = get_session_factory()
         async with factory() as session:
-            # 取 5 个 KP（seed 进库的）
-            from sqlalchemy import select
             stmt = select(KnowledgePoint).limit(5)
             kps = (await session.execute(stmt)).scalars().all()
 
-            node_ids = []
+            node_ids: list[str] = []
             for idx, kp in enumerate(kps):
                 node = MapNode(
-                    student_id=uuid.UUID(student_id) if isinstance(student_id, str) else student_id,
+                    student_id=student_id,
                     kp_id=kp.kp_id,
                     status="active",
                     branch_type="main",
@@ -1973,14 +2077,19 @@ class PlanAgent(AbstractAgent):
 
 #### `backend/scripts/seed_map.py`
 ```python
-"""Seed 5-10 个 KnowledgePoint（Stage 3 MVP — 自注意力机制 / Transformer 等示例）。"""
+"""Seed 5-10 个 KnowledgePoint（Stage 3 MVP — 自注意力机制 / Transformer 等示例）。
+
+幂等性：重复执行不抛错（SELECT WHERE title = ... 已存在则跳过）。
+"""
 from __future__ import annotations
 
 import asyncio
 import uuid
 
-from selflearn.infra.db import get_session_factory
+from sqlalchemy import select
+
 from selflearn.domain.knowledge_point import KnowledgePoint
+from selflearn.infra.db import get_session_factory
 
 
 SEED_KPS = [
@@ -2005,25 +2114,31 @@ SEED_KPS = [
 async def main() -> None:
     factory = get_session_factory()
     async with factory() as session:
+        inserted = 0
         for kp_data in SEED_KPS:
+            stmt = select(KnowledgePoint).where(KnowledgePoint.title == kp_data["title"])
+            existing = (await session.execute(stmt)).scalar_one_or_none()
+            if existing is not None:
+                continue
             kp = KnowledgePoint(**kp_data, kp_id=uuid.uuid4())
             session.add(kp)
+            inserted += 1
         await session.commit()
-        print(f"seeded {len(SEED_KPS)} knowledge_points")
+        print(f"[seed_map] inserted {inserted} knowledge_points (skipped {len(SEED_KPS) - inserted})")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Step 4: 跑测试 + 跑 seed
+### Step 4：跑测试 + 跑 seed
 
 ```bash
-uv run pytest tests/unit/test_exercise_agent.py -v
-uv run python -m scripts.seed_map
+cd backend && uv run pytest tests/unit/test_plan_agent.py -v
+cd backend && uv run python -m scripts.seed_map
 ```
 
-Expected: test + 控制台 `seeded 5 knowledge_points`。
+Expected: 3 passed + 控制台 `inserted 5 knowledge_points (skipped 0)`，第二次执行同命令得 `inserted 0 knowledge_points (skipped 5)`。
 
 ### Step 5: mypy + commit
 
@@ -2044,18 +2159,30 @@ git commit -m "feat(agents): PlanAgent + seed_map.py（5 个 KP 种子）"
 > - Skill markdown（`docs/skills/skill.exercise.generate.md`）**只**写"做什么 + 怎么算合法"，**不**写 fetch_template / lint_json 这些工程步骤——全在 Agent.run_sync() 内硬编码。
 
 **Files:**
-- Modify: `backend/src/selflearn/agents/builtin/exercise_agent.py`（创建时已有 stub，仅内容）
-- Modify: `backend/tests/unit/test_exercise_agent.py`（追加 exercise agent 用例）
+- Create: `backend/src/selflearn/agents/builtin/exercise_agent.py`
+- Create: `backend/src/selflearn/agents/builtin/_node_protocol.py`（`Node` Protocol，Task 9 + 11 共享）
+- Test: `backend/tests/unit/test_exercise_agent.py`（独立文件）
 
-### Step 1: 写失败的测试
+> **V1.3 Rule #13 第四子规则补救**：`ExerciseAgent` 显式 `agent_type = "exercise"` + `queue = "agent.exercise.work"`。
+> **新增 `Node` Protocol**：`run_sync(env, node)` 的 `node` 参数类型不再是 `Any`，而是一个 `Node` Protocol，仅声明需要的两个属性——`node_id: UUID`、`kp: KnowledgePoint`。`DirectorAgent`（Task 11）依赖此 Protocol；后续 Repository/Query 重构时可用 `MapNode` ORM 实体作为实现，不用改 Protocol。
 
-`backend/tests/unit/test_exercise_agent.py` 追加：
+### Step 1：写失败的测试
+
+`backend/tests/unit/test_exercise_agent.py`：
+
 ```python
-async def test_exercise_agent_lint_failure_raises():
-    """Exercise Agent: tool.lint_json 拒收时抛 EXERCISE_INVALID。"""
-    from unittest.mock import AsyncMock, patch
-    from selflearn.tools.protocol import ToolResult
+import json
+from unittest.mock import AsyncMock, patch
 
+import pytest
+
+from selflearn.tools.protocol import ToolResult
+
+pytestmark = pytest.mark.asyncio
+
+
+async def test_exercise_agent_lint_failure_raises():
+    """Exercise Agent: tool.lint_json 拒收时抛 EXERCISE_INVALID（即便 2 次重试）。"""
     with patch("selflearn.llm.registry.llm_registry") as mock_reg:
         mock_reg.default.return_value.chat = AsyncMock(
             return_value='[{"exercise_type":"single_choice","prompt":"Q?","correct_answer":"A"}]'  # 缺字段
@@ -2064,26 +2191,31 @@ async def test_exercise_agent_lint_failure_raises():
         with patch("selflearn.tools.protocol.ToolRegistry.call") as mock_tool:
             mock_tool.return_value = ToolResult(ok=False, error="schema_violation: 'difficulty' is a required property")
 
-            from selflearn.core.envelope import Envelope, ActorRef
             from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+            from selflearn.core.envelope import ActorRef, Envelope
             from selflearn.core.errors import AppError, ErrorCode
+            from uuid import UUID
+
+            # fake node 满足 Node protocol（仅需 node_id + kp）
+            fake_kp = AsyncMock()
+            fake_kp.title = "Mock KP"
+            fake_node = AsyncMock()
+            fake_node.node_id = UUID("00000000-0000-0000-0000-000000000001")
+            fake_node.kp = fake_kp
 
             env = Envelope(
                 action="skill.execute",
                 sender=ActorRef(type="director", id="d"),
                 target=ActorRef(type="skill", id="skill.exercise.generate"),
-                payload={"node_id": "00000000-0000-0000-0000-000000000001"},
+                payload={"node_id": str(fake_node.node_id)},
                 trace_id="test-trace-1",
             )
             with pytest.raises(AppError) as exc:
-                await ExerciseAgent().run_sync(env, node=AsyncMock())
+                await ExerciseAgent().run_sync(env, node=fake_node)
             assert exc.value.code == ErrorCode.EXERCISE_INVALID
 
 
 async def test_exercise_agent_returns_list_on_valid():
-    from unittest.mock import AsyncMock, patch
-    from selflearn.tools.protocol import ToolResult
-
     valid_json = json.dumps([{
         "exercise_type": "single_choice",
         "prompt": "Transformer 的核心是？",
@@ -2099,44 +2231,67 @@ async def test_exercise_agent_returns_list_on_valid():
         with patch("selflearn.tools.protocol.ToolRegistry.call") as mock_tool:
             mock_tool.return_value = ToolResult(ok=True, data={"validated_count": 1})
 
-            from selflearn.core.envelope import Envelope, ActorRef
             from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+            from selflearn.core.envelope import ActorRef, Envelope
+            from uuid import UUID
+
+            fake_kp = AsyncMock()
+            fake_kp.title = "Transformer 概览"
+            fake_node = AsyncMock()
+            fake_node.node_id = UUID("00000000-0000-0000-0000-000000000002")
+            fake_node.kp = fake_kp
+
             env = Envelope(
                 action="skill.execute",
                 sender=ActorRef(type="director", id="d"),
                 target=ActorRef(type="skill", id="skill.exercise.generate"),
-                payload={"node_id": "00000000-0000-0000-0000-000000000001"},
+                payload={"node_id": str(fake_node.node_id)},
                 trace_id="test-trace-2",
             )
-            result = await ExerciseAgent().run_sync(env, node=AsyncMock())
+            result = await ExerciseAgent().run_sync(env, node=fake_node)
             assert isinstance(result, list)
             assert len(result) == 1
             assert result[0]["correct_answer"] == "Self-Attention"
-
-
-import json  # 顶 import
 ```
 
-### Step 2: 跑测试确认失败
+### Step 2：跑测试确认失败
 
 ```bash
-uv run pytest tests/unit/test_exercise_agent.py -v
+cd backend && uv run pytest tests/unit/test_exercise_agent.py -v
 ```
 
-Expected: FAIL（ExerciseAgent 还没实现 / lint 拒收时不抛 AppError）。
+Expected: FAIL with `ModuleNotFoundError: No module named 'selflearn.agents.builtin.exercise_agent'`。
 
-### Step 3: 实现 ExerciseAgent
+### Step 3：实现 ExerciseAgent
+
+#### `backend/src/selflearn/agents/builtin/_node_protocol.py`
+```python
+"""Plan Agent / Director Agent 传给 Exercise Agent 的 `node` 参数接口约定。
+
+`MapNode` ORM 实体满足此 Protocol；测试中用 `AsyncMock` + 手工 set 属性也能跑通。
+"""
+from __future__ import annotations
+
+from typing import Protocol
+from uuid import UUID
+
+from selflearn.domain.knowledge_point import KnowledgePoint
+
+
+class Node(Protocol):
+    node_id: UUID
+    kp: KnowledgePoint
+```
 
 #### `backend/src/selflearn/agents/builtin/exercise_agent.py`
 ```python
-"""ExerciseAgent: LLM 出题 + tool.lint_json 校验。"""
+"""ExerciseAgent: LLM 出题 + tool.lint_json + 1 次自动重试（V1.3 Rule #15 范例）。"""
 from __future__ import annotations
 
-import json
-from collections.abc import Awaitable
 from typing import Any
 
 from selflearn.agents.base import AbstractAgent
+from selflearn.agents.builtin._node_protocol import Node
 from selflearn.core.envelope import Envelope
 from selflearn.core.errors import AppError, ErrorCode
 from selflearn.core.thinking import extract_json_from_fence
@@ -2147,35 +2302,43 @@ from selflearn.tools.protocol import ToolRegistry
 
 
 class ExerciseAgent(AbstractAgent):
+    """skill.exercise.generate: 前置打包 → 调 LLM → 冷酷后置校验（最多 1 次重试）。"""
+
     agent_id = "exercise-01"
-    # 注：Agent 类不声明 skills = [...]。Skill 在 run_sync() 内通过 skill_library.get(...) 动态获取。
+    agent_type = "exercise"
+    queue = "agent.exercise.work"
 
-    async def run(self, env: Envelope) -> Any: ...  # 满足抽象
+    async def run(self, env: Envelope) -> Envelope:
+        """Dispatcher 走 Envelope 入口（Stage 3 MVP 仅通过 Director 同步调用 run_sync）。"""
+        return env  # pragma: no cover - 同步调用模式
 
-    async def run_sync(self, env: Envelope, node: Any) -> list[dict]:
+    async def run_sync(self, env: Envelope, node: Node) -> list[dict[str, Any]]:
         """Director 同步调；返回 list[dict]，由 Director 写库。
 
-        V1.1: lint 拒收时抛 AppError，让 Director.try/except 兜底推 FAILED。
+        V1.1 Rule #15: lint 拒收时抛 AppError，让 Director.try/except 兜底推 FAILED。
         """
         skill = get_skill("skill.exercise.generate")
 
+        # 前置打包 1) 拉模板
         tmpl = await ToolRegistry.call(
             "tool.fetch_template", name="exercise_generation_v1"
         )
         if not tmpl.ok:
             raise AppError(ErrorCode.INTERNAL, f"fetch_template 失败: {tmpl.error}")
 
+        # 前置打包 2) 一次性把所有输入塞进 ChatRequest
         req = ChatRequest(
             messages=[ChatMessage(
                 role="user",
-                content=f"node_id={node.node_id}; kp_title={getattr(node.kp, 'title', '')}",
+                content=f"node_id={node.node_id}; kp_title={node.kp.title}",
             )],
             system=skill.body + "\n\n" + tmpl.data["content"],
             reasoning=True,
         )
 
-        last_err = None
-        for attempt in range(2):  # 1 次自动重试
+        # 冷酷后置校验 + 1 次重试
+        last_err: str | None = None
+        for _attempt in range(2):
             raw = await llm_registry.default().chat(req)
             parsed = extract_json_from_fence(raw)
             lint = await ToolRegistry.call(
@@ -2184,47 +2347,56 @@ class ExerciseAgent(AbstractAgent):
             if lint.ok:
                 if not isinstance(parsed, list):
                     parsed = [parsed]
-                return parsed
+                return parsed  # type: ignore[return-value]
             last_err = lint.error
+
         raise AppError(ErrorCode.EXERCISE_INVALID, f"lint 重试失败: {last_err}")
 ```
 
-### Step 4: 跑测试
+### Step 4：跑测试
 
 ```bash
-uv run pytest tests/unit/test_exercise_agent.py -v
+cd backend && uv run pytest tests/unit/test_exercise_agent.py -v
 ```
 
-Expected: 至少 4 passed（前 2 个 + 新加 2 个）。
+Expected: 2 passed。
 
-### Step 5: mypy + commit
+### Step 5：mypy + Stage 2 回归 + commit
 
 ```bash
-uv run mypy src tests
-git add src/selflearn/agents/builtin/exercise_agent.py tests/unit/test_exercise_agent.py
-git commit -m "feat(agents): ExerciseAgent（LLM 出题 + tool.lint_json + 1 次重试）"
+cd backend && uv run mypy src tests
+cd backend && uv run pytest tests/integration/test_smoke.py -q
+git add backend/src/selflearn/agents/builtin/_node_protocol.py backend/src/selflearn/agents/builtin/exercise_agent.py backend/tests/unit/test_exercise_agent.py
+git commit -m "feat(agents): ExerciseAgent（LLM + tool.lint_json + 1 次重试） + Node Protocol"
 ```
 
 ---
 
-## Task 10: ReviewAgent（规则过滤）
+## Task 10: ReviewAgent（规则过滤）+ ExerciseRepository
 
 **Files:**
 - Create: `backend/src/selflearn/agents/builtin/review_agent.py`
+- Create: `backend/src/selflearn/infra/repositories/__init__.py`（包占位）
 - Create: `backend/src/selflearn/infra/repositories/exercise_repo.py`
-- Test: `backend/tests/unit/test_review_agent.py`
+- Test: `backend/tests/unit/test_review_agent.py`（独立文件）
+- Test: `backend/tests/unit/test_exercise_repo.py`（独立文件）
 
-### Step 1: 写失败的测试
+> **V1.3 Rule #13 第四子规则补救**：`ReviewAgent` 显式 `agent_type = "review"` + `queue = "agent.review.work"`。
+> **Repository 生命周期契约（与 Task 11 Director 衔接）**：`ExerciseRepository(session)` 在 caller 已经打开的 session 内调用——**不**自己起 transaction、**不**重复 commit。Caller（Director）用一个 `async with factory() as session:` 包整段业务（level + exercises + review_result 写入），所有写入完成后 `await session.commit()` 一次，repository 内部只 `session.add()` 实体，由 outer commit 落地（**注**：本 Task 实现里 repository 内部仍调 `self.session.commit()`——这是 Stage 3 MVP 简化，Director 拿到返回的 list[Exercise] 后不再 commit。Stage 4 引入 Unit of Work 时由 Director 统一 commit，repository 改为只 add）。
 
-`backend/tests/unit/test_review_agent.py`:
+### Step 1：写失败的测试
+
+`backend/tests/unit/test_review_agent.py`：
+
 ```python
 import pytest
+
+from selflearn.agents.builtin.review_agent import ReviewAgent
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_review_passes_valid_exercises():
-    from selflearn.agents.builtin.review_agent import ReviewAgent
     exercises = [
         {"prompt": f"Q{i}?", "exercise_type": "single_choice",
          "options": ["A","B","C","D"], "correct_answer": "A",
@@ -2237,7 +2409,6 @@ async def test_review_passes_valid_exercises():
 
 
 async def test_review_flags_duplicate_prompts():
-    from selflearn.agents.builtin.review_agent import ReviewAgent
     exercises = [
         {"prompt": "same Q?", "exercise_type": "single_choice",
          "options": ["A","B","C","D"], "correct_answer": "A",
@@ -2252,7 +2423,6 @@ async def test_review_flags_duplicate_prompts():
 
 
 async def test_review_rejects_choice_with_no_matching_answer():
-    from selflearn.agents.builtin.review_agent import ReviewAgent
     exercises = [
         {"prompt": "Q?", "exercise_type": "single_choice",
          "options": ["A","B","C","D"], "correct_answer": "Z",  # 不在 options 里
@@ -2264,45 +2434,96 @@ async def test_review_rejects_choice_with_no_matching_answer():
                for i in review.issues)
 ```
 
-### Step 2: 跑测试确认失败
+`backend/tests/unit/test_exercise_repo.py`：
 
-```bash
-uv run pytest tests/unit/test_review_agent.py -v
+```python
+from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID, uuid4
+
+import pytest
+
+from selflearn.infra.repositories.exercise_repo import ExerciseRepository
+
+
+@pytest.mark.asyncio
+async def test_bulk_create_adds_each_item() -> None:
+    """bulk_create 必须：为每条 item 调 session.add()，commit 一次。"""
+    fake_session = MagicMock()
+    fake_session.add = MagicMock()
+    fake_session.commit = AsyncMock()
+
+    repo = ExerciseRepository(fake_session)
+    # 用 AsyncMock 走 commit，select 走 sync MagicMock 不可，所以这里 bypass select→读 list：
+    items = [{
+        "exercise_type": "single_choice",
+        "prompt": "Q?",
+        "options": ["A","B","C","D"],
+        "correct_answer": "A",
+        "explanation": "x",
+        "difficulty": 1,
+        "score": 1.5,
+    }]
+
+    level_id = UUID("11111111-1111-1111-1111-111111111111")
+
+    # 期望实现：用 fake_session 触发 commit 一次、add 一次
+    # 备注：bulk_create 返回 list[Exercise]；Stage 3 MVP 实现可由 commit + 后续 select 拼出，
+    #       但我们 mock select 让它返回 []
+    from sqlalchemy import select
+    fake_session.execute = AsyncMock(
+        return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+    )
+    result = await repo.bulk_create(level_id, items)
+    assert fake_session.add.call_count == 1
+    assert fake_session.commit.await_count >= 1
+    assert isinstance(result, list)
 ```
 
-Expected: FAIL with `ModuleNotFoundError`。
+### Step 2：跑测试确认失败
 
-### Step 3: 最小实现
+```bash
+cd backend && uv run pytest tests/unit/test_review_agent.py tests/unit/test_exercise_repo.py -v
+```
+
+Expected: FAIL（ReviewAgent / ExerciseRepository 还没实现）。
+
+### Step 3：最小实现
+
+#### `backend/src/selflearn/infra/repositories/__init__.py`
+```python
+"""Repository 子包：Stage 3 引入 + Stage 4 完整 Unit of Work 重构。"""
+```
 
 #### `backend/src/selflearn/infra/repositories/exercise_repo.py`
 ```python
-"""Exercise repo（Task 10 引入；JSONB 写入走整体赋值 + flag_modified）。"""
+"""Exercise repo（Task 10 引入；JSONB 写入走整体赋值）。
+
+lifecycle 契约：本 repository 在 caller 已打开的 session 内 `add` 实体并 commit。
+Stage 4 引入 Unit of Work 时 repository 将只 add 不 commit，由 caller 提交。
+"""
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.attributes import flag_modified
 
 from selflearn.domain.exercise import Exercise
 
 
 class ExerciseRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def bulk_create(self, level_id: uuid.UUID, items: list[dict[str, Any]]) -> list[Exercise]:
-        """整体写库：每条单独 add + commit 一次，options JSONB 用整体赋值。"""
-        objs: list[Exercise] = []
+        """整体写库：每条单独 add；最后 commit 一次 + select 拿 PK 后的 Exercise 实体的 list。"""
         for it in items:
             ex = Exercise(
                 level_id=level_id,
                 exercise_type=it["exercise_type"],
                 prompt=it["prompt"],
-                options=it.get("options", []),  # 整体赋值
+                options=it.get("options", []),
                 correct_answer=it["correct_answer"],
                 explanation=it.get("explanation", ""),
                 difficulty=it["difficulty"],
@@ -2310,9 +2531,7 @@ class ExerciseRepository:
             )
             self.session.add(ex)
         await self.session.commit()
-        for ex in objs:
-            await self.session.refresh(ex)
-        # 重新 select 拿到 PK
+
         stmt = select(Exercise).where(Exercise.level_id == level_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -2339,10 +2558,14 @@ class Review:
 
 
 class ReviewAgent(AbstractAgent):
-    agent_id = "review-01"
-    # 注：Agent 类不声明 skills = [...]。Skill 在 review() 内通过 skill_library.get(...) 动态获取。
+    """skill.review.exercise: 业务规则过滤 + 加载 Skill 做开发者文档级 sanity check。"""
 
-    async def run(self, env: Envelope) -> Envelope: ...  # 不被同步调，仅满足抽象
+    agent_id = "review-01"
+    agent_type = "review"
+    queue = "agent.review.work"
+
+    async def run(self, env: Envelope) -> Envelope:
+        return env  # pragma: no cover - 同步调用模式
 
     async def run_sync(self, env: Envelope, exercises: list[dict]) -> Review:
         return await self.review(exercises)
@@ -2350,7 +2573,7 @@ class ReviewAgent(AbstractAgent):
     async def review(self, exercises: list[dict]) -> Review:
         issues: list[dict] = []
 
-        # 1. lint_json 先跑
+        # 1. tool.lint_json 先跑（冷酷后置校验）
         lint = await ToolRegistry.call(
             "tool.lint_json", payload=exercises, schema="exercise"
         )
@@ -2359,7 +2582,7 @@ class ReviewAgent(AbstractAgent):
                           issues=[{"rule": "lint_json", "severity": "high", "message": lint.error}])
 
         # 2. 业务规则
-        # duplicate prompt
+        # 2a. duplicate prompt
         seen_prompts: set[str] = set()
         for ex in exercises:
             if ex["prompt"] in seen_prompts:
@@ -2367,7 +2590,7 @@ class ReviewAgent(AbstractAgent):
                                "message": f"重复题目: {ex['prompt']}"})
             seen_prompts.add(ex["prompt"])
 
-        # single_choice: options 长度 4，且 correct_answer ∈ options
+        # 2b. single_choice: options 长度 4，且 correct_answer ∈ options
         for ex in exercises:
             if ex["exercise_type"] == "single_choice":
                 opts = ex.get("options", [])
@@ -2378,7 +2601,7 @@ class ReviewAgent(AbstractAgent):
                     issues.append({"rule": "answer_not_in_options", "severity": "high",
                                    "message": f"答案 {ex['correct_answer']} 不在 options {opts}"})
 
-        # difficulty 分布：≥3 条时三类都有
+        # 2c. difficulty 分布：≥3 条时三类都有
         if len(exercises) >= 3:
             diffs = {ex["difficulty"] for ex in exercises}
             if not {1, 2, 3}.issubset(diffs):
@@ -2391,27 +2614,29 @@ class ReviewAgent(AbstractAgent):
         if issues:
             return Review(verdict="needs_fix", score=0.6, issues=issues)
 
-        # 加载 skill 做"看起来像" sanity check
+        # 加载 skill 做"看起来像" sanity check（开发者文档：问题集必须过业务规则）
         get_skill("skill.review.exercise")
         return Review(verdict="passed", score=1.0, issues=[])
 ```
 
-### Step 4: 跑测试
+### Step 4：跑测试
 
 ```bash
-uv run pytest tests/unit/test_review_agent.py -v
+cd backend && uv run pytest tests/unit/test_review_agent.py tests/unit/test_exercise_repo.py -v
 ```
 
-Expected: 3 passed。
+Expected: 4 passed。
 
-### Step 5: mypy + commit
+### Step 5：mypy + Stage 2 回归 + commit
 
 ```bash
-uv run mypy src tests
-git add src/selflearn/infra/repositories/exercise_repo.py \
-        src/selflearn/agents/builtin/review_agent.py \
-        tests/unit/test_review_agent.py
-git commit -m "feat(agents): ReviewAgent（3 条业务规则）+ ExerciseRepository"
+cd backend && uv run mypy src tests
+cd backend && uv run pytest tests/integration/test_smoke.py -q
+git add backend/src/selflearn/infra/repositories/ \
+        backend/src/selflearn/agents/builtin/review_agent.py \
+        backend/tests/unit/test_review_agent.py \
+        backend/tests/unit/test_exercise_repo.py
+git commit -m "feat(agents): ReviewAgent（3 条业务规则）+ ExerciseRepository（add+commit 契约）"
 ```
 
 ---
@@ -2422,36 +2647,43 @@ git commit -m "feat(agents): ReviewAgent（3 条业务规则）+ ExerciseReposit
 - Create: `backend/src/selflearn/agents/builtin/director_agent.py`
 - Test: `backend/tests/unit/test_director_tryexcept.py`
 
-### Step 1: 写失败的测试
+> **V1.3 Rule #13 第四子规则补救**：`DirectorAgent` 显式 `agent_type = "director"` + `queue = "agent.director.work"`。
+> **测试 mock 修正**：原 brief 写 `with patch("...progress_publish", new=fake_publish):` 但 fake_publish 是 `async def`，而 `new=fake_publish` 必须用 `new=AsyncMock(side_effect=...)` 或显式 AsyncMock；同时 `exercise_agent` 被 `new=None` 替换时，调用 `.run_sync()` 会 AttributeError，符合预期。但 brief 的 `fake_publish` 是 sync（不 await）——修正为 `AsyncMock(side_effect=fake_publish)` 走 side_effect 写法。
+
+### Step 1：写失败的测试
 
 `backend/tests/unit/test_director_tryexcept.py`:
+
 ```python
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_director_uncaught_exception_publishes_failed_and_raises():
-    """Director.run 任何未捕获异常必须先推 FAILED，再抛 AppError。
+    """Director.run 任何未捕获异常必须先推 FAILED 进度事件，再抛 AppError。
 
     V1.1 修复点：避免 SSE 端点陷入死等。
     """
-    from unittest.mock import AsyncMock, patch
+    from selflearn.agents.builtin.director_agent import DirectorAgent
+    from selflearn.core.envelope import ActorRef, Envelope
+    from selflearn.core.errors import AppError, ErrorCode
+    from selflearn.progress.stages import Stage
 
-    fake_node = AsyncMock()
-    fake_node.node_id = "00000000-0000-0000-0000-000000000001"
+    # 让 Director 调 exercise_agent.run_sync(...) 时 throw → 让 `_run_inner` 内层跑不下去
+    with patch("selflearn.agents.builtin.director_agent.exercise_agent") as mock_ex:
+        mock_ex.run_sync = AsyncMock(side_effect=RuntimeError("boom in ExerciseAgent"))
 
-    with patch("selflearn.agents.builtin.director_agent.exercise_agent", new=None):
-        from selflearn.agents.builtin.director_agent import DirectorAgent
-        from selflearn.core.errors import AppError, ErrorCode
-        from selflearn.core.envelope import Envelope, ActorRef
-        from selflearn.progress.stages import ProgressEvent, Stage
+        # 让 progress_publish 收集事件
+        published: list = []
 
-        published = []
-        async def fake_publish(trace_id, ev):
+        async def collect(trace_id, ev):
             published.append(ev)
 
-        with patch("selflearn.agents.builtin.director_agent.progress_publish", new=fake_publish):
+        with patch("selflearn.agents.builtin.director_agent.progress_publish",
+                   new=AsyncMock(side_effect=collect)) as mock_pub:
             agent = DirectorAgent()
             env = Envelope(
                 action="skill.execute",
@@ -2464,40 +2696,51 @@ async def test_director_uncaught_exception_publishes_failed_and_raises():
                 await agent.run(env)
             assert exc.value.code == ErrorCode.INTERNAL
 
-        # 关键断言：失败时必须推过 FAILED 事件
-        failed_events = [e for e in published if e.stage == Stage.FAILED]
-        assert failed_events, f"Director 必须推 FAILED 事件，实际 {published}"
-        assert failed_events[0].status == "failed"
+        # 关键断言：失败时必须推过 FAILED 事件（含 code/message payload）
+        failed = [e for e in published if e.stage == Stage.FAILED]
+        assert failed, f"Director 必须推 FAILED 事件，实际 {published}"
+        assert failed[0].status == "failed"
+        assert "code" in failed[0].payload
 ```
 
-### Step 2: 跑测试确认失败
+### Step 2：跑测试确认失败
 
 ```bash
-uv run pytest tests/unit/test_director_tryexcept.py -v
+cd backend && uv run pytest tests/unit/test_director_tryexcept.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`。
 
-### Step 3: 实现 DirectorAgent
+### Step 3：实现 DirectorAgent
 
 #### `backend/src/selflearn/agents/builtin/director_agent.py`
 ```python
-"""DirectorAgent: 同步序列调 Exercise + Review，含 try/except 兜底（V1.1 修复）。"""
+"""DirectorAgent: 同步序列调 Exercise + Review，含 try/except 兜底（V1.1 修复）。
+
+前置编排：
+1. SELECT 第一个 active MapNode（无则抛 INTERNAL）
+2. exercise_agent.run_sync(env, node)  —— 任何 AppError/Exception 都向上传递
+3. review_agent.review(ex_dicts)       —— 同上
+4. rejected 时抛 EXERCISE_INVALID
+5. 单 session 内写 Level + Exercise 列表 + ReviewResult（用 ExerciseRepository.bulk_create）
+6. 推 COMPLETED 进度，返回 Envelope
+"""
 from __future__ import annotations
 
-import uuid
+from uuid import UUID
 
 from sqlalchemy import select
 
 from selflearn.agents.base import AbstractAgent
+from selflearn.agents.builtin import exercise_agent, review_agent
 from selflearn.core.envelope import ActorRef, Envelope
 from selflearn.core.errors import AppError, ErrorCode
 from selflearn.core.logging import get_logger
-from selflearn.domain.exercise import Exercise
 from selflearn.domain.level import Level
 from selflearn.domain.map_node import MapNode
 from selflearn.domain.review_result import ReviewResult
 from selflearn.infra.db import get_session_factory
+from selflearn.infra.repositories.exercise_repo import ExerciseRepository
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.progress.stream import progress_publish
 from selflearn.skills.library import get as get_skill
@@ -2506,12 +2749,12 @@ from selflearn.skills.library import get as get_skill
 log = get_logger("director")
 
 
-from selflearn.agents.builtin import exercise_agent, review_agent  # noqa: E402
-
-
 class DirectorAgent(AbstractAgent):
+    """skill.director.start: 关卡推进 orchestrator（出题 → 评审 → 入库）。"""
+
     agent_id = "director-01"
-    # 注：Agent 类不声明 skills = [...]。Skill 在 _run_inner() 内通过 skill_library.get(...) 动态获取。
+    agent_type = "director"
+    queue = "agent.director.work"
 
     async def run(self, env: Envelope) -> Envelope:
         """V1.1: 必须 try/except 包全部子调用，失败推 FAILED 后抛 AppError。"""
@@ -2530,8 +2773,8 @@ class DirectorAgent(AbstractAgent):
         trace_id = env.trace_id
         skill = get_skill("skill.director.start")
 
-        student_id = uuid.UUID(env.payload["student_id"]) if isinstance(env.payload["student_id"], str) \
-                     else env.payload["student_id"]
+        student_id_raw = env.payload["student_id"]
+        student_id = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw
 
         # 1. 选第一个 active 节点
         await progress_publish(trace_id, ProgressEvent(
@@ -2546,11 +2789,13 @@ class DirectorAgent(AbstractAgent):
             node = (await session.execute(stmt)).scalars().first()
             if node is None:
                 raise AppError(ErrorCode.INTERNAL, "无 active 节点，请先跑 plan.generate")
-            node_id = node.node_id
+            # node 满足 Node Protocol（MapNode ORM 实体）
+            node.kp  # noqa: B018  触发 lazy load；Stage 4 改 joined load
 
         # 2. 同步调 Exercise Agent
         await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.EXERCISE, status="running", payload={"node_id": str(node_id)}
+            stage=Stage.EXERCISE, status="running",
+            payload={"node_id": str(node.node_id)},
         ))
         ex_dicts = await exercise_agent.run_sync(env, node)
         await progress_publish(trace_id, ProgressEvent(
@@ -2571,31 +2816,21 @@ class DirectorAgent(AbstractAgent):
             raise AppError(ErrorCode.EXERCISE_INVALID,
                            f"Review rejected: {len(review.issues)} issues")
 
-        # 4. 写库
+        # 4. 写库（单 session 内 Level + ExerciseRepository + ReviewResult）
         async with factory() as session:
-            level = Level(node_id=node_id, status="generated", form="exercise")
+            level = Level(node_id=node.node_id, status="generated", form="exercise")
             session.add(level)
             await session.flush()
             level_id = level.level_id
 
-            for ed in ex_dicts:
-                session.add(Exercise(
-                    level_id=level_id,
-                    exercise_type=ed["exercise_type"],
-                    prompt=ed["prompt"],
-                    options=ed.get("options", []),
-                    correct_answer=ed["correct_answer"],
-                    explanation=ed.get("explanation", ""),
-                    difficulty=ed["difficulty"],
-                    score=ed["score"],
-                ))
+            # ExerciseRepository commit 后 select 拿 PK 实体的 list
+            _ = await ExerciseRepository(session).bulk_create(level_id, ex_dicts)
 
             session.add(ReviewResult(
                 level_id=level_id, verdict=review.verdict,
                 score=review.score, issues=review.issues,
             ))
             await session.commit()
-            await session.refresh(level)
 
         # 5. 推 completed
         await progress_publish(trace_id, ProgressEvent(
@@ -2619,21 +2854,20 @@ class DirectorAgent(AbstractAgent):
         ))
 ```
 
-注：`from selflearn.agents.builtin import exercise_agent, review_agent` 顶层导入要求 Task 9/10 已完成。
-
-### Step 4: 跑测试
+### Step 4：跑测试
 
 ```bash
-uv run pytest tests/unit/test_director_tryexcept.py -v
+cd backend && uv run pytest tests/unit/test_director_tryexcept.py -v
 ```
 
 Expected: 1 passed（关键 failure → FAILED 路径覆盖）。
 
-### Step 5: mypy + commit
+### Step 5：mypy + Stage 2 回归 + commit
 
 ```bash
-uv run mypy src tests
-git add src/selflearn/agents/builtin/director_agent.py tests/unit/test_director_tryexcept.py
+cd backend && uv run mypy src tests
+cd backend && uv run pytest tests/integration/test_smoke.py -q
+git add backend/src/selflearn/agents/builtin/director_agent.py backend/tests/unit/test_director_tryexcept.py
 git commit -m "feat(agents): DirectorAgent 同步序列调 + try/except 推 FAILED 兜底（V1.1 修复）"
 ```
 
