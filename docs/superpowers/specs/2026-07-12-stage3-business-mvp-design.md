@@ -1,14 +1,26 @@
 # Stage 3 — 核心业务 MVP — 设计文档
 
-> **For agentic workers:** 本 spec 是 Stage 3 的"做什么、怎么做、不做什么"的权威来源。配套实施计划见 `docs/superpowers/plans/2026-07-12-stage3-business-mvp.md`。
+> **For agentic workers:** 本 spec 是 Stage 3 的"做什么、怎么做、不做什么"的权威来源。配套实施计划见 `docs/superpowers/plans/2026-07-12-stage3-business-mvp.md`（Plan 阶段产出文件，可能与此处 slug 略有差异）。
 >
 > 配套文档：
 > - Stage 2 spec：`docs/superpowers/specs/2026-07-11-stage2-backend-foundation-design.md`（所有 Stage 2 决策与基座约束继续生效）
 > - 项目记忆：`[[no-auth-no-login]]`（鉴权 0 实现）
+>
+> **修订记录：**
+> - V1.0 (2026-07-12) — 初稿
+> - **V1.1 (2026-07-12) — Patch：4 项工程漏洞修复**
+>   - last_id 由 `"$"` 改为 `"0-0"`（消除"前端建连前已写入事件"的竞态）
+>   - `AGENT_TIMEOUT` 由 30s 放宽到 **120s**（5 阶段同步叠加 + 思考模式慢调用）
+>   - 全文档去除 `XREAD GROUP`，统一改用 **裸 `XREAD`**（不需要 consumer group / XACK）
+>   - `DirectorAgent.run` 加 **try/except 兜底**，失败时 `progress_publish(stage=FAILED)` 后抛 AppError，避免 SSE 端点死等
+> - **V1.1 — Skill / MCP 重设**（基于 `superpowers:writing-skills` 视角）：
+>   - Skill 重新定义：**Skill = 流程模板**（可复用步骤序列 + 提示词模板），**不是** Agent 注册中心
+>   - 新增 § 9 MCP Tool 协议层：Agent 通过 `ToolRegistry` 接入 3 个 stub Tool（lint / fetch / store），不直连外部系统
 
 | 文档版本 | 修订日期 | 修订人 | 修订说明 |
 | --- | --- | --- | --- |
 | V1.0 | 2026-07-12 | 团队 | Stage 3 初稿。基于已交付的 Stage 2 后端基座，扩展到 5 个业务 Agent + Redis Stream 真流式 SSE + LLM 思考模式 + 6 张业务表。**MVP 范围——只跑通核心闭环，4 种关卡形式 / 评估模块 / TTS-ASR / 仪表盘 / 9 窗口真实内容均推到 Stage 4/5**。**项目级约束：完全不做鉴权 / 登录**（参见 [[no-auth-no-login]]）。 |
+| V1.1 | 2026-07-12 | 团队 | Patch: (a) 4 项工程漏洞修复（last_id `0-0` / timeout 120s / 裸 XREAD / Director try-except）；(b) Skill 重设 = 流程模板（去装饰器 + 去全局注册表）；(c) 新增 § 9 MCP Tool 协议层（Tool / ToolRegistry / 3 个 stub Tool） |
 
 ---
 
@@ -18,7 +30,7 @@
 
 1. **Stage 3 交付什么**：5 个 Agent + Redis Stream 真流式 SSE + 思考模式抽象 + 6 张业务表 + 完整闭环 smoke
 2. **用什么技术栈**：在 Stage 2 8 项决策基础上，新增 Redis Stream（事件流推送）+ LLM `reasoning_content` 字段
-3. **消息怎么流**：单 Redis Stream 拓扑（worker 任意点 XADD → gateway SSE XREAD GROUP）
+3. **消息怎么流**：单 Redis Stream 拓扑（worker 任意点 XADD → gateway SSE 裸 XREAD）
 4. **怎么验证**：`scripts/smoke_mvp.sh` 端到端跑通 "profile → plan → director → exercise → review → submit"
 
 **读法建议**：
@@ -42,7 +54,7 @@
 | **5 个业务 Agent** | `ProfileAgent` / `PlanAgent` / `DirectorAgent` / `ExerciseAgent` / `ReviewAgent` |
 | **核心闭环 MVP** | "画像构建 → 藏宝图生成 → 进关卡 → 出题 → 评审 → 提交完成" 全链路可跑 |
 | **6 张新业务表** | `knowledge_points` / `map_nodes` / `levels` / `exercises` / `level_completions` / `review_results` + Alembic 迁移 |
-| **Redis Stream 真流** | worker 任意点 `progress_publish()` → gateway SSE 端点 `XREAD GROUP` 阻塞读 → 真流分块 |
+| **Redis Stream 真流** | worker 任意点 `progress_publish()` → gateway SSE 端点 `XREAD` 阻塞读 → 真流分块 |
 | **SSE 端点升级** | `/api/profile/init/{trace_id}/stream` 与新增 `/api/level/{level_id}/stream` 订阅 Redis Stream |
 | **LLM 思考模式抽象** | `ChatRequest.reasoning` + `ChatRequest.reasoning_budget`；`ChatChunk.reasoning_delta`；adapter 解析 `reasoning_content` |
 | **评审 Agent（规则过滤）** | JSON 合法性 / 题目唯一性 / 答案格式 / 难度梯度 |
@@ -100,7 +112,7 @@
 | --- | --- | --- | --- | --- |
 | 9 | 进程拓扑 | **单一 worker 容器（Stage 2 现状）、同镜像多实例可扩展** | 按 Agent 类型拆容器 / 集群化部署 | 5 个 Agent 加起来 QPS 仍低；多实例只要多部署一即可；避免镜像重复 |
 | 10 | Director 调度 | **同步序列调 + Redis Stream 真流推送** | 纯序列调（无流式）/ 全异步信封编排 | 内部代码简单线性、SSE 流式不变；外部用户体验跟异步一致 |
-| 11 | SSE 后端方案 | **单一 Redis Stream `stream:{trace_id}` · 各阶段 XADD · gateway XREAD GROUP** | 多 Stream 按阶段拆 / RabbitMQ 共享拓扑 / Redis Pub/Sub | 实现最简，断线可重放（stream 有持久化），与 RabbitMQ 拓扑零耦合 |
+| 11 | SSE 后端方案 | **单一 Redis Stream `stream:{trace_id}` · 各阶段 XADD · gateway 裸 XREAD** | 多 Stream 按阶段拆 / RabbitMQ 共享拓扑 / Redis Pub/Sub | 实现最简，游标从 `0-0` 起步可拿全历史；与 RabbitMQ 拓扑零耦合 |
 | 12 | 数据库表数 | **6 张新表**（不含 Stage 2 已建 `students` / `profiles`） | 一次拿 25 张全部 / 全部走 Redis JSON | MVP 闭门验证设计；ALTER 留给 Stage 4 |
 | 13 | LLM 思考模式启用 | **按 `ChatRequest` 字段 `reasoning` 默认 `False`** | 全局开关 / 按 Agent 类型预设 | 调用方按需传入，最灵活也最显式 |
 | 14 | 存储布局 | **状态走 PG（事务+查询）、热数据走 Redis（缓存 + Stream）** | 全 PG / 全 Redis | MVP 边界清晰；状态持久化靠 PG、流推送靠 Redis |
@@ -109,7 +121,7 @@
 
 - 包管理 / 运行：uv
 - Python：3.12（沿用 Stage 2 锁定）
-- Redis Stream 客户端：redis-py 5.x async（`xadd` / `xreadgroup`）
+- Redis Stream 客户端：redis-py 5.x async（`xadd` / `xread`，**不使用** `xreadgroup` / consumer group）
 - Alembic：Stage 2 已用，Stage 3 新增 1 个 revision
 
 ---
@@ -129,7 +141,7 @@ docker-compose.yml
 └── worker            # 消费进程（5 个 Agent 全部在内部）
 ```
 
-**Stage 3 拓扑变化**：仅 redis 多了 Stream 用法（XADD / XREAD GROUP）；其他无变。
+**Stage 3 拓扑变化**：仅 redis 多了 Stream 用法（XADD / 裸 XREAD，从 0-0 起步）；其他无变。
 
 ### 3.2 backend/ 新增与修改
 
@@ -154,18 +166,25 @@ backend/
 │   ├── progress/              # 新增子模块
 │   │   ├── stream.py          # progress_publish / progress_consume（Redis Stream 包装）
 │   │   └── stages.py          # Stage 枚举 + ProgressEvent dataclass
+│   ├── tools/                 # 新增：MCP Tool 协议层（见 § 9）
+│   │   ├── protocol.py        # Tool / ToolResult 接口、ToolRegistry 单例
+│   │   └── builtin/
+│   │       ├── lint_json.py       # Tool: tool.lint_json（stub：jsonschema 规则校验）
+│   │       ├── fetch_template.py  # Tool: tool.fetch_template（stub：读 prompts/*.yaml）
+│   │       └── store_kp.py        # Tool: tool.store_kp（stub：本地 dict，Stage 4 接真）
+│   ├── skills/                # V1.1 重设：Skill = 流程模板（不是 Agent 注册表）
+│   │   ├── base.py            # SkillTemplate dataclass + skill_template(name) 注册到 skill_library
+│   │   └── builtin/
+│   │       ├── profile_build.py     # 流程：5 轮对话 → 写 profiles → 推 progress
+│   │       ├── plan_generate.py     # 流程：选 KP → 调 LLM → 解析 → 写 map_nodes + kp
+│   │       ├── exercise_generate.py # 流程：模板 → LLM → JSON schema → tool.lint_json
+│   │       └── review_exercise.py   # 流程：tool.lint_json + 业务规则 → verdict
 │   ├── agents/builtin/
-│   │   ├── profile_agent.py   # 新增
-│   │   ├── plan_agent.py      # 新增
-│   │   ├── director_agent.py  # 新增（核心：同步序列调 Exercise + Review）
-│   │   ├── exercise_agent.py  # 新增
-│   │   └── review_agent.py    # 新增
-│   ├── skills/builtin/
-│   │   ├── profile.py         # 修改：增加 build / update handler
-│   │   ├── map.py             # 新增
-│   │   ├── level.py           # 新增
-│   │   ├── exercise.py        # 新增
-│   │   └── review.py          # 新增
+│   │   ├── profile_agent.py   # 新增：执行 skill.profile_build
+│   │   ├── plan_agent.py      # 新增：执行 skill.plan_generate
+│   │   ├── director_agent.py  # 新增（核心：同步序列调 Exercise + Review，含 try/except）
+│   │   ├── exercise_agent.py  # 新增：执行 skill.exercise_generate
+│   │   └── review_agent.py    # 新增：执行 skill.review_exercise
 │   ├── domain/
 │   │   ├── knowledge_point.py # 新增
 │   │   ├── map_node.py        # 新增
@@ -212,19 +231,26 @@ async def progress_publish(trace_id: str, event: ProgressEvent) -> None:
 
 
 async def progress_consume(trace_id: str) -> AsyncIterator[ProgressEvent]:
-    """Gateway SSE 端点调用，从 Stream 阻塞读。"""
+    """Gateway SSE 端点调用，从 Stream 阻塞读。
+
+    ⚠️ **关键修复（V1.1）**：游标必须从 `"0-0"` 开始，而非 `"$"`。
+    - `"$"` = "只接收连接后新到的消息"——前端 POST 后到 GET 这两次网络请求间隙，
+      Worker 可能已写完好几条 progress。前端用 `$` 接入，会错过所有历史事件，
+      SSE 端点陷入死等。
+    - `"0-0"` = "从头读"——前端连上瞬间拿回所有已发事件，再继续阻塞等后续。
+    每个 trace_id 独立一个 Stream key，从头读不会带来性能问题。
+    """
     r: Redis = get_redis()
     key = f"{PROGRESS_STREAM_PREFIX}{trace_id}"
-    last_id = "$"
+    last_id = "0-0"  # ← V1.1 修复：从 0-0 起步，避免事件丢失
     while True:
         result = await r.xread({key: last_id}, block=5000, count=10)
         if not result:
-            continue  # block 超时，重试；可能 stream 已写满或已关闭
+            continue  # block 超时，重试（说明 stream 暂时没新事件）
         for _, entries in result:
             for entry_id, fields in entries:
                 yield ProgressEvent.from_redis_fields(fields)
                 last_id = entry_id
-        # 消费者组：本 MVP 不开 group，单消费者即可（gateway 是唯一的 stream 读取者）
 ```
 
 **`progress/stages.py` —— Stage 枚举与事件类型**：
@@ -278,57 +304,85 @@ class ProgressEvent:
 ```python
 # agents/builtin/director_agent.py
 class DirectorAgent(AbstractAgent):
+    """Director 单进程内同步序列调 Profile → Plan → Exercise → Review。
+
+    ⚠️ V1.1 修复：必须 try/except 兜底。
+    失败场景：LLM 返回不合规 JSON / 网络断开 / 解析异常 / DB 写入冲突。
+    若不 catch：
+      - Director 进程崩溃
+      - Redis Stream 没有 Stage.FAILED 事件写入
+      - Gateway SSE 端点 XREAD 死循环 continue
+      - 前端无限转圈
+    所以：任何异常必须捕获 → 推送 FAILED 进度 → 抛 AppError 让上层记录 trace。
+    """
     agent_id = "director-01"
     skills = ["skill.level.start"]
 
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
+        try:
+            # 1. 选节点（v4 § 3.13 选第一个 active 节点）
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.DIRECTOR, status="running",
+                payload={"action": "select_node"}
+            ))
+            node = await self._select_first_active_node(env.payload["student_id"])
 
-        # 1. 选节点（v4 § 3.13 选第一个 active 节点）
-        await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.DIRECTOR, status="running",
-            payload={"action": "select_node"}
-        ))
-        node = await self._select_first_active_node(env.payload["student_id"])
+            # 2. 同步调 Exercise Agent（直接函数调用，不绕 RabbitMQ）
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.EXERCISE, status="running",
+                payload={"node_id": str(node.node_id)}
+            ))
+            exercises = await exercise_agent.run_sync(env, node)
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.EXERCISE, status="completed",
+                payload={"count": len(exercises)}
+            ))
 
-        # 2. 同步调 Exercise Agent（直接函数调用，不绕 RabbitMQ）
-        await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.EXERCISE, status="running",
-            payload={"node_id": str(node.node_id)}
-        ))
-        exercises = await exercise_agent.run_sync(env, node)
-        await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.EXERCISE, status="completed",
-            payload={"count": len(exercises)}
-        ))
+            # 3. 同步调 Review Agent
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.REVIEW, status="running"
+            ))
+            review = await review_agent.run_sync(env, exercises)
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.REVIEW, status="completed",
+                payload={"verdict": review.verdict, "issues_count": len(review.issues)}
+            ))
 
-        # 3. 同步调 Review Agent
-        await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.REVIEW, status="running"
-        ))
-        review = await review_agent.run_sync(env, exercises)
-        await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.REVIEW, status="completed",
-            payload={"verdict": review.verdict, "issues_count": len(review.issues)}
-        ))
+            # 4. 写库（levels + exercises + review_results 表）
+            await self._persist(node, exercises, review)
 
-        # 4. 写库（levels + exercises + review_results 表）
-        await self._persist(node, exercises, review)
+            # 5. 推 completed 进度
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.COMPLETED, status="completed",
+                payload={"level_id": str(self._level_id), "exercises_count": len(exercises)}
+            ))
 
-        # 5. 推 completed 进度
+            return Envelope(
+                action="skill.completed",
+                sender=ActorRef(type="agent", id=self.agent_id),
+                target=ActorRef(type="gateway", id=env.sender.id),
+                payload={"level_id": str(self._level_id), "exercises": exercises_as_dict},
+                trace_id=trace_id,
+                parent_id=env.span_id,
+            )
+
+        except AppError:
+            # 业务异常：包一层带 trace_id 的 FAILED 进度后上抛
+            await self._emit_failed(trace_id, "agent_internal_error", "Director 处理失败")
+            raise
+        except Exception as e:  # noqa: BLE001
+            # 兜底：任何意外（LLM 解析 / 网络 / DB）都推到 Stream 一个 FAILED
+            await self._emit_failed(trace_id, "internal_unhandled", repr(e))
+            log.error("director.unhandled_exception", trace_id=trace_id, error=repr(e))
+            raise AppError(ErrorCode.INTERNAL, "Director 处理失败", trace_id=trace_id) from e
+
+    async def _emit_failed(self, trace_id: str, code: str, message: str) -> None:
+        """推一条 FAILED 进度让前端 SSE 端点跳出死等。"""
         await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.COMPLETED, status="completed",
-            payload={"level_id": str(self._level_id), "exercises_count": len(exercises)}
+            stage=Stage.FAILED, status="failed",
+            payload={"code": code, "message": message}
         ))
-
-        return Envelope(
-            action="skill.completed",
-            sender=ActorRef(type="agent", id=self.agent_id),
-            target=ActorRef(type="gateway", id=env.sender.id),
-            payload={"level_id": str(self._level_id), "exercises": exercises_as_dict},
-            trace_id=trace_id,
-            parent_id=env.span_id,
-        )
 ```
 
 ---
@@ -558,7 +612,7 @@ class ProfileRepository:
 |--------|------|------|-------|
 | `ENVELOPE_INVALID` | 400 | 信封字段缺失 / 类型错 | 2 |
 | `SKILL_NOT_FOUND` | 422 | SkillBasedScheduler 找不到匹配 Agent | 2 |
-| `AGENT_TIMEOUT` | 504 | Agent 运行超过 30s（Stage 3 调到 30s，5 个子调用叠加） | 2 |
+| `AGENT_TIMEOUT` | 504 | Director 整体运行超过 120s（V1.1 从 30s 放宽——5 阶段同步叠加 + 思考模式慢调用） | 2 |
 | `LLM_RATE_LIMIT` | 429 | LLM 429 | 2 |
 | `LLM_UPSTREAM` | 502 | LLM 5xx / 网络错 | 2 |
 | `DB_CONFLICT` | 409 | 唯一约束冲突 | 2 |
@@ -614,8 +668,10 @@ class ProfileRepository:
     - `completed` (含 level_id, exercises)
   - POST `/api/level/{level_id}/submit` → score > 0 / level status = completed
 - [ ] **LLM 抽象层**：`BaseLLMAdapter` 支持 `ChatRequest.reasoning=True`，mock + openai_compat adapter 流中能产生 `reasoning_delta` chunk
-- [ ] **Redis Stream 真流**：worker 端 `XADD` 一条 progress 后，gateway SSE XREAD GROUP 立即收到（< 200ms）
+- [ ] **Redis Stream 真流**：worker 端 `XADD` 一条 progress 后，gateway SSE `XREAD` 立即收到（< 200ms）；游标从 `0-0` 起步，连上前已写入的事件全部能拿到
 - [ ] **评审 Agent**：能拒收 JSON 非法 / 题目重复 / 答案格式错误的习题集合
+- [ ] **Skill 模板化**：去掉全局 `@skill()` 装饰器；Agent 直接 import `SkillTemplate` 对象引用（如 `skill_profile_build`），不在字符串里寻路
+- [ ] **MCP Tool 协议**：`tools/protocol.py` 提供 `Tool` 接口与 `ToolRegistry.call()`；3 个 stub Tool（`tool.lint_json` / `tool.fetch_template` / `tool.store_kp`）已注册；Exercise Agent 通过 `ToolRegistry` 调 lint_json（不直连 jsonschema）
 - [ ] **JSONB 字段**：单测覆盖 — `dimensions` 字典就字段序更新可被刷出
 - [ ] `level_completions` 表写入字段齐全（score / duration_seconds / answers / metrics）
 - [ ] `uv run mypy src tests` 0 错误（strict 模式）
@@ -639,7 +695,8 @@ class ProfileRepository:
 | 风险 | 概率 | 应对 |
 |------|------|------|
 | Redis Stream 在新版 redis-py 5 异步客户端的兼容性 | 中 | 锁 redis-py>=5.0.4；单测覆盖 XADD / XREAD；实战前在 staging 跑通 |
-| 同步序列调让总时长叠加（5 个 LLM 调用串行可能 30s+） | 高 | Plan/Exercise 不强制同步等完整结果；Director 错位 × 提交后后台继续跑 |
+| 同步序列调让总时长叠加（5 个 LLM 调用串行可能 30s+） | 高 | AGENT_TIMEOUT 放宽到 120s（V1.1）；Plan/Exercise 不强制同步等完整结果；Director 错位 × 提交后后台继续跑 |
+| **Director 同步调用缺异常兜底**（V1.1 新增） | 高 | DirectorAgent.run 外层 try/except，任何异常 → progress_publish(stage=FAILED) → 抛 AppError。SSE 端点必须能识别 FAILED 事件后关闭连接 |
 | Exercise Agent LLM 输出 JSON 经常不合规 | 高 | 强制 prompt 模板；Review Agent 拒收；1 次自动重试 |
 | Postgres JSONB 嵌套字典脏检查失效 | 中 | Repo 层统一封装：走整体赋值 或 `flag_modified`；单测覆盖 |
 | MVP 后 demo 质量不高 | 中 | 评审 Agent 把关 reject ≥40% 内容；人工巡检；seed_map 补中 |
@@ -679,7 +736,188 @@ class ProfileRepository:
 
 ---
 
-## 9. 配套文档
+## 9. MCP Tool 协议层（V1.1 补节）
+
+> **Stage 3 起，MCP Tool 不能继续是占位壳了。** 理由：Exercise / Review / Plan Agent 都依赖**与外部数据 / 系统交互**（题目模板加载、JSON lint、向量写库），这些能力如果写死在 Agent 里，下一阶段加新工具得改 Agent 代码。把 Tool 抽成 MCP 协议层，Agent 仅依赖 `ToolRegistry`，Stage 4 接真 MCP server 时零改动。
+
+### 9.1 Tool 协议契约
+
+```python
+# tools/protocol.py
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+@dataclass
+class ToolResult:
+    ok: bool
+    data: Any = None
+    error: str | None = None
+
+
+class Tool(ABC):
+    """MCP Tool 协议——一个 Tool 是一个可调用能力。
+
+    设计原则（基于 superpowers:writing-skills 关于 Skill 的视角）：
+    - Tool = "我能做什么"（能力），Agent = "我要做什么"（编排）
+    - Skill = "做这件事的标准步骤"（流程模板）
+    - Agent 在 Skill 流程的某一步调 Tool 拿数据
+    """
+
+    tool_name: str      # 例如 "tool.lint_json"
+    description: str    # 给 LLM 看的能力描述（Stage 4 接真 MCP 用）
+
+    @abstractmethod
+    async def call(self, **kwargs: Any) -> ToolResult:
+        """统一签名：kwargs 与 Tool 自身定义的 input_schema 一致。"""
+
+
+class ToolRegistry:
+    """进程内 MCP Tool 注册中心（Stage 3 用单例，Stage 4 换成真 MCP client）。
+
+    用法：
+        result = await ToolRegistry.call("tool.lint_json", payload=raw_text, schema=...)
+    """
+
+    _tools: dict[str, Tool] = {}
+
+    @classmethod
+    def register(cls, tool: Tool) -> None:
+        cls._tools[tool.tool_name] = tool
+
+    @classmethod
+    async def call(cls, name: str, **kwargs: Any) -> ToolResult:
+        tool = cls._tools.get(name)
+        if not tool:
+            return ToolResult(ok=False, error=f"tool_not_found:{name}")
+        try:
+            return await tool.call(**kwargs)
+        except Exception as e:  # noqa: BLE001
+            return ToolResult(ok=False, error=repr(e))
+
+
+# 模块加载时注册 stub 工具
+_register_default_tools()  # 在 tools/builtin/*.py 里完成
+```
+
+### 9.2 Stage 3 必须落地的 3 个 stub Tool
+
+| Tool 名 | 职责 | MVP stub 实现 | Stage 4 升级 |
+|---------|------|----------------|--------------|
+| `tool.lint_json` | 校验题目 JSON 是否合法（schema 约束） | 用 `jsonschema` 包对照 `schemas/exercise.schema.json` 校验 | 接 MCP `jsonschema` server |
+| `tool.fetch_template` | 拉取题目 / 评审模板（YAML） | 读 `selflearn/prompts/*.yaml` 本地文件 | 接 MinIO / 配置中心 |
+| `tool.store_kp` | 知识点写库 | 直接调 SQLAlchemy repo（KP 表插入） | Stage 4 接向量库（Qdrant）+ PG 双写 |
+
+**stub 实现示例（tool.lint_json）**：
+
+```python
+# tools/builtin/lint_json.py
+import jsonschema
+from selflearn.tools.protocol import Tool, ToolResult
+
+EXERCISE_SCHEMA: dict = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["exercise_type", "prompt", "correct_answer", "difficulty", "score"],
+        "properties": {
+            "exercise_type": {"enum": ["single_choice", "fill_blank", "short_answer", "code"]},
+            "prompt": {"type": "string", "minLength": 5},
+            "options": {"type": "array"},
+            "correct_answer": {"type": "string", "minLength": 1},
+            "difficulty": {"type": "integer", "minimum": 1, "maximum": 3},
+            "score": {"type": "number", "minimum": 0.5, "maximum": 3.0},
+        },
+    },
+}
+
+
+class LintJsonTool(Tool):
+    tool_name = "tool.lint_json"
+    description = "用 jsonschema 校验 LLM 输出的 JSON 是否符合业务 schema"
+
+    async def call(self, *, payload: str | list | dict, schema: str = "exercise") -> ToolResult:
+        try:
+            data = json.loads(payload) if isinstance(payload, str) else payload
+        except json.JSONDecodeError as e:
+            return ToolResult(ok=False, error=f"json_decode_error:{e}")
+
+        target = {"exercise": EXERCISE_SCHEMA}.get(schema)
+        if not target:
+            return ToolResult(ok=False, error=f"unknown_schema:{schema}")
+
+        try:
+            jsonschema.validate(instance=data, schema=target)
+        except jsonschema.ValidationError as e:
+            return ToolResult(ok=False, error=f"schema_violation:{e.message}")
+
+        return ToolResult(ok=True, data={"validated_count": len(data) if isinstance(data, list) else 1})
+
+
+def _register_default_tools() -> None:
+    from selflearn.tools.protocol import ToolRegistry
+    ToolRegistry.register(LintJsonTool())
+    ToolRegistry.register(FetchTemplateTool())
+    ToolRegistry.register(StoreKPTool())
+```
+
+### 9.3 Agent 如何用 Tool（不是 LLM function_call）
+
+> **Stage 3 的 MVP 不走 LLM function_call**（避免 prompt 上下文膨胀、控制台混合）。Agent 内部用 Python 代码显式调：
+
+```python
+# agents/builtin/exercise_agent.py
+from selflearn.tools.protocol import ToolRegistry
+
+class ExerciseAgent(AbstractAgent):
+    async def run_sync(self, env: Envelope, node: MapNode) -> list[Exercise]:
+        # 1. 先取模板
+        tmpl_res = await ToolRegistry.call(
+            "tool.fetch_template", name="exercise_generation_v1"
+        )
+        if not tmpl_res.ok:
+            raise AppError(ErrorCode.INTERNAL, f"fetch_template 失败: {tmpl_res.error}")
+
+        # 2. 调 LLM 按模板生成题目
+        req = ChatRequest(
+            messages=[...],
+            system=tmpl_res.data["content"],
+            reasoning=True,
+        )
+        raw = await llm_registry.default().chat(req)
+
+        # 3. tool.lint_json 校验
+        lint_res = await ToolRegistry.call(
+            "tool.lint_json", payload=raw, schema="exercise"
+        )
+        if not lint_res.ok:
+            raise AppError(ErrorCode.EXERCISE_INVALID, lint_res.error)
+
+        # 4. 解析入库
+        ...
+```
+
+**关键约束**：
+- Agent 调 Tool 不经过 RabbitMQ / LLM 协议；纯 Python `await` 调用
+- Tool 是**能力复用单元**，不是 Agent 之间通信的载体
+- Stage 4 接真 MCP server 时，仅替换 `ToolRegistry._tools` 来源（`Tool` 实现从本地函数 → MCP `client.call(name, **kwargs)`），Agent 代码 0 改动
+
+### 9.4 与 Skill 的边界
+
+| 维度 | Skill（流程模板） | Tool（能力协议） |
+|------|-------------------|------------------|
+| 形态 | 步骤序列 + 提示词模板 | 可调用能力（schema + impl） |
+| 关心什么 | "做这件事的标准做法" | "我能做什么" |
+| 注册到 | `skill_library` | `ToolRegistry` |
+| 调用方 | Agent 内部硬编码流程 | Agent 通过 `ToolRegistry.call()` |
+| LLM 关系 | Skill 含 LLM prompt 模板 | Tool 通常不调 LLM（除非 tool 自己需要） |
+| Stage 3 举例 | `skill.exercise_generate`：5 步流程 | `tool.lint_json`：单步能力 |
+
+两者相辅相成：**Skill 是说明书，Tool 是扳手**。Skill 流程里的某一步用扳手（Tool）取数据 / 做验证。
+
+---
+
+## 10. 配套文档
 
 - 实施计划：`docs/superpowers/plans/2026-07-12-stage3-business-mvp.md`（下一步）
 - 验收报告：`docs/实施计划-Stage3-验收报告.md`（Stage 3 末尾产出）
