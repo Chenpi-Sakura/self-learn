@@ -37,6 +37,11 @@
     - **Agent 类禁止声明 `skills = [...]` 类属性 / 方法**：Skill 与 Agent 的绑定完全靠 `Envelope.target.id` ↔ `docs/skills/<id>.md` 文件名匹配。Agent 在 run() 内需要时直接 `skill_library.get(...)`，不靠任何静态注册表。
     - **SkillBasedScheduler 重构**：路由机制剥离对 Agent 静态属性或装饰器的依赖，强制仅认 `envelope.target.id`，与 markdown 文件名一一对应。
 14. **数据表严格 6 张**：本阶段不允许新增 / ALTER 表，最多 6 张 + Stage 2 已建的 2 张。
+15. **V1.3 数据流哲学——开发者"前置打包 + 冷酷后置校验 + 1 次重试"**：
+    - **前置打包（Pre-fetching）**：开发者对每个 LLM 任务的输入数据需求**完全已知**（业务场景固定）。Agent.run() 内主动完成：①查 DB 拿节点/KP/profile 等结构化数据，拼成字符串塞进 ChatMessage.content；②`await ToolRegistry.call("tool.fetch_template", ...)` 拉取 prompt 模板；③与 Skill.body 合并成完整 system prompt；④一次性喂给 LLM。LLM 启动推理那一刻，所有原材料已躺在上下文里，**LLM 无需也无法再发起任何额外数据获取动作**。
+    - **冷酷后置校验**：流水线**不指望 LLM 自我反省**，用纯代码拦截：①`await ToolRegistry.call("tool.lint_json", payload=parsed, schema=...)` 严格 jsonschema 校验；②结构 OK 后交 ReviewAgent 做业务规则过滤（唯一性、难度梯度等）。
+    - **1 次自动重试**：lint_json 抛 `EXERCISE_INVALID` → Agent 内部触发**最多 1 次**自动重试（同一模板、同一上下文，仅 user message 追加"上一次未通过校验，请严格遵守 schema"）；重试仍失败则抛 `EXERCISE_INVALID` 上抛，不写库、不进 Review。Review verdict=rejected 时**不**触发自动重试（业务规则错不是 LLM 的锅）。
+    - Skill markdown 中**不**写"前置要查哪些表""要调哪个 tool 取模板"——这些是 Agent 硬编码的工程步骤，不属于业务约束；写入会污染 LLM 上下文。
 
 ---
 
@@ -2001,6 +2006,12 @@ git commit -m "feat(agents): PlanAgent + seed_map.py（5 个 KP 种子）"
 ---
 
 ## Task 9: ExerciseAgent（LLM 出题 + tool.lint_json 校验）
+
+> **V1.3 数据流哲学（Rule #15）的核心体现**：本 Task 是"前置打包 + 冷酷后置校验 + 1 次重试"模式的标准范例。
+> - **前置打包**：`run_sync()` 内先查 DB 拿 node + kp 详情拼字符串、`await tool.fetch_template` 拉模板、`skill.body + 模板` 合并成 system prompt，一次性塞进 ChatRequest。
+> - **后置校验**：`await tool.lint_json` jsonschema 严格校验。
+> - **1 次重试**：lint 失败时 `for attempt in range(2)` 循环；重试失败抛 `EXERCISE_INVALID`，不进 Review、不写库。
+> - Skill markdown（`docs/skills/skill.exercise.generate.md`）**只**写"做什么 + 怎么算合法"，**不**写 fetch_template / lint_json 这些工程步骤——全在 Agent.run_sync() 内硬编码。
 
 **Files:**
 - Modify: `backend/src/selflearn/agents/builtin/exercise_agent.py`（创建时已有 stub，仅内容）

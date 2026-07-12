@@ -761,11 +761,26 @@ class ProfileRepository:
 - **生命周期**：进程启动时由 `skills/library.py` 读盘载入为 `Skill` 对象到 `skill_library` 单例
 - **调用**：Agent 通过 `skill_library.get("skill.exercise.generate")` 拿到 Skill 对象，**用 Skill.body 作为 system prompt**，用 Skill.output_schema / validation_rules 作为 LLM 输出的结构化校验
 
+**V1.3 数据流哲学：开发者"前置打包 + 冷酷后置校验 + 1 次重试"**
+
+Stage 3 的流水线架构假定开发者（即写 Agent 业务逻辑的人）对每项 LLM 任务的输入数据需求是**完全已知**的——因为业务场景固定（出题 / 评审 / 画像 / 藏宝图），不存在"我不知道该喂什么"的开放场景。因此：
+
+1. **前置打包（Pre-fetching）**：在 Agent.run() 内，开发者主动完成所有数据准备工作，然后一次性把全部原材料喂给 LLM。
+   - **上下文数据注入**：用 Python 代码查 DB，把节点、知识点、profile 等结构化数据拼成字符串直接塞进 ChatMessage.content，例如 `content=f"node_id={node.node_id}, kp_title={node.kp.title}, kp_desc={node.kp.description}"`。
+   - **规则与模板注入**：Agent 主动 `await ToolRegistry.call("tool.fetch_template", name=...)` 拉取 prompt 模板，与 `Skill.body` 中的业务规则合并，拼成完整的 system prompt。
+   - **结果**：LLM 启动推理的那一刻，它所需的全部知识点细节、输出格式要求、业务约束都已经躺在它的上下文里；**LLM 无需也无法再发起任何额外数据获取动作**。
+
+2. **冷酷后置校验**：前置注入的数据如因任何原因存在歧义，流水线**不指望 LLM 能自我反省**，而是用纯代码做拦截：
+   - **结构校验**：LLM 输出完成后，Agent 立刻 `await ToolRegistry.call("tool.lint_json", payload=parsed, schema="exercise")`，严格按 jsonschema 检查输出。
+   - **业务评审**：结构 OK 后交由下一节点 ReviewAgent 做规则过滤（唯一性、难度梯度、code 必含 def/class 等）。
+   - **容错重试**：若 lint_json 抛 `EXERCISE_INVALID`，Agent 内部触发**最多 1 次自动重试**（同一模板、同一上下文，仅在 user message 中追加"上一次输出未通过校验，请重试并严格遵守 schema"），重试仍失败则抛 `EXERCISE_INVALID` 上抛，不写库、不进 Review。
+
 **Skill markdown 文档 V1.2 约束**（重要）：
 
 1. Skill = 纯业务说明书 + LLM system prompt 源，**禁止**写入 Tool 调用指令 / 工具名提示 / `ToolRegistry.call(...)` 之类的内容。原因：Skill.body 直接喂给 LLM，LLM 没有 function_call 能力，写了只会污染输出、引发解析崩溃。
 2. Skill 仅描述：**意图 / 数据格式校验规则 / 输出 Schema / 业务硬约束**。
 3. Tool 的实际调用由 Agent.run() 用 Python `await ToolRegistry.call(...)` 硬编排，编排顺序写在 Agent 代码里，不写在 Skill 里。
+4. Skill 不描述"前置要查哪些表""要调哪个 tool 取模板"——这些是 Agent 在 run() 内硬编码的工程步骤，不属于业务约束。
 
 **示例 Skill 文档**（`docs/skills/skill.exercise.generate.md`）：
 
