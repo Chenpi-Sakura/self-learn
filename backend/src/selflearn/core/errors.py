@@ -10,6 +10,8 @@ class ErrorCode(str, Enum):
     LLM_UPSTREAM = "LLM_UPSTREAM"
     DB_CONFLICT = "DB_CONFLICT"
     INTERNAL = "INTERNAL"
+    # Stage 3: ExerciseAgent 1 次重试仍 lint 拒收 → 422 Unprocessable Entity
+    EXERCISE_INVALID = "EXERCISE_INVALID"
 
 
 _DEFAULT = {
@@ -21,6 +23,7 @@ _DEFAULT = {
     ErrorCode.LLM_UPSTREAM: 502,
     ErrorCode.DB_CONFLICT: 409,
     ErrorCode.INTERNAL: 500,
+    ErrorCode.EXERCISE_INVALID: 422,  # Unprocessable Entity
 }
 
 
