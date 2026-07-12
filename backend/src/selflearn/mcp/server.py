@@ -1,0 +1,1 @@
+"""MCP server 占位 — Stage 3 按 v4 § 2.1.5 实装 JSON-RPC over RabbitMQ。"""
