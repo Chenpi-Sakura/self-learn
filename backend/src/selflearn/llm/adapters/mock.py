@@ -1,24 +1,25 @@
-"""MockLLMAdapter — 不走网络，deterministic 输出。"""
+"""Mock LLM Adapter（Stage 3: 支持 reasoning 字段）。"""
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 
 from selflearn.llm.base import BaseLLMAdapter, ChatChunk, ChatRequest
 
 
 class MockLLMAdapter(BaseLLMAdapter):
+    """不走网络；reasoning=True 时额外 yield reasoning_delta。"""
+
     provider_name = "mock"
 
     async def chat(self, req: ChatRequest) -> str:
-        await asyncio.sleep(0)
-        last = req.messages[-1].content if req.messages else ""
-        return f"mock-reply: ping -> pong ({len(last)} chars)"
+        return f"mock-reply: {req.messages[-1].content[:32]} -> pong"
 
     async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatChunk]:
-        for part in ("mock-", "reply:", " pong"):
-            await asyncio.sleep(0)
-            yield ChatChunk(delta=part)
+        if req.reasoning:
+            yield ChatChunk(delta="", reasoning_delta="mock-think: ...", finish_reason=None)
+            yield ChatChunk(delta="", reasoning_delta="  planning next steps", finish_reason=None)
+        yield ChatChunk(delta="mock chunk 1", finish_reason=None)
+        yield ChatChunk(delta="mock chunk 2", finish_reason=None)
         yield ChatChunk(delta="", finish_reason="stop")
 
     async def health(self) -> bool:

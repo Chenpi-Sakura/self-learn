@@ -1,4 +1,4 @@
-"""OpenAI 兼容适配器（DeepSeek / 通义千问）。"""
+"""OpenAI 兼容适配器（DeepSeek / 通义千问）。Stage 3: 解析 reasoning_content。"""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -34,10 +34,8 @@ class OpenAICompatAdapter(BaseLLMAdapter):
         r = await self._client.post(f"{self.base_url}/chat/completions", json=body)
         r.raise_for_status()
         data = r.json()
-        choices = data["choices"]
-        first = choices[0]
-        message = first["message"]
-        return str(message["content"])
+        first = data["choices"][0]
+        return str(first["message"]["content"])
 
     async def chat_stream(self, req: ChatRequest) -> AsyncIterator[ChatChunk]:
         body: dict[str, object] = {
@@ -60,9 +58,12 @@ class OpenAICompatAdapter(BaseLLMAdapter):
                     yield ChatChunk(delta="", finish_reason="stop")
                     return
                 obj = json.loads(data)
-                delta = obj["choices"][0]["delta"].get("content", "")
-                if delta:
-                    yield ChatChunk(delta=delta)
+                delta = obj["choices"][0]["delta"]
+                # Stage 3: DeepSeek-R1 / 通义 QwQ 在 stream 中同时含 reasoning_content 与 content
+                if reasoning := delta.get("reasoning_content"):
+                    yield ChatChunk(delta="", reasoning_delta=reasoning)
+                if content := delta.get("content", ""):
+                    yield ChatChunk(delta=content)
 
     async def health(self) -> bool:
         try:
