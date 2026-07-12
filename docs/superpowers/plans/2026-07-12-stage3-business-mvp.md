@@ -649,11 +649,9 @@ from datetime import datetime
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, SmallInteger, String, Numeric, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    pass
+from selflearn.domain.base import Base
 
 
 class Exercise(Base):
