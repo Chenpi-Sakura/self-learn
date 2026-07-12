@@ -1,0 +1,690 @@
+# Stage 3 — 核心业务 MVP — 设计文档
+
+> **For agentic workers:** 本 spec 是 Stage 3 的"做什么、怎么做、不做什么"的权威来源。配套实施计划见 `docs/superpowers/plans/2026-07-12-stage3-business-mvp.md`。
+>
+> 配套文档：
+> - Stage 2 spec：`docs/superpowers/specs/2026-07-11-stage2-backend-foundation-design.md`（所有 Stage 2 决策与基座约束继续生效）
+> - 项目记忆：`[[no-auth-no-login]]`（鉴权 0 实现）
+
+| 文档版本 | 修订日期 | 修订人 | 修订说明 |
+| --- | --- | --- | --- |
+| V1.0 | 2026-07-12 | 团队 | Stage 3 初稿。基于已交付的 Stage 2 后端基座，扩展到 5 个业务 Agent + Redis Stream 真流式 SSE + LLM 思考模式 + 6 张业务表。**MVP 范围——只跑通核心闭环，4 种关卡形式 / 评估模块 / TTS-ASR / 仪表盘 / 9 窗口真实内容均推到 Stage 4/5**。**项目级约束：完全不做鉴权 / 登录**（参见 [[no-auth-no-login]]）。 |
+
+---
+
+## 0. 编写目的与读法
+
+本文档回答四个问题：
+
+1. **Stage 3 交付什么**：5 个 Agent + Redis Stream 真流式 SSE + 思考模式抽象 + 6 张业务表 + 完整闭环 smoke
+2. **用什么技术栈**：在 Stage 2 8 项决策基础上，新增 Redis Stream（事件流推送）+ LLM `reasoning_content` 字段
+3. **消息怎么流**：单 Redis Stream 拓扑（worker 任意点 XADD → gateway SSE XREAD GROUP）
+4. **怎么验证**：`scripts/smoke_mvp.sh` 端到端跑通 "profile → plan → director → exercise → review → submit"
+
+**读法建议**：
+- § 1 范围与不在范围内（先看）
+- § 2 决策表（核心，8+3 项）
+- § 3 架构与目录（实现依据）
+- § 4 消息流与 SSE 推送（关键路径）
+- § 5 数据模型（6 张新表 DDL + JSONB 脏检查陷阱）
+- § 6 错误 / 测试 / 可观测性（质量门）
+- § 7 验收（不可漏）
+- § 8 与 Stage 2 / v4 详细设计文档的一致性
+
+---
+
+## 1. 范围与不在范围内
+
+### 1.1 Stage 3 范围内（必交付）
+
+| 项 | 说明 |
+| --- | --- |
+| **5 个业务 Agent** | `ProfileAgent` / `PlanAgent` / `DirectorAgent` / `ExerciseAgent` / `ReviewAgent` |
+| **核心闭环 MVP** | "画像构建 → 藏宝图生成 → 进关卡 → 出题 → 评审 → 提交完成" 全链路可跑 |
+| **6 张新业务表** | `knowledge_points` / `map_nodes` / `levels` / `exercises` / `level_completions` / `review_results` + Alembic 迁移 |
+| **Redis Stream 真流** | worker 任意点 `progress_publish()` → gateway SSE 端点 `XREAD GROUP` 阻塞读 → 真流分块 |
+| **SSE 端点升级** | `/api/profile/init/{trace_id}/stream` 与新增 `/api/level/{level_id}/stream` 订阅 Redis Stream |
+| **LLM 思考模式抽象** | `ChatRequest.reasoning` + `ChatRequest.reasoning_budget`；`ChatChunk.reasoning_delta`；adapter 解析 `reasoning_content` |
+| **评审 Agent（规则过滤）** | JSON 合法性 / 题目唯一性 / 答案格式 / 难度梯度 |
+| **REST 端点（MVP 子集）** | profile build / map generate / level start / submit / status / stream |
+| **Seed 数据** | 从 demo-serif 现有 Map 节点抽 5-10 个知识点 + 关卡结构 |
+| **`scripts/smoke_mvp.sh`** | 端到端跑通：build → SSE 收 6 段 progress → submit → score |
+| **测试** | 单元 + 集成（testcontainers 起真实 Redis Stream 跑通） |
+| **可观测性** | OTel + Jaeger，5 个 Agent 全链路 trace |
+
+### 1.2 Stage 3 范围外（推到 Stage 4+）
+
+| 项 | 推到 |
+| --- | --- |
+| 4 种关卡形式（📖/🤖/💻/🎯） | Stage 4（文档 / 思维导图 / 代码 / 听力） |
+| 评估模块 / 仪表盘 / 画像演变图表 | Stage 4 |
+| 9 个核心窗口的真实内容 | Stage 4 |
+| WebSocket 流式（Stage 2 已说明 Stage 3 仍走 SSE） | 永不做，仅 SSE |
+| TTS / ASR / 讯飞星火 | Stage 5 |
+| 1 个 Demo 之外的 3 个内容 Agent（导图 / 文档 / 代码） | Stage 4 |
+| 评审 Agent 的 RAG / 引用 / 完整 4 阶段 | Stage 4 |
+| 三层存储一致性（写穿透 / 读旁路 / Singleflight） | Stage 4 |
+| v4 § 5.3.2 完整 25 张表 | Stage 4+ 按需 ALTER |
+| OAuth / JWT / 登录 / 会话 | **永远不做**（项目级硬约束） |
+| k8s / Helm | Stage 5 |
+
+### 1.3 项目级硬约束（继承自 [[no-auth-no-login]]）
+
+> **整个项目（所有阶段）都不需要登录 / 鉴权 / 会话 / Token / OAuth / JWT 任何形式。**
+
+落地规则：
+- 任何阶段、任何 task、任何 spec / plan / 文档中出现鉴权 / 登录 / 会话 / Token / JWT / OAuth / 账号 / 注册 / 注销 / 邮箱密码 / refresh token / `Depends(get_current_user)` / `auth.py` 等概念，**一律删除**
+- 学生以**业务字段 `student_id`** 标识，请求体或路径直接传入
+- `students` 表保留为业务主数据表，但不与任何 token 关联
+
+---
+
+## 2. 技术决策表（继承 Stage 2 + 新增 3 项）
+
+### 2.1 继承自 Stage 2 的 8 项（继续生效）
+
+| # | 决策点 | 决策 |
+| --- | --- | --- |
+| 1 | Agent 框架 | 自研 `BaseAgent` + `SkillBasedScheduler` |
+| 2 | 消息总线 | RabbitMQ |
+| 3 | LLM 主路径 | OpenAI 兼容（DeepSeek / 通义千问） |
+| 4 | Web 框架 | FastAPI |
+| 5 | 鉴权 | 不做（项目级硬约束） |
+| 6 | 容器化 | docker-compose |
+| 7 | ORM | SQLAlchemy 2.x async + Alembic |
+| 8 | 监控 | OTel + Jaeger |
+
+### 2.2 Stage 3 新增的决策
+
+| # | 决策点 | 决策 | 备选 | 决定理由 |
+| --- | --- | --- | --- | --- |
+| 9 | 进程拓扑 | **单一 worker 容器（Stage 2 现状）、同镜像多实例可扩展** | 按 Agent 类型拆容器 / 集群化部署 | 5 个 Agent 加起来 QPS 仍低；多实例只要多部署一即可；避免镜像重复 |
+| 10 | Director 调度 | **同步序列调 + Redis Stream 真流推送** | 纯序列调（无流式）/ 全异步信封编排 | 内部代码简单线性、SSE 流式不变；外部用户体验跟异步一致 |
+| 11 | SSE 后端方案 | **单一 Redis Stream `stream:{trace_id}` · 各阶段 XADD · gateway XREAD GROUP** | 多 Stream 按阶段拆 / RabbitMQ 共享拓扑 / Redis Pub/Sub | 实现最简，断线可重放（stream 有持久化），与 RabbitMQ 拓扑零耦合 |
+| 12 | 数据库表数 | **6 张新表**（不含 Stage 2 已建 `students` / `profiles`） | 一次拿 25 张全部 / 全部走 Redis JSON | MVP 闭门验证设计；ALTER 留给 Stage 4 |
+| 13 | LLM 思考模式启用 | **按 `ChatRequest` 字段 `reasoning` 默认 `False`** | 全局开关 / 按 Agent 类型预设 | 调用方按需传入，最灵活也最显式 |
+| 14 | 存储布局 | **状态走 PG（事务+查询）、热数据走 Redis（缓存 + Stream）** | 全 PG / 全 Redis | MVP 边界清晰；状态持久化靠 PG、流推送靠 Redis |
+
+### 2.3 关联选型（已敲定，不在 8+3 项决策里）
+
+- 包管理 / 运行：uv
+- Python：3.12（沿用 Stage 2 锁定）
+- Redis Stream 客户端：redis-py 5.x async（`xadd` / `xreadgroup`）
+- Alembic：Stage 2 已用，Stage 3 新增 1 个 revision
+
+---
+
+## 3. 架构与目录
+
+### 3.1 进程拓扑（沿用 Stage 2）
+
+```
+docker-compose.yml
+├── postgres          # PostgreSQL 16
+├── redis             # Redis 7（含 Stream 类型）
+├── qdrant            # Qdrant v1.7+（Stage 3 暂不创建 collection，留接口）
+├── minio             # MinIO
+├── jaeger            # Jaeger all-in-one
+├── gateway           # FastAPI gateway（REST + SSE）
+└── worker            # 消费进程（5 个 Agent 全部在内部）
+```
+
+**Stage 3 拓扑变化**：仅 redis 多了 Stream 用法（XADD / XREAD GROUP）；其他无变。
+
+### 3.2 backend/ 新增与修改
+
+```
+backend/
+├── migrations/
+│   └── versions/
+│       └── <new>_stage3_business_tables.py   ← 新增 6 张表的迁移
+├── scripts/
+│   ├── smoke_mvp.sh                          ← 新增：MVP 闭环端到端
+│   ├── smoke.sh                              ← Stage 2 已建，仍跑
+│   └── seed_map.py                           ← 新增：从 demo-serif 抽 5-10 个知识点
+├── src/selflearn/
+│   ├── core/
+│   │   ├── envelope.py        # 修改：action 增加 progress 子集枚举（可选，仅文档）
+│   │   └── thinking.py        # 新增：LLM 思考模式辅助（解析 reasoning_content）
+│   ├── llm/
+│   │   ├── base.py            # 修改：ChatRequest.reasoning, reasoning_budget；ChatChunk.reasoning_delta
+│   │   ├── adapters/
+│   │   │   ├── mock.py        # 修改：chat_stream yield reasoning_delta
+│   │   │   └── openai_compat.py  # 修改：chat_stream 同时取 reasoning_content
+│   ├── progress/              # 新增子模块
+│   │   ├── stream.py          # progress_publish / progress_consume（Redis Stream 包装）
+│   │   └── stages.py          # Stage 枚举 + ProgressEvent dataclass
+│   ├── agents/builtin/
+│   │   ├── profile_agent.py   # 新增
+│   │   ├── plan_agent.py      # 新增
+│   │   ├── director_agent.py  # 新增（核心：同步序列调 Exercise + Review）
+│   │   ├── exercise_agent.py  # 新增
+│   │   └── review_agent.py    # 新增
+│   ├── skills/builtin/
+│   │   ├── profile.py         # 修改：增加 build / update handler
+│   │   ├── map.py             # 新增
+│   │   ├── level.py           # 新增
+│   │   ├── exercise.py        # 新增
+│   │   └── review.py          # 新增
+│   ├── domain/
+│   │   ├── knowledge_point.py # 新增
+│   │   ├── map_node.py        # 新增
+│   │   ├── level.py           # 新增
+│   │   ├── exercise.py        # 新增
+│   │   ├── level_completion.py# 新增
+│   │   └── review_result.py   # 新增
+│   ├── gateway/routes/
+│   │   ├── profile.py         # 修改：init 改为 build + SSE 订阅 stream
+│   │   ├── map.py             # 新增
+│   │   └── level.py           # 新增
+│   └── schemas/
+│       └── progress.py        # 新增：Stage enum + ProgressEvent Pydantic
+└── tests/
+    ├── unit/
+    │   ├── test_thinking.py           # 新增
+    │   ├── test_chat_stream_reasoning.py  # 新增
+    │   ├── test_progress_stream.py    # 新增（mock Redis）
+    │   ├── test_exercise_agent.py     # 新增
+    │   └── test_review_agent.py       # 新增
+    └── integration/
+        ├── test_smoke_mvp.py          # 新增（testcontainers 起真实 Redis Stream）
+        └── test_smoke.py              # Stage 2 已有，仍跑
+```
+
+### 3.3 关键模块职责
+
+**`progress/stream.py` —— Redis Stream 真流核心**：
+
+```python
+# progress/stream.py
+from redis.asyncio import Redis
+from selflearn.config import get_settings
+
+PROGRESS_STREAM_PREFIX = "stream:"
+PROGRESS_STREAM_TTL_SECONDS = 3600  # 1 小时回收
+
+async def progress_publish(trace_id: str, event: ProgressEvent) -> None:
+    """worker 任意代码点调用，往 Redis Stream 写一条进度。"""
+    r: Redis = get_redis()
+    key = f"{PROGRESS_STREAM_PREFIX}{trace_id}"
+    await r.xadd(key, event.to_redis_fields(), maxlen=100, approximate=True)
+    await r.expire(key, PROGRESS_STREAM_TTL_SECONDS)
+
+
+async def progress_consume(trace_id: str) -> AsyncIterator[ProgressEvent]:
+    """Gateway SSE 端点调用，从 Stream 阻塞读。"""
+    r: Redis = get_redis()
+    key = f"{PROGRESS_STREAM_PREFIX}{trace_id}"
+    last_id = "$"
+    while True:
+        result = await r.xread({key: last_id}, block=5000, count=10)
+        if not result:
+            continue  # block 超时，重试；可能 stream 已写满或已关闭
+        for _, entries in result:
+            for entry_id, fields in entries:
+                yield ProgressEvent.from_redis_fields(fields)
+                last_id = entry_id
+        # 消费者组：本 MVP 不开 group，单消费者即可（gateway 是唯一的 stream 读取者）
+```
+
+**`progress/stages.py` —— Stage 枚举与事件类型**：
+
+```python
+from enum import Enum
+from dataclasses import dataclass, field
+from datetime import datetime
+
+
+class Stage(str, Enum):
+    PROFILE = "profile"
+    PLAN = "plan"
+    DIRECTOR = "director"
+    EXERCISE = "exercise"
+    REVIEW = "review"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass
+class ProgressEvent:
+    stage: Stage
+    status: str            # "running" | "completed" | "failed"
+    payload: dict = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+    def to_redis_fields(self) -> dict[str, str]:
+        return {
+            "stage": self.stage.value,
+            "status": self.status,
+            "payload": json.dumps(self.payload, ensure_ascii=False),
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+    @classmethod
+    def from_redis_fields(cls, fields: dict[bytes | str, bytes | str]) -> "ProgressEvent":
+        decoded = {k.decode() if isinstance(k, bytes) else k:
+                   v.decode() if isinstance(v, bytes) else v
+                   for k, v in fields.items()}
+        return cls(
+            stage=Stage(decoded["stage"]),
+            status=decoded["status"],
+            payload=json.loads(decoded["payload"]),
+            timestamp=datetime.fromisoformat(decoded["timestamp"]),
+        )
+```
+
+### 3.4 Director Agent 同步序列调 + 流推送
+
+```python
+# agents/builtin/director_agent.py
+class DirectorAgent(AbstractAgent):
+    agent_id = "director-01"
+    skills = ["skill.level.start"]
+
+    async def run(self, env: Envelope) -> Envelope:
+        trace_id = env.trace_id
+
+        # 1. 选节点（v4 § 3.13 选第一个 active 节点）
+        await progress_publish(trace_id, ProgressEvent(
+            stage=Stage.DIRECTOR, status="running",
+            payload={"action": "select_node"}
+        ))
+        node = await self._select_first_active_node(env.payload["student_id"])
+
+        # 2. 同步调 Exercise Agent（直接函数调用，不绕 RabbitMQ）
+        await progress_publish(trace_id, ProgressEvent(
+            stage=Stage.EXERCISE, status="running",
+            payload={"node_id": str(node.node_id)}
+        ))
+        exercises = await exercise_agent.run_sync(env, node)
+        await progress_publish(trace_id, ProgressEvent(
+            stage=Stage.EXERCISE, status="completed",
+            payload={"count": len(exercises)}
+        ))
+
+        # 3. 同步调 Review Agent
+        await progress_publish(trace_id, ProgressEvent(
+            stage=Stage.REVIEW, status="running"
+        ))
+        review = await review_agent.run_sync(env, exercises)
+        await progress_publish(trace_id, ProgressEvent(
+            stage=Stage.REVIEW, status="completed",
+            payload={"verdict": review.verdict, "issues_count": len(review.issues)}
+        ))
+
+        # 4. 写库（levels + exercises + review_results 表）
+        await self._persist(node, exercises, review)
+
+        # 5. 推 completed 进度
+        await progress_publish(trace_id, ProgressEvent(
+            stage=Stage.COMPLETED, status="completed",
+            payload={"level_id": str(self._level_id), "exercises_count": len(exercises)}
+        ))
+
+        return Envelope(
+            action="skill.completed",
+            sender=ActorRef(type="agent", id=self.agent_id),
+            target=ActorRef(type="gateway", id=env.sender.id),
+            payload={"level_id": str(self._level_id), "exercises": exercises_as_dict},
+            trace_id=trace_id,
+            parent_id=env.span_id,
+        )
+```
+
+---
+
+## 4. 消息流与 SSE 真流
+
+### 4.1 总体消息流
+
+```
+client (curl / SSE EventSource)
+   │
+   │ POST /api/profile/build {student_id, topic}
+   ▼
+gateway/routes/profile.py
+   │ 1. 创建 trace_id
+   │ 2. XADD stream:{trace_id} {stage:profile, status:"pending"}
+   │ 3. publish envelope {action:"skill.execute", target.director?}
+   │    routing key = profile.skill.profile.build
+   │ 4. 立即返回 { trace_id }
+   │
+   ▼
+worker (单进程消费)
+   │
+   ├─ ProfileAgent.run(env)         ← XADD stream progress (running → completed)
+   │     ├─ 5 轮对话（mock 即可）+ LLM call
+   │     ├─ 写 profiles 表
+   │     └─ publish envelope {director}
+   │
+   ├─ PlanAgent.run(env)            ← XADD stream progress (running → completed)
+   │     ├─ 调 LLM 生成藏宝图
+   │     ├─ 写 knowledge_points + map_nodes 表
+   │     └─ publish envelope {director}
+   │
+   ├─ DirectorAgent.run(env)        ← 核心编排
+   │     ├─ XADD {director running + select_node}
+   │     ├─ 同步调 Exercise Agent.run_sync()    ← 内部 await
+   │     │   ├─ LLM call（reasoning=True）
+   │     │   ├─ 解析 JSON → 写 exercises 表
+   │     │   └─ XADD {exercise running → completed}
+   │     ├─ 同步调 Review Agent.run_sync()
+   │     │   ├─ 规则过滤（JSON / 重复 / 答案格式）
+   │     │   ├─ 写 review_results 表
+   │     │   └─ XADD {review running → completed}
+   │     ├─ 写 levels 表
+   │     └─ XADD {completed}
+   │
+   ▼
+gateway SSE 端点（订阅 stream）
+   │ XREAD stream:{trace_id} BLOCK 5000
+   │     → 推送 SSE: event="progress" data=ProgressEvent JSON
+   │     → 收到 COMPLETED 事件后推送 SSE: event="completed" data=final_result
+   │     → 连接关闭
+```
+
+### 4.2 SSE 事件契约（升级版，兼容 Stage 2）
+
+| event | data JSON | 何时推送 | 兼容性 |
+|-------|-----------|---------|--------|
+| `progress` | `{"stage": str, "status": str, "payload": {...}, "timestamp": iso}` | Agent 每个阶段开始 / 完成时 | Stage 3 新增 |
+| `reasoning` | `{"delta": str}` | `ChatRequest.reasoning=True` 时逐 chunk | Stage 3 新增 |
+| `chunk` | `{"delta": str}` | `chat_stream` 每个非推理 chunk | Stage 3 新增 |
+| `completed` | `{"trace_id, level_id, exercises, review_verdict, ...}` | Director 全部跑完 | Stage 2 已有、扩展 payload |
+| `error` | `{"code": "ErrorCode", "message": str}` | 出错时 | Stage 2 已有 |
+
+**关键约束**（破坏即报错）：
+- 路径固定：`/api/profile/init/{trace_id}/stream`、`/api/level/{level_id}/stream`
+- 事件名固定：上表 5 类，新增必须 `feature_event` 命名
+- `Content-Type: text/event-stream`（sse-starlette 自动设置）
+- 断线清理：Gateway 端 `try/finally` 关闭 XREAD
+
+### 4.3 ErrorCode 增量
+
+Stage 2 已有 8 个；Stage 3 新增：
+
+```python
+EXERCISE_INVALID = "EXERCISE_INVALID"      # 评审拒绝、JSON 不合法
+REVIEW_REJECTED  = "REVIEW_REJECTED"       # 评审严格拒收（需要重新生成）
+STREAM_TIMEOUT   = "STREAM_TIMEOUT"        # Redis Stream 阻塞读取超时
+```
+
+---
+
+## 5. 数据模型（6 张新表）
+
+### 5.1 ER 总图
+
+```
+students (Stage 2)
+   ↓ 1:N
+profiles (Stage 2，dimensions JSONB)
+   ↓ 1:N (按 student)
+map_nodes (新增)
+   ↓ 1:N
+levels (新增)
+   ↓ 1:N
+exercises (新增)
+   ↓
+review_results (新增) ← chain by level_id
+   ↓
+knowledge_points (新增，独立字典表，按 kp_id 反查)
+
+level_completions (新增) ← 学生提交记录，按 level_id
+```
+
+### 5.2 6 张新表 DDL
+
+```sql
+-- knowledge_points —— 知识点字典表
+CREATE TABLE knowledge_points (
+    kp_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject        VARCHAR(128) NOT NULL,
+    title          VARCHAR(255) NOT NULL,
+    description    TEXT NOT NULL,
+    difficulty     SMALLINT NOT NULL CHECK (difficulty BETWEEN 1 AND 5),
+    prerequisites  JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_kp_subject ON knowledge_points(subject);
+
+
+-- map_nodes —— 藏宝图节点
+CREATE TABLE map_nodes (
+    node_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id     UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    kp_id          UUID NOT NULL REFERENCES knowledge_points(kp_id),
+    status         VARCHAR(32) NOT NULL DEFAULT 'active',  -- active/sleeping/completed/locked
+    branch_type    VARCHAR(32) NOT NULL DEFAULT 'main',    -- main/interest
+    position       JSONB NOT NULL DEFAULT '{"x":0,"y":0}'::jsonb,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_map_nodes_student_status ON map_nodes(student_id, status);
+
+
+-- levels —— 关卡
+CREATE TABLE levels (
+    level_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    node_id        UUID NOT NULL REFERENCES map_nodes(node_id) ON DELETE CASCADE,
+    status         VARCHAR(32) NOT NULL DEFAULT 'generated',
+    form           VARCHAR(32) NOT NULL DEFAULT 'exercise',  -- MVP 只用 exercise
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_levels_node ON levels(node_id);
+
+
+-- exercises —— 题目
+CREATE TABLE exercises (
+    exercise_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    level_id       UUID NOT NULL REFERENCES levels(level_id) ON DELETE CASCADE,
+    exercise_type  VARCHAR(32) NOT NULL,           -- single_choice/fill_blank/short_answer/code
+    prompt         TEXT NOT NULL,
+    options        JSONB NOT NULL DEFAULT '[]'::jsonb,
+    correct_answer TEXT NOT NULL,
+    explanation    TEXT NOT NULL,
+    difficulty     SMALLINT NOT NULL CHECK (difficulty BETWEEN 1 AND 3),
+    score          NUMERIC(4,2) NOT NULL DEFAULT 1.0
+);
+CREATE INDEX idx_exercises_level ON exercises(level_id);
+
+
+-- level_completions —— 关卡完成记录
+CREATE TABLE level_completions (
+    completion_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    level_id          UUID NOT NULL REFERENCES levels(level_id) ON DELETE CASCADE,
+    student_id        UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    score             NUMERIC(5,2) NOT NULL,
+    duration_seconds  INTEGER NOT NULL,
+    answers           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    metrics           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    submitted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_lc_student ON level_completions(student_id);
+CREATE INDEX idx_lc_level ON level_completions(level_id);
+
+
+-- review_results —— 评审结果
+CREATE TABLE review_results (
+    review_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    level_id       UUID NOT NULL REFERENCES levels(level_id) ON DELETE CASCADE,
+    verdict        VARCHAR(32) NOT NULL,            -- passed/rejected/needs_fix
+    score          NUMERIC(4,2) NOT NULL,
+    issues         JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_rr_level ON review_results(level_id);
+```
+
+### 5.3 ⚠️ JSONB 脏检查陷阱（实现注意事项）
+
+> 这是 SQLAlchemy 2.x async + JSONB 的已知坑。Stage 3 必须全栈规避。
+
+**问题**：
+```python
+profile.dimensions["knowledge_base"] = 0.8   # ⚠️ 不触发 dirty tracking
+await session.commit()                        # JSONB 字段不变
+```
+
+**解决**（统一封装在 `domain/*.py` 仓库层）：
+
+```python
+# 仅供演示，具体在 plan 中由实现 agent 设计
+from sqlalchemy.orm.attributes import flag_modified
+
+class ProfileRepository:
+    async def update_dimension(self, session: AsyncSession, profile: Profile,
+                               dim_name: str, value: float) -> None:
+        new_dims = {**profile.dimensions, dim_name: value}   # 整体替换
+        profile.dimensions = new_dims                        # 直接赋值
+        # 或者显式 flag_modified：
+        # flag_modified(profile, "dimensions")
+        await session.flush()
+```
+
+**统一规则（必须遵守）**：
+- JSONB 字段就字典序新对象的引用，**不**就地 mutate
+- 多步批量更新走"读 dict → 改 → 整体回写"
+- 单测覆盖：mutate 后必须能被 `await session.refresh(profile)` 读到新值
+
+---
+
+## 6. 错误处理、测试、可观测性
+
+### 6.1 错误处理（继承 + 增量）
+
+| 错误码 | HTTP | 触发 | Stage |
+|--------|------|------|-------|
+| `ENVELOPE_INVALID` | 400 | 信封字段缺失 / 类型错 | 2 |
+| `SKILL_NOT_FOUND` | 422 | SkillBasedScheduler 找不到匹配 Agent | 2 |
+| `AGENT_TIMEOUT` | 504 | Agent 运行超过 30s（Stage 3 调到 30s，5 个子调用叠加） | 2 |
+| `LLM_RATE_LIMIT` | 429 | LLM 429 | 2 |
+| `LLM_UPSTREAM` | 502 | LLM 5xx / 网络错 | 2 |
+| `DB_CONFLICT` | 409 | 唯一约束冲突 | 2 |
+| `INTERNAL` | 500 | 其他 | 2 |
+| **`EXERCISE_INVALID`** | 422 | 题目 LLM 输出不合规（评审 Agent 无法修复） | **3 新增** |
+| **`REVIEW_REJECTED`** | 422 | 评审严格拒收（Director 触发二次生成） | **3 新增** |
+| **`STREAM_TIMEOUT`** | 504 | Redis Stream 阻塞读取超时（gateway SSE 端点） | **3 新增** |
+
+### 6.2 测试策略
+
+**单元测试（新增 5 个文件）**：
+- `test_thinking.py` — 思考模式 helper（reasoning_content 解析）
+- `test_chat_stream_reasoning.py` — `chat_stream` 同时 yield delta + reasoning_delta
+- `test_progress_stream.py` — `progress_publish / progress_consume` 用 mock Redis 验证序列化
+- `test_exercise_agent.py` — LLM mock 输出 → 解析 JSON → 写表
+- `test_review_agent.py` — 规则过滤（JSON 合法 / 题目重复 / 答案格式 / 难度梯度）
+
+**集成测试（新增 1 个 + Stage 2 已有）**：
+- `test_smoke_mvp.py` — testcontainers 起真实 Redis Stream，跑完整 MVP 闭环
+
+**覆盖率**：核心组件 > 70%
+
+**每 task 验证**：`uv run mypy src` + `uv run pytest tests/unit -q` 必须 0 错。
+
+### 6.3 可观测性
+
+| Span 名 | 属性 | 位置 |
+|---------|------|------|
+| `agent.{name}.run` | agent.name, trace_id, level_id | 各 Agent run |
+| `progress.publish` | stream.key, stage | progress_publish 内 |
+| `stream.read` | stream.key, block_ms, count | progress_consume 内 |
+| `review.rule` | rule.name, passed | ReviewAgent 规则过滤内 |
+
+每条 Span 必须带 `envelope.trace_id`（与 Stage 2 一致）。
+
+---
+
+## 7. 验收
+
+### 7.1 必过清单
+
+- [ ] `alembic upgrade head` 创建 6 张新表（`knowledge_points` / `map_nodes` / `levels` / `exercises` / `level_completions` / `review_results`）
+- [ ] `scripts/seed_map.py` 种子 5-10 个 `knowledge_points`
+- [ ] `POST /api/profile/build` 触发 → SSE 1s 内收到第 1 个 `progress` 事件（stage=profile）
+- [ ] `scripts/smoke_mvp.sh` 端到端跑通：
+  - POST `/api/profile/build` → trace_id 返回
+  - SSE 持续订阅 `/api/level/{level_id}/stream` 依次收到：
+    - `progress` stage=profile (running → completed)
+    - `progress` stage=plan (running → completed)
+    - `progress` stage=director (running)
+    - `progress` stage=exercise (running → completed, items=N)
+    - `progress` stage=review (running → completed, verdict=passed)
+    - `completed` (含 level_id, exercises)
+  - POST `/api/level/{level_id}/submit` → score > 0 / level status = completed
+- [ ] **LLM 抽象层**：`BaseLLMAdapter` 支持 `ChatRequest.reasoning=True`，mock + openai_compat adapter 流中能产生 `reasoning_delta` chunk
+- [ ] **Redis Stream 真流**：worker 端 `XADD` 一条 progress 后，gateway SSE XREAD GROUP 立即收到（< 200ms）
+- [ ] **评审 Agent**：能拒收 JSON 非法 / 题目重复 / 答案格式错误的习题集合
+- [ ] **JSONB 字段**：单测覆盖 — `dimensions` 字典就字段序更新可被刷出
+- [ ] `level_completions` 表写入字段齐全（score / duration_seconds / answers / metrics）
+- [ ] `uv run mypy src tests` 0 错误（strict 模式）
+- [ ] `uv run pytest tests/unit -q` 全绿
+- [ ] `uv run pytest tests/integration/test_smoke_mvp.py -q` 全绿
+- [ ] `uv run pytest tests/integration/test_smoke.py -q`（Stage 2 smoke）仍全绿（向后兼容）
+- [ ] Jaeger UI 完整 trace：profile → plan → director → exercise → review → submit
+- [ ] `backend/README.md` 更新（端点表 + 思考模式用法 + smoke_mvp 用法）
+
+### 7.2 不允许出现（继承 Stage 2 § 6.2）
+
+- ❌ 鉴权 / 登录 / Token / JWT / OAuth 代码
+- ❌ 4 种关卡形式的非 exercise 实现
+- ❌ 评估模块 / 仪表盘
+- ❌ TTS / ASR / 讯飞 / WebSocket
+- ❌ 数据表超过本次声明的 6 张（新增 / ALTER 留给 Stage 4）
+- ❌ 直连 OpenAI SDK 绕过 `LLMRegistry`
+
+### 7.3 风险与应对
+
+| 风险 | 概率 | 应对 |
+|------|------|------|
+| Redis Stream 在新版 redis-py 5 异步客户端的兼容性 | 中 | 锁 redis-py>=5.0.4；单测覆盖 XADD / XREAD；实战前在 staging 跑通 |
+| 同步序列调让总时长叠加（5 个 LLM 调用串行可能 30s+） | 高 | Plan/Exercise 不强制同步等完整结果；Director 错位 × 提交后后台继续跑 |
+| Exercise Agent LLM 输出 JSON 经常不合规 | 高 | 强制 prompt 模板；Review Agent 拒收；1 次自动重试 |
+| Postgres JSONB 嵌套字典脏检查失效 | 中 | Repo 层统一封装：走整体赋值 或 `flag_modified`；单测覆盖 |
+| MVP 后 demo 质量不高 | 中 | 评审 Agent 把关 reject ≥40% 内容；人工巡检；seed_map 补中 |
+| Map 生成 LLM 节点重复 / 环路 | 中 | Plan Agent 加约束节点唯一；Review Agent 触发二次生成 |
+| Stage 2 现有 smoke 被反向破坏 | 低 | 跨仓在 Stage 2 spec 上加“Stage 3 不能破坏 Stage 2 smoke”的活跨测验证 |
+
+---
+
+## 8. 与 Stage 2 / v4 详细设计文档的一致性
+
+### 8.1 Stage 2 决策链锁仔与衔接
+
+| Stage 2 项 | Stage 3 衔接 |
+|------------|---------------|
+| 8 项决策 | 全部继承（见 § 2.1） |
+| SkillBasedScheduler | Stage 3 5 个新 Agent 都走 skill 路由 |
+| LLM Registry + mock + openai_compat | + adapter 修改（§ 3.2、§ 4） |
+| `BaseLLMAdapter` + `chat_stream` | 保持兼容 + 加 `reasoning` 字段 |
+| SSE 端点骨架（轮询） | Stage 3 升级为 Redis Stream 真流 |
+| Smoke 闭环 POST /api/profile/init | Stage 3 改名为 `POST /api/profile/build` 业务含义更准；Stage 2 init 路径仍保留为兼容别名 |
+| RabbitMQ 拓扑 | Stage 3 沿用；不新增队列 |
+| OTel | Stage 3 新增 4 类 Span |
+
+### 8.2 v4 详细设计文档对齐
+
+| v4 节号 | 状态 | 说明 |
+|---------|------|------|
+| § 2.1.4 SkillBasedScheduler | 部分 | Stage 3 5 个新 skill 注册 |
+| § 2.4.1 首次访问 → 画像构建 | 实现 | 去掉“登录”字眼 |
+| § 2.4.2 画像更新公式 | 部分 | 量化指标表表存在；公式推到 Stage 4 |
+| § 3.13 关卡 完整流程 | 部分 | MVP 取 subset：Profile → Plan → Director → Exercise → Review |
+| § 4.1 7 类 WebSocket 事件 | 不实现 | 仅 SSE（Stage 2 已说明） |
+| § 4.2 REST 17 个端点 | 部分 | Stage 3 子集：profile / map / level / submit |
+| § 5.3.2 25 张表 | 部分 | Stage 3 取 6 张 |
+| § 5.6 三层存储一致性 | 不实现 | Stage 4 |
+| § 2.5 评审 Agent 协议 | 部分 | 仅规则过滤 |
+
+---
+
+## 9. 配套文档
+
+- 实施计划：`docs/superpowers/plans/2026-07-12-stage3-business-mvp.md`（下一步）
+- 验收报告：`docs/实施计划-Stage3-验收报告.md`（Stage 3 末尾产出）
+- 决策记忆：`[[no-auth-no-login]]` / `[[stage3-llm-thinking-mode]]`（闭合后两条记忆可删）
+
+---
+
+> 文档结束。本 spec 是 Stage 3 子项目的实施依据，补充 Stage 2 基座而**不修改** Stage 2 决策。
