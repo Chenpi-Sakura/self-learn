@@ -16,11 +16,18 @@
 > - **V1.1 — Skill / MCP 重设**（基于 `superpowers:writing-skills` 视角）：
 >   - Skill 重新定义：**Skill = 流程模板**（可复用步骤序列 + 提示词模板），**不是** Agent 注册中心
 >   - 新增 § 9 MCP Tool 协议层：Agent 通过 `ToolRegistry` 接入 3 个 stub Tool（lint / fetch / store），不直连外部系统
+> - **V1.2 (2026-07-12) — Skill 重设计哲学对齐**（基于 `superpowers:writing-skills` 完整解读）：
+>   - Skill **彻底剥离装饰器模式** → 改为 **`docs/skills/<name>.md` markdown 文档**，启动时由 `skills/library.py` 读盘载入
+>   - Skill 作为 **Agent 行为约束器**（prompt 注入 + 结构化校验），**不是**注册中心、不是 Python 装饰器
+>   - § 9 重写为 **Skill ↔ Tool ↔ Agent 三者边界说明**，明确「Skill=说明书 / Tool=扳手 / Agent=执行者」
+>   - Stage 2 SkillBasedScheduler 保留 gateway 入口薄壳，但 Skill 名字不再来自装饰器字符串
+>   - 删除 `src/selflearn/skills/builtin/*.py` 装饰器代码 → 改 `src/selflearn/skills/library.py`（loader）+ `docs/skills/` Skill 文档
 
 | 文档版本 | 修订日期 | 修订人 | 修订说明 |
 | --- | --- | --- | --- |
 | V1.0 | 2026-07-12 | 团队 | Stage 3 初稿。基于已交付的 Stage 2 后端基座，扩展到 5 个业务 Agent + Redis Stream 真流式 SSE + LLM 思考模式 + 6 张业务表。**MVP 范围——只跑通核心闭环，4 种关卡形式 / 评估模块 / TTS-ASR / 仪表盘 / 9 窗口真实内容均推到 Stage 4/5**。**项目级约束：完全不做鉴权 / 登录**（参见 [[no-auth-no-login]]）。 |
 | V1.1 | 2026-07-12 | 团队 | Patch: (a) 4 项工程漏洞修复（last_id `0-0` / timeout 120s / 裸 XREAD / Director try-except）；(b) Skill 重设 = 流程模板（去装饰器 + 去全局注册表）；(c) 新增 § 9 MCP Tool 协议层（Tool / ToolRegistry / 3 个 stub Tool） |
+| V1.2 | 2026-07-12 | 团队 | Skill 哲学对齐：完全去掉装饰器模式 → Skill = `docs/skills/<name>.md` markdown 文档，启动时 `skills/library.py` 读盘载入；§ 9 重写为 Skill ↔ Tool ↔ Agent 三者边界说明；删除 `skills/builtin/*.py` Python 装饰器代码 |
 
 ---
 
@@ -172,19 +179,23 @@ backend/
 │   │       ├── lint_json.py       # Tool: tool.lint_json（stub：jsonschema 规则校验）
 │   │       ├── fetch_template.py  # Tool: tool.fetch_template（stub：读 prompts/*.yaml）
 │   │       └── store_kp.py        # Tool: tool.store_kp（stub：本地 dict，Stage 4 接真）
-│   ├── skills/                # V1.1 重设：Skill = 流程模板（不是 Agent 注册表）
-│   │   ├── base.py            # SkillTemplate dataclass + skill_template(name) 注册到 skill_library
-│   │   └── builtin/
-│   │       ├── profile_build.py     # 流程：5 轮对话 → 写 profiles → 推 progress
-│   │       ├── plan_generate.py     # 流程：选 KP → 调 LLM → 解析 → 写 map_nodes + kp
-│   │       ├── exercise_generate.py # 流程：模板 → LLM → JSON schema → tool.lint_json
-│   │       └── review_exercise.py   # 流程：tool.lint_json + 业务规则 → verdict
-│   ├── agents/builtin/
-│   │   ├── profile_agent.py   # 新增：执行 skill.profile_build
-│   │   ├── plan_agent.py      # 新增：执行 skill.plan_generate
-│   │   ├── director_agent.py  # 新增（核心：同步序列调 Exercise + Review，含 try/except）
-│   │   ├── exercise_agent.py  # 新增：执行 skill.exercise_generate
-│   │   └── review_agent.py    # 新增：执行 skill.review_exercise
+│   ├── skills/                # V1.2 重设：Skill = markdown 文档 + Agent 加载为 prompt/约束器
+│   │   ├── library.py              # 从 docs/skills/*.md 加载 Skill 对象到进程内 skill_library
+│   │   └── loader.py              # Skill 解析（frontmatter + body）→ Skill 对象
+│   └── builtin/                # ⚠️ 重要：Skill 不在这里写代码，仅是一些具体 Skill 的 Builder/Loader 助手
+│       └── # （如 exercise_builder.py 提供「从 Skill 拿模板字段」的便捷函数）
+├── docs/skills/                # ★ Skill 的真正存储位置——markdown 文档
+│   ├── skill.exercise.generate.md   # 「如何生成合规习题」流程说明书
+│   ├── skill.review.exercise.md     # 「如何评审」流程说明书
+│   ├── skill.profile.build.md       # 「画像构建」流程说明书
+│   ├── skill.plan.generate.md       # 「藏宝图生成」流程说明书
+│   └── skill.director.start.md      # 「Director 推进」流程说明书
+├── agents/builtin/
+│   ├── profile_agent.py        # Agent 代码；通过 skills.library.get("profile.build") 加载 Skill 内容作 system prompt
+│   ├── plan_agent.py
+│   ├── director_agent.py       # 同步序列调，含 try/except（见 § 3.4）
+│   ├── exercise_agent.py
+│   └── review_agent.py
 │   ├── domain/
 │   │   ├── knowledge_point.py # 新增
 │   │   ├── map_node.py        # 新增
@@ -670,7 +681,8 @@ class ProfileRepository:
 - [ ] **LLM 抽象层**：`BaseLLMAdapter` 支持 `ChatRequest.reasoning=True`，mock + openai_compat adapter 流中能产生 `reasoning_delta` chunk
 - [ ] **Redis Stream 真流**：worker 端 `XADD` 一条 progress 后，gateway SSE `XREAD` 立即收到（< 200ms）；游标从 `0-0` 起步，连上前已写入的事件全部能拿到
 - [ ] **评审 Agent**：能拒收 JSON 非法 / 题目重复 / 答案格式错误的习题集合
-- [ ] **Skill 模板化**：去掉全局 `@skill()` 装饰器；Agent 直接 import `SkillTemplate` 对象引用（如 `skill_profile_build`），不在字符串里寻路
+- [ ] **Skill markdown 化（V1.2）**：`docs/skills/skill.exercise.generate.md` 等 Skill 文档存在；`skills.library.load_all()` 启动时读盘；Agent 通过 `skill_library.get(name)` 加载 Skill.body 作为 LLM system prompt
+- [ ] **Skill 与 Tool 边界**：Agent 同时使用 Skill（注入 prompt）和 Tool（拿数据/做校验），二者**不混合** —— Skill 不调 ToolRegistry，Tool 不注入 prompt
 - [ ] **MCP Tool 协议**：`tools/protocol.py` 提供 `Tool` 接口与 `ToolRegistry.call()`；3 个 stub Tool（`tool.lint_json` / `tool.fetch_template` / `tool.store_kp`）已注册；Exercise Agent 通过 `ToolRegistry` 调 lint_json（不直连 jsonschema）
 - [ ] **JSONB 字段**：单测覆盖 — `dimensions` 字典就字段序更新可被刷出
 - [ ] `level_completions` 表写入字段齐全（score / duration_seconds / answers / metrics）
@@ -736,11 +748,247 @@ class ProfileRepository:
 
 ---
 
-## 9. MCP Tool 协议层（V1.1 补节）
+## 9. Skill 与 MCP Tool 协边界说明（V1.2 重设）
 
-> **Stage 3 起，MCP Tool 不能继续是占位壳了。** 理由：Exercise / Review / Plan Agent 都依赖**与外部数据 / 系统交互**（题目模板加载、JSON lint、向量写库），这些能力如果写死在 Agent 里，下一阶段加新工具得改 Agent 代码。把 Tool 抽成 MCP 协议层，Agent 仅依赖 `ToolRegistry`，Stage 4 接真 MCP server 时零改动。
+> 本节解决两件事：(a) **Skill 在本项目中到底是什么**；(b) **MCP Tool 协议契约**。这两个问题之前混在一起，导致第一稿把 Skill 设计成"装饰器 + 全局注册表"，错位。V1.2 重设基于 `superpowers:writing-skills` 的设计哲学——Skill 是**给未来 agent 的可复用参考指南**，不是 Python 装饰器。
 
-### 9.1 Tool 协议契约
+### 9.1 Skill = Markdown 说明书 + Agent 加载器
+
+**Skill 在本项目中是「Agent 行为约束器」**，具体含义：
+
+- **形态**：`docs/skills/<skill_name>.md` 的 markdown 文件，含 YAML frontmatter + Markdown 正文
+- **职责**：告诉 Agent "做这件事时按这个规范来" —— 通过 **prompt 注入** + **结构化约束** 两种方式
+- **生命周期**：进程启动时由 `skills/library.py` 读盘载入为 `Skill` 对象到 `skill_library` 单例
+- **调用**：Agent 通过 `skill_library.get("skill.exercise.generate")` 拿到 Skill 对象，**用 Skill.body 作为 system prompt**，用 Skill.output_schema / validation_rules 作为 LLM 输出的结构化校验
+
+**示例 Skill 文档**（`docs/skills/skill.exercise.generate.md`）：
+
+```markdown
+---
+name: skill.exercise.generate
+description: Use when generating exercises from a knowledge point. Output must match exercise schema and pass tool.lint_json before persistence.
+tags: [stage3, exercise, generation]
+output_schema: schemas/exercise.schema.json
+---
+
+# Skill: 生成合规习题
+
+## Steps
+1. Call `tool.fetch_template(name="exercise_generation_v1")` to load prompt template.
+2. Build ChatRequest with `reasoning=True` and the template as system prompt.
+3. Parse LLM JSON output (may need extract-from-fence helper).
+4. Validate via `tool.lint_json(payload=parsed, schema="exercise")`. If fail: retry once, otherwise raise `EXERCISE_INVALID`.
+5. Return list of Exercise ORM objects.
+
+## Output Schema
+See `schemas/exercise.schema.json` — required fields: exercise_type, prompt, options, correct_answer, difficulty (1-3), score.
+
+## Validation Rules
+- No duplicate prompts within one batch.
+- Difficulty must be in 1..3.
+- For `single_choice`: `options` length == 4 and exactly one matches `correct_answer`.
+- For `code`: `correct_answer` must contain a Python `def` or `class` definition.
+
+## Common Mistakes
+- LLM returns prose around JSON — wrap parsing in try/except with fence extraction.
+- Difficulty gradient skipped — keep 1 (easy) / 2 (medium) / 3 (hard) in roughly even split.
+```
+
+**Agent 加载 Skill 的代码形态**：
+
+```python
+# skills/library.py
+from pathlib import Path
+import frontmatter  # python-frontmatter package
+from selflearn.core.logging import get_logger
+
+log = get_logger("skills")
+
+class Skill:
+    def __init__(self, name: str, description: str, body: str, output_schema_path: str | None):
+        self.name = name
+        self.description = description
+        self.body = body
+        self.output_schema_path = output_schema_path
+
+
+_skill_library: dict[str, Skill] = {}
+
+
+def load_all(skills_dir: Path = Path("docs/skills")) -> None:
+    """进程启动时调一次。"""
+    for md_path in skills_dir.glob("*.md"):
+        post = frontmatter.load(md_path)
+        if "name" not in post.metadata:
+            log.warning("skills.skip_missing_name", path=str(md_path))
+            continue
+        skill = Skill(
+            name=post.metadata["name"],
+            description=post.metadata.get("description", ""),
+            body=post.content,
+            output_schema_path=post.metadata.get("output_schema"),
+        )
+        _skill_library[skill.name] = skill
+    log.info("skills.loaded", count=len(_skill_library))
+
+
+def get(name: str) -> Skill:
+    if name not in _skill_library:
+        raise KeyError(f"skill_not_loaded:{name}（需在 docs/skills/{name}.md 加文档，或调 load_all()）")
+    return _skill_library[name]
+```
+
+**Agent 用 Skill 的代码形态**：
+
+```python
+# agents/builtin/exercise_agent.py
+from selflearn.agents.base import AbstractAgent
+from selflearn.core.envelope import Envelope
+from selflearn.llm.registry import llm_registry
+from selflearn.skills.library import get as get_skill
+from selflearn.tools.protocol import ToolRegistry
+
+
+class ExerciseAgent(AbstractAgent):
+    agent_id = "exercise-01"
+
+    async def run_sync(self, env: Envelope, node) -> list:
+        skill = get_skill("skill.exercise.generate")  # 加载 Skill 文档
+
+        # 1. 取模板
+        tmpl = await ToolRegistry.call("tool.fetch_template", name="exercise_generation_v1")
+
+        # 2. system prompt = Skill.body + 模板（Skill 是约束器，模板是参数）
+        req = ChatRequest(
+            messages=[ChatMessage(role="user", content=f"node_id={node.node_id}, kp_title={node.kp.title}")],
+            system=skill.body + "\n\n" + tmpl.data["content"],
+            reasoning=True,
+        )
+
+        # 3. LLM 调用
+        raw = await llm_registry.default().chat(req)
+
+        # 4. Skill 自带 output_schema → 转 tool.lint_json 参数校验
+        lint = await ToolRegistry.call("tool.lint_json", payload=raw, schema="exercise")
+        if not lint.ok:
+            raise AppError(ErrorCode.EXERCISE_INVALID, lint.error)
+
+        # 5. 反序列化入库
+        ...
+```
+
+### 9.2 MCP Tool 协议层
+
+> **Stage 3 起，MCP Tool 不能继续是占位壳了。** Tool 与 Skill 分工：Tool 是 Agent 与外部数据 / 系统交互的**能力协议层**，Skill 是约束 Agent 行为的**文档**。Agent 在 Skill 约束的步骤里调 Tool 拿数据。
+
+**Tool 协议契约**：
+
+```python
+# tools/protocol.py
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any
+
+@dataclass
+class ToolResult:
+    ok: bool
+    data: Any = None
+    error: str | None = None
+
+
+class Tool(ABC):
+    """MCP Tool = 一项可调用能力。Agent 通过 ToolRegistry.call() 调。"""
+
+    tool_name: str
+    description: str
+
+    @abstractmethod
+    async def call(self, **kwargs: Any) -> ToolResult:
+        ...
+
+
+class ToolRegistry:
+    _tools: dict[str, Tool] = {}
+
+    @classmethod
+    def register(cls, tool: Tool) -> None:
+        cls._tools[tool.tool_name] = tool
+
+    @classmethod
+    async def call(cls, name: str, **kwargs: Any) -> ToolResult:
+        tool = cls._tools.get(name)
+        if not tool:
+            return ToolResult(ok=False, error=f"tool_not_found:{name}")
+        try:
+            return await tool.call(**kwargs)
+        except Exception as e:  # noqa: BLE001
+            return ToolResult(ok=False, error=repr(e))
+
+
+_register_default_tools()  # 在 tools/builtin/*.py 里完成
+```
+
+**Stage 3 必须落地的 3 个 stub Tool**：
+
+| Tool 名 | 职责 | MVP stub 实现 | Stage 4 升级 |
+|---------|------|----------------|--------------|
+| `tool.lint_json` | 校验题目 JSON 是否合法 | `jsonschema` 包对照 `schemas/exercise.schema.json` 校验 | 接 MCP `jsonschema` server |
+| `tool.fetch_template` | 拉取题目 / 评审模板（YAML） | 读 `selflearn/prompts/*.yaml` 本地文件 | 接 MinIO / 配置中心 |
+| `tool.store_kp` | 知识点写库 | 直接调 SQLAlchemy repo 插表 | 接向量库（Qdrant）+ PG 双写 |
+
+**关键约束**：
+- Agent 调 Tool 不经过 RabbitMQ / LLM function_call；纯 Python `await` 调用
+- Tool 是**能力复用单元**，不是 Agent 之间通信的载体
+- Stage 4 接真 MCP server 时，仅替换 `ToolRegistry._tools` 来源，Agent 代码 0 改动
+
+### 9.3 Skill ↔ Tool ↔ Agent 三者边界
+
+| 维度 | Skill（markdown 文档） | Tool（可调用能力） | Agent（代码逻辑） |
+|------|------------------------|---------------------|-------------------|
+| 形态 | `.md` 文件 + frontmatter | Python 类继承 `Tool` | Python 类继承 `AbstractAgent` |
+| 关心什么 | "做这件事按什么规范" | "我能提供什么能力" | "我要做什么、怎么做" |
+| 注册到 | `skill_library`（启动时读盘） | `ToolRegistry`（启动时注册） | DI 容器 / 模块级单例 |
+| 调用方 | Agent 调 `skill_library.get(name)` | Agent 调 `ToolRegistry.call(name, **kwargs)` | — |
+| LLM 关系 | Skill.body 注入到 system prompt | Tool 通常不调 LLM（除非 tool 自己需要） | Agent 组合 Skill + Tool 完成工作 |
+| 失败模式 | Skill 文档缺失 → KeyError | Tool 不存在 → 返回 ToolResult(ok=False) | Agent 处理 ToolResult.ok 失败重试或抛 AppError |
+| Stage 3 示例 | `docs/skills/skill.exercise.generate.md` | `LintJsonTool` 类 | `ExerciseAgent.run_sync()` |
+
+**三者协作示例**（Exercise Agent 出题）：
+
+```
+Agent (ExerciseAgent.run_sync)
+  │
+  │ 1. skill_library.get("skill.exercise.generate") → Skill 对象
+  │      │
+  │      └── Skill.body + output_schema 用于 step 2/3/4
+  │
+  │ 2. ToolRegistry.call("tool.fetch_template") ─────────────► Tool (FetchTemplateTool)
+  │
+  │ 3. llm_registry.default().chat(req with Skill.body as system)  ◄── LLM
+  │
+  │ 4. ToolRegistry.call("tool.lint_json") ────────────────────► Tool (LintJsonTool)
+  │      │
+  │      └── 用 Skill.output_schema 指定的 schema 校验输出
+  │
+  ▼
+入库 exercises 表
+```
+
+**Skill 与 Tool 的核心区分**：
+- **Skill 是规范**（"按这个流程做"）—— Agent 用 Skill 约束**自己**的行为
+- **Tool 是能力**（"这个能力我可以调用"）—— Agent 用 Tool **拿数据或做校验**
+
+### 9.4 与 Stage 2 SkillBasedScheduler 衔接
+
+Stage 2 的 `SkillBasedScheduler`（`agents/scheduler.py`）是个**gateway 入口薄壳**：HTTP 请求带 envelope 进来 → scheduler 看 `target.id` 决定交给哪个 Agent.handle。本质是个**字符串路由表**。
+
+V1.2 重设不破坏 Stage 2，**只改变 Skill 的组织方式**：
+- Stage 2：`@skill("name")` 装饰器 + 全局 `skill_registry.register()` —— 这是错误的设计
+- Stage 3 V1.2：`docs/skills/<name>.md` markdown 文档 + 启动时 `skills.library.load_all()` 读盘
+
+Stage 2 的 SkillBasedScheduler 仍可用，但 `skill.name` 字段不再来自装饰器字符串，而来自 `envelope.target.id` → 与 `docs/skills/<id>.md` 文件名匹配。
+
+---
 
 ```python
 # tools/protocol.py
@@ -796,124 +1044,8 @@ class ToolRegistry:
             return ToolResult(ok=False, error=repr(e))
 
 
-# 模块加载时注册 stub 工具
 _register_default_tools()  # 在 tools/builtin/*.py 里完成
 ```
-
-### 9.2 Stage 3 必须落地的 3 个 stub Tool
-
-| Tool 名 | 职责 | MVP stub 实现 | Stage 4 升级 |
-|---------|------|----------------|--------------|
-| `tool.lint_json` | 校验题目 JSON 是否合法（schema 约束） | 用 `jsonschema` 包对照 `schemas/exercise.schema.json` 校验 | 接 MCP `jsonschema` server |
-| `tool.fetch_template` | 拉取题目 / 评审模板（YAML） | 读 `selflearn/prompts/*.yaml` 本地文件 | 接 MinIO / 配置中心 |
-| `tool.store_kp` | 知识点写库 | 直接调 SQLAlchemy repo（KP 表插入） | Stage 4 接向量库（Qdrant）+ PG 双写 |
-
-**stub 实现示例（tool.lint_json）**：
-
-```python
-# tools/builtin/lint_json.py
-import jsonschema
-from selflearn.tools.protocol import Tool, ToolResult
-
-EXERCISE_SCHEMA: dict = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "required": ["exercise_type", "prompt", "correct_answer", "difficulty", "score"],
-        "properties": {
-            "exercise_type": {"enum": ["single_choice", "fill_blank", "short_answer", "code"]},
-            "prompt": {"type": "string", "minLength": 5},
-            "options": {"type": "array"},
-            "correct_answer": {"type": "string", "minLength": 1},
-            "difficulty": {"type": "integer", "minimum": 1, "maximum": 3},
-            "score": {"type": "number", "minimum": 0.5, "maximum": 3.0},
-        },
-    },
-}
-
-
-class LintJsonTool(Tool):
-    tool_name = "tool.lint_json"
-    description = "用 jsonschema 校验 LLM 输出的 JSON 是否符合业务 schema"
-
-    async def call(self, *, payload: str | list | dict, schema: str = "exercise") -> ToolResult:
-        try:
-            data = json.loads(payload) if isinstance(payload, str) else payload
-        except json.JSONDecodeError as e:
-            return ToolResult(ok=False, error=f"json_decode_error:{e}")
-
-        target = {"exercise": EXERCISE_SCHEMA}.get(schema)
-        if not target:
-            return ToolResult(ok=False, error=f"unknown_schema:{schema}")
-
-        try:
-            jsonschema.validate(instance=data, schema=target)
-        except jsonschema.ValidationError as e:
-            return ToolResult(ok=False, error=f"schema_violation:{e.message}")
-
-        return ToolResult(ok=True, data={"validated_count": len(data) if isinstance(data, list) else 1})
-
-
-def _register_default_tools() -> None:
-    from selflearn.tools.protocol import ToolRegistry
-    ToolRegistry.register(LintJsonTool())
-    ToolRegistry.register(FetchTemplateTool())
-    ToolRegistry.register(StoreKPTool())
-```
-
-### 9.3 Agent 如何用 Tool（不是 LLM function_call）
-
-> **Stage 3 的 MVP 不走 LLM function_call**（避免 prompt 上下文膨胀、控制台混合）。Agent 内部用 Python 代码显式调：
-
-```python
-# agents/builtin/exercise_agent.py
-from selflearn.tools.protocol import ToolRegistry
-
-class ExerciseAgent(AbstractAgent):
-    async def run_sync(self, env: Envelope, node: MapNode) -> list[Exercise]:
-        # 1. 先取模板
-        tmpl_res = await ToolRegistry.call(
-            "tool.fetch_template", name="exercise_generation_v1"
-        )
-        if not tmpl_res.ok:
-            raise AppError(ErrorCode.INTERNAL, f"fetch_template 失败: {tmpl_res.error}")
-
-        # 2. 调 LLM 按模板生成题目
-        req = ChatRequest(
-            messages=[...],
-            system=tmpl_res.data["content"],
-            reasoning=True,
-        )
-        raw = await llm_registry.default().chat(req)
-
-        # 3. tool.lint_json 校验
-        lint_res = await ToolRegistry.call(
-            "tool.lint_json", payload=raw, schema="exercise"
-        )
-        if not lint_res.ok:
-            raise AppError(ErrorCode.EXERCISE_INVALID, lint_res.error)
-
-        # 4. 解析入库
-        ...
-```
-
-**关键约束**：
-- Agent 调 Tool 不经过 RabbitMQ / LLM 协议；纯 Python `await` 调用
-- Tool 是**能力复用单元**，不是 Agent 之间通信的载体
-- Stage 4 接真 MCP server 时，仅替换 `ToolRegistry._tools` 来源（`Tool` 实现从本地函数 → MCP `client.call(name, **kwargs)`），Agent 代码 0 改动
-
-### 9.4 与 Skill 的边界
-
-| 维度 | Skill（流程模板） | Tool（能力协议） |
-|------|-------------------|------------------|
-| 形态 | 步骤序列 + 提示词模板 | 可调用能力（schema + impl） |
-| 关心什么 | "做这件事的标准做法" | "我能做什么" |
-| 注册到 | `skill_library` | `ToolRegistry` |
-| 调用方 | Agent 内部硬编码流程 | Agent 通过 `ToolRegistry.call()` |
-| LLM 关系 | Skill 含 LLM prompt 模板 | Tool 通常不调 LLM（除非 tool 自己需要） |
-| Stage 3 举例 | `skill.exercise_generate`：5 步流程 | `tool.lint_json`：单步能力 |
-
-两者相辅相成：**Skill 是说明书，Tool 是扳手**。Skill 流程里的某一步用扳手（Tool）取数据 / 做验证。
 
 ---
 
