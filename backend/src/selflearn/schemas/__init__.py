@@ -1,0 +1,1 @@
+"""schemas 包 — Pydantic 入参出参。"""

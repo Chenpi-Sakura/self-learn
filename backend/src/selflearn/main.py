@@ -13,8 +13,18 @@ def parse_role() -> str:
 
 
 async def run_gateway() -> None:
-    # Task 11 替换为真实 uvicorn 启动
-    print("[gateway] placeholder - Task 11 will wire uvicorn here")
+    import uvicorn
+
+    from selflearn.config import get_settings
+
+    s = get_settings()
+    uvicorn.run(
+        "selflearn.gateway.app:create_app",
+        factory=True,
+        host=s.gateway_host,
+        port=s.gateway_port,
+        log_level=s.log_level.lower(),
+    )
 
 
 async def run_worker() -> None:
