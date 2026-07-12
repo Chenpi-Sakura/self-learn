@@ -21,3 +21,16 @@ class LLMRegistry:
 
 
 llm_registry = LLMRegistry()
+
+
+def _register_default_adapters() -> None:
+    """模块加载时注册默认 provider（mock），保证 worker / 单测都能调 llm_registry.default()。
+
+    通过延迟导入避免 llm 包内部循环依赖。
+    """
+    from selflearn.llm.adapters.mock import MockLLMAdapter
+
+    llm_registry.register(MockLLMAdapter())
+
+
+_register_default_adapters()

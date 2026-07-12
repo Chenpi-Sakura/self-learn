@@ -28,8 +28,25 @@ async def run_gateway() -> None:
 
 
 async def run_worker() -> None:
-    # Task 12 替换为真实 aio-pika consumer
-    print("[worker] placeholder - Task 12 will wire aio-pika consumer here")
+    """Worker 进程入口：setup_logging + setup_tracing + register skill + register_agent + consume。
+
+    LLM adapter 由 selflearn.llm.registry 模块加载时自动注册（MockLLMAdapter），
+    所以这里不需要显式 register。PingAgent.run() 调 llm_registry.default() 即可拿到 mock。
+    """
+    from selflearn.agents.worker import register_agent, run_worker as consume_loop
+    from selflearn.config import get_settings
+    from selflearn.core.logging import setup_logging
+    from selflearn.core.tracing import setup_tracing
+    from selflearn.infra.rabbit import setup_topology
+    from selflearn.skills.builtin.ping import agent_info, register as register_skill
+
+    s = get_settings()
+    setup_logging(s.log_level)
+    setup_tracing(s.otel_service_name + "-worker", s.otel_exporter_otlp_endpoint)
+    register_skill()
+    await setup_topology()
+    register_agent(agent_info())
+    await consume_loop(queue_name="agent.ping.work", routing_key="ping_agent.#")
 
 
 def main() -> int:
