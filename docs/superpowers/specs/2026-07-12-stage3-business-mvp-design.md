@@ -327,7 +327,7 @@ class DirectorAgent(AbstractAgent):
     所以：任何异常必须捕获 → 推送 FAILED 进度 → 抛 AppError 让上层记录 trace。
     """
     agent_id = "director-01"
-    skills = ["skill.director.start"]
+    # 注：Agent 类不声明 skills = [...]。Skill 在 run() 内通过 skill_library.get(...) 动态获取。
 
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
