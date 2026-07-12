@@ -1,0 +1,16 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["exercise_type", "prompt", "correct_answer", "difficulty", "score", "explanation"],
+    "properties": {
+      "exercise_type": {"enum": ["single_choice", "fill_blank", "short_answer", "code"]},
+      "prompt": {"type": "string", "minLength": 5},
+      "options": {"type": "array"},
+      "correct_answer": {"type": "string", "minLength": 1},
+      "explanation": {"type": "string"},
+      "difficulty": {"type": "integer", "minimum": 1, "maximum": 3},
+      "score": {"type": "number", "minimum": 0.5, "maximum": 3.0}
+    }
+  }
+}

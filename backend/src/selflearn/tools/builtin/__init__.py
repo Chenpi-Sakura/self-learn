@@ -1,0 +1,1 @@
+"""Tool stubs（Stage 3 MVP，Stage 4 接真 MCP server）。"""

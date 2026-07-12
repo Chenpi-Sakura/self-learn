@@ -26,6 +26,8 @@ dependencies = [
     "opentelemetry-instrumentation-httpx>=0.45b0",
     "python-json-logger>=2.0",
     "structlog>=24.1",
+    "jsonschema>=4.26.0",
+    "types-jsonschema>=4.26.0.20260518",
 ]
 
 [project.optional-dependencies]
