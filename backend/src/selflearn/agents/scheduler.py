@@ -4,35 +4,29 @@ Stage 3 V1.3 路由改造（Rule #13 第四子规则）：
 - 主路径：`_AGENT_FOR_SKILL[target.id]`（仅 target.id，不读 skills 字段、不读装饰器）。
 - 缺失回退：`skill_registry.match(target.id)`（保留 Stage 2 `skill.profile.init`）。
 - 都没有：抛 NotImplementedError，明确指出尚未实现的 Agent 类。
-- Stage 3 Agent 尚未落地 → `_AGENT_FOR_SKILL` 5 个键先以 `None` 占位（Task 7-11 实装）
-  ，避免循环依赖与 stub 噪音。
+- Stage 3 Agent 全部实装（Task 7-11）→ `_AGENT_FOR_SKILL` 5 个键映射到真实 Agent 类。
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from selflearn.agents.base import AbstractAgent
+from selflearn.agents.builtin.director_agent import DirectorAgent
+from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+from selflearn.agents.builtin.plan_agent import PlanAgent
+from selflearn.agents.builtin.profile_agent import ProfileAgent
+from selflearn.agents.builtin.review_agent import ReviewAgent
 from selflearn.core.envelope import Envelope
 from selflearn.skills.base import skill_registry
-
-if TYPE_CHECKING:
-    from selflearn.agents.builtin.profile_agent import ProfileAgent  # noqa: F401, TCH004  # Task 7
-    from selflearn.agents.builtin.plan_agent import PlanAgent  # noqa: F401, TCH004  # Task 8
-    from selflearn.agents.builtin.exercise_agent import ExerciseAgent  # noqa: F401, TCH004  # Task 9
-    from selflearn.agents.builtin.review_agent import ReviewAgent  # noqa: F401, TCH004  # Task 10
-    from selflearn.agents.builtin.director_agent import DirectorAgent  # noqa: F401, TCH004  # Task 11
 
 
 # Stage 3 routing map (Rule #13 第四子规则):
 # - 仅 envelope.target.id 命中此表 → 走 Agent class（无装饰器，无 skills 字段依赖）。
-# - 5 个值暂为 None，避免 Task 4 提前依赖 Task 7-11 Agent 模块造成循环。
-#   每个 None 必须在对应 Agent 实装时替换为 `MyAgent` 类（Task 7 / 8 / 9 / 10 / 11）。
+# - 5 个值已实装（Task 7-11），全部映射到对应的 Agent 类。
 _AGENT_FOR_SKILL: dict[str, type[AbstractAgent] | None] = {
-    "skill.profile.build": None,      # TODO Task 7: ProfileAgent
-    "skill.plan.generate": None,      # TODO Task 8: PlanAgent
-    "skill.exercise.generate": None,  # TODO Task 9: ExerciseAgent
-    "skill.review.exercise": None,    # TODO Task 10: ReviewAgent
-    "skill.director.start": None,     # TODO Task 11: DirectorAgent
+    "skill.profile.build": ProfileAgent,    # Task 7
+    "skill.plan.generate": PlanAgent,        # Task 8
+    "skill.exercise.generate": ExerciseAgent, # Task 9
+    "skill.review.exercise": ReviewAgent,    # Task 10
+    "skill.director.start": DirectorAgent,   # Task 11
 }
 
 
