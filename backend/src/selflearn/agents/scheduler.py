@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from selflearn.agents.builtin.plan_agent import PlanAgent  # noqa: F401, TCH004  # Task 8
     from selflearn.agents.builtin.exercise_agent import ExerciseAgent  # noqa: F401, TCH004  # Task 9
     from selflearn.agents.builtin.review_agent import ReviewAgent  # noqa: F401, TCH004  # Task 10
-    from selflearn.agents.builtin.director_agent import DirectorAgent  # type: ignore[import-untyped]  # noqa: F401, TCH004  # Task 11
+    from selflearn.agents.builtin.director_agent import DirectorAgent  # noqa: F401, TCH004  # Task 11
 
 
 # Stage 3 routing map (Rule #13 第四子规则):
