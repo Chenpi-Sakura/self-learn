@@ -67,4 +67,5 @@ ignore_missing_imports = true
 [dependency-groups]
 dev = [
     "aiosqlite>=0.22.1",
+    "fakeredis>=2.36.2",
 ]
