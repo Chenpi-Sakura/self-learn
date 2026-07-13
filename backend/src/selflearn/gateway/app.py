@@ -48,6 +48,13 @@ def create_app() -> FastAPI:
     app.include_router(map_router)
     app.include_router(level_router)
 
+    # Stage 4: AOP /debug/state 路由（spec § 6.5 + § 10.7，plan T5）
+    # 仅在 settings.debug=True 时挂载；生产场景（DEBUG 不设）返回 404，零暴露面。
+    if s.debug:
+        from selflearn.observability.routes import router as debug_router
+
+        app.include_router(debug_router)
+
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         trace_id = request.headers.get("x-trace-id")
