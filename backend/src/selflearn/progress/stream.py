@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from selflearn.infra.redis_client import get_redis
+from selflearn.observability.decorators import hook
 from selflearn.progress.stages import ProgressEvent
 
 
@@ -12,6 +13,7 @@ PROGRESS_STREAM_PREFIX = "stream:"
 PROGRESS_STREAM_TTL_SECONDS = 3600
 
 
+@hook("progress.publish")
 async def progress_publish(trace_id: str, event: ProgressEvent) -> None:
     """worker 任意代码点调用，往 stream:{trace_id} 写一条进度。"""
     r = get_redis()

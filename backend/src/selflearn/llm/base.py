@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
+from selflearn.observability.decorators import hook_stream
+
 
 @dataclass
 class ChatMessage:
@@ -50,3 +52,16 @@ class BaseLLMAdapter(ABC):
 
     @abstractmethod
     async def health(self) -> bool: ...
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        """所有 LLM adapter 子类自动给 chat_stream() 装 @hook_stream('llm.call')。
+
+        用 cls.__dict__.get 只取当前类直接定义的版本（不沿父类链拿已装饰版本），
+        再用 _is_hook_wrapped 标记防重复包装。
+        """
+        super().__init_subclass__(**kwargs)
+        original = cls.__dict__.get("chat_stream")
+        if original is not None and not getattr(original, "_is_hook_wrapped", False):
+            wrapped = hook_stream("llm.call")(original)
+            wrapped._is_hook_wrapped = True  # type: ignore[attr-defined]
+            cls.chat_stream = wrapped  # type: ignore[method-assign]

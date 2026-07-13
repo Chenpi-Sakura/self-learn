@@ -6,11 +6,13 @@ import aio_pika
 from selflearn.core.envelope import Envelope
 from selflearn.core.tracing import get_tracer
 from selflearn.infra.rabbit import EXCHANGE_EVENTS, get_connection
+from selflearn.observability.decorators import hook, hook_stream
 
 
 Callback = Callable[[Envelope], Awaitable[None]]
 
 
+@hook("envelope.publish")
 async def publish_envelope(envelope: Envelope, routing_key: str) -> None:
     conn = await get_connection()
     ch = await conn.channel()
@@ -30,6 +32,7 @@ async def publish_envelope(envelope: Envelope, routing_key: str) -> None:
     await ch.close()
 
 
+@hook_stream("envelope.consume")
 async def consume_envelope(
     queue_name: str,
     routing_key: str,
