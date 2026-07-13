@@ -12,6 +12,8 @@ from selflearn.core.errors import AppError
 from selflearn.core.logging import get_logger
 from selflearn.core.tracing import setup_tracing
 from selflearn.gateway.routes import health, profile
+from selflearn.gateway.routes.level import router as level_router
+from selflearn.gateway.routes.map import router as map_router
 from selflearn.infra.rabbit import setup_topology
 from selflearn.skills.builtin.ping import register as register_ping_skill
 
@@ -33,6 +35,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="selflearn-gateway", version="0.1.0", lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(profile.router)
+    app.include_router(map_router)
+    app.include_router(level_router)
 
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
