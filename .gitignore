@@ -9,10 +9,10 @@ build/
 *.tsbuildinfo
 
 # TypeScript emit artifacts in source tree (we use noEmit, but defensive)
-demo-serif/src/**/*.js
-demo-serif/src/**/*.d.ts
-demo-serif/vite.config.js
-demo-serif/vite.config.d.ts
+frontend/src/**/*.js
+frontend/src/**/*.d.ts
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # editor
 .vscode/
@@ -35,4 +35,4 @@ npm-debug.log*
 *.shot.png
 
 # development screenshots
-demo-serif-*.png
+frontend-*.png

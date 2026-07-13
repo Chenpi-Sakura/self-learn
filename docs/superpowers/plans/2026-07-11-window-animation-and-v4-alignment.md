@@ -1,6 +1,8 @@
 # 窗口动画 + 附录 A 对齐 v4 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Stage 4 T1 重命名注（2026-07-13）**：本文档原工程目录为 `demo-serif/`，Stage 4 T1 已重命名为 `frontend/`。下方所有 `demo-serif/` 字串保留原貌以保持历史准确性。
 
 **Goal:** 给 demo-serif 补全 4 类窗口过渡动画（最大化/还原/最小化收 Dock/关闭淡出），并按 spec 实施附录 A 10 项决策（v4 文档 + 7 批代码重构）
 

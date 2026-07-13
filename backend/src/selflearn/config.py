@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     gateway_host: str = "0.0.0.0"
     gateway_port: int = 8000
     log_level: str = "INFO"
+    # Stage 4: AOP /debug/state 路由挂载开关（spec § 10.7 + plan T1）
+    debug: bool = False
 
     @property
     def postgres_dsn(self) -> str:

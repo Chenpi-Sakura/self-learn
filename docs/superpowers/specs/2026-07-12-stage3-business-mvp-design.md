@@ -66,7 +66,7 @@
 | **LLM 思考模式抽象** | `ChatRequest.reasoning` + `ChatRequest.reasoning_budget`；`ChatChunk.reasoning_delta`；adapter 解析 `reasoning_content` |
 | **评审 Agent（规则过滤）** | JSON 合法性 / 题目唯一性 / 答案格式 / 难度梯度 |
 | **REST 端点（MVP 子集）** | profile build / map generate / level start / submit / status / stream |
-| **Seed 数据** | 从 demo-serif 现有 Map 节点抽 5-10 个知识点 + 关卡结构 |
+| **Seed 数据** | 从 frontend（原 demo-serif）现有 Map 节点抽 5-10 个知识点 + 关卡结构 |
 | **`scripts/smoke_mvp.sh`** | 端到端跑通：build → SSE 收 6 段 progress → submit → score |
 | **测试** | 单元 + 集成（testcontainers 起真实 Redis Stream 跑通） |
 | **可观测性** | OTel + Jaeger，5 个 Agent 全链路 trace |
@@ -160,7 +160,7 @@ backend/
 ├── scripts/
 │   ├── smoke_mvp.sh                          ← 新增：MVP 闭环端到端
 │   ├── smoke.sh                              ← Stage 2 已建，仍跑
-│   └── seed_map.py                           ← 新增：从 demo-serif 抽 5-10 个知识点
+│   └── seed_map.py                           ← 新增：从 frontend（原 demo-serif）抽 5-10 个知识点
 ├── src/selflearn/
 │   ├── core/
 │   │   ├── envelope.py        # 修改：action 增加 progress 子集枚举（可选，仅文档）

@@ -1,6 +1,8 @@
 # Notion × UKIYO Serif Demo Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Stage 4 T1 重命名注（2026-07-13）**：本文档原 Working directory 为 `D:\Projects\SelfLearn\demo-serif\`，Stage 4 T1 已将工程目录重命名为 `D:\Projects\SelfLearn\frontend\`。下方所有 `demo-serif/` 路径串保留原貌以保持历史准确性；实际后续 Stage 文档使用 `frontend/`。
 
 **Goal:** Build `D:\Projects\SelfLearn\demo-serif\` — a Vite + React + TS desktop-style workspace demo combining Notion structural language with UKIYO indigo+vermilion palette and all-serif fonts (FlyFlower Song + Hedvig Letters Serif), with light drag/hover/layout-switch interactions.
 
