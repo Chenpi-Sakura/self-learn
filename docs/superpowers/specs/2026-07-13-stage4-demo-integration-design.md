@@ -95,6 +95,14 @@
 | 18 | **AOP Hook 注入方式** | **装饰器包装原函数**（`@hook("kind")` 包裹实现，业务函数保持原签名） | monkey-patch / 中间件 / 上下文管理器 / 切面框架 | 零业务代码改动；保留原函数可单元测试；可观测层独立可禁用 |
 | 19 | **Hook 暴露形式** | RingBuffer（最近 500 条，进程内 deque）+ `/debug/state` GET 路由（仅 `settings.debug=True` 时挂载） | 写本地文件 / 推 Redis Stream / 调试页面 | 仅供开发期用；零外部依赖；MCP `list_network_requests` 可直接看 |
 
+### 2.3 关联选型（Stage 4 锁定）
+
+- **LLM Provider（默认）**：DeepSeek（OpenAI 兼容、有 reasoning_content、便宜）— 配置走 `OPENAI_BASE_URL=https://api.deepseek.com/v1` + `OPENAI_MODEL=deepseek-chat`。亦可换 OpenAI / 通义千问任一兼容 endpoint
+- **凭证管理**：`backend/.env`（pydantic-settings 读取），`OPENAI_API_KEY` 缺失时自动 fallback 到 Mock adapter（详见 § 10.7）
+- **雷达图库**：recharts（含 RadarChart，统一用于雷达图 + 演变折线图）
+- **动画库**：framer-motion（补间动画，0.5s 闪光 + 数值过渡）
+- **窗口拖拽库**：react-rnd（§ 2.2 决策 #16）
+
 ---
 
 ## 3. 架构与目录
@@ -604,6 +612,141 @@ useEffect(() => {
 
 ---
 
+## 10. 已知风险与硬骨头（前置到 spec，避免 Plan 阶段返工）
+
+> 本节列出 **4 个真实工程障碍 + 3 个隐藏成本**，每项标明**修法**与**触发位置**。不视为额外 scope，视为实现 spec 必备。
+
+### 10.1 CORS（FastAPI 跨域 middleware 缺失）
+
+**问题**：Stage 2/3 后端从未被前端调用，`gateway/app.py` **没有配 CORSMiddleware**。`frontend/`（默认 `localhost:5173`）调 `localhost:8000` 浏览器立刻报 CORS 错误。
+
+**修法**（强制 — Plan 第 1 task 必做）：
+```python
+# gateway/app.py — create_app() 内 create 之前
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Vite dev
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+**生产环境**留 `allow_origins=["*"]` + 注释 `# STAGE5_PROD_HARDEN`（Demo 阶段不修，Stage 5+ 上生产时收紧）。
+
+**验证**：Playwright e2e 启动第一步即调后端，断言无 CORS 报错（console error 监听）。
+
+### 10.2 Vite proxy SSE buffering（流式变批量）
+
+**问题**：Vite `server.proxy` 默认会 buffer upstream response，前端调 SSE 会看到"等几秒一波"，不是真流。
+
+**修法**（Plan 阶段 frontend 启动任务必做）：
+```ts
+// vite.config.ts
+server: {
+  proxy: {
+    "/api": {
+      target: "http://localhost:8000",
+      changeOrigin: true,
+      // 关键：关掉 proxy buffer
+      configure: (proxy) => {
+        proxy.on("proxyRes", (proxyRes) => {
+          proxyRes.headers["cache-control"] = "no-cache";
+        });
+      },
+    },
+  },
+},
+```
+
+**或**前端直接打 `localhost:8000`（依赖 § 10.1 CORS 已配好）—— **Plan 阶段二选一并写明选择**。推荐前者（避免前端硬编码后端地址）。
+
+### 10.3 SSE `completed` 事件缺字段（Stage 3 真没塞）
+
+**问题**：现有 SSE 端点 `completed` 事件的 `payload` 来源于 `progress_publish()` 写入内容。Stage 3 的 `ProfileAgent.run()` 末尾 publish 时**只塞了 status / 没有 profile 完整 JSON**，前端只能从进度事件里捞数据。
+
+**修法**（Plan 阶段必修 + integration test 验证）：
+- 改 `profile_agent.py` 末尾 publish：`payload={"profile": profile}`（spec § 5.1 已写明，必须配套**集成测试**验证 SSE 流上确实能拿到）
+- 改 `director_agent.py` 末尾 publish：`payload={"level_id": ..., "exercise_ids": [...]}`（spec § 5.1 已写明）
+
+**验证**：在 `tests/integration/test_api_gaps.py` 写：
+```python
+async def test_profile_sse_completed_includes_full_profile():
+    """SSE completed 事件必须携带完整 profile 字段。"""
+    # POST /api/profile/build → trace_id → 订阅 SSE → 断言 completed.data.payload["profile"]["kb"] 是 float
+```
+
+### 10.4 画像动画选型（雷达图库 + 补间动画，~1-2 天）
+
+**问题**：spec § 7.4 一句话"0.5s 闪光 + 数值过渡"背后是 4 个真实子决策：
+1. 雷达图库选型：**recharts**（包大、易用）/ **chart.js + chartjs-plugin-radar**（轻）/ **D3 自撸**（灵活但贵）。v4 spec 未指定。
+2. 6 维数据 → 雷达图坐标映射（sin/cos）
+3. 旧值 → 新值补间：CSS transition / framer-motion / RAF lerp
+4. 演变迷你折线图：Recharts 还是 Chart.js（影响 bundle size）
+
+**修法**（Plan 阶段 frontend 任务展开）：
+- 默认选 **recharts**（含 RadarChart）+ **framer-motion**（补间）—— 包大但 Demo 阶段不在意
+- 配色与 UKIYO 调色板对齐：`#1B3B6F`（靛蓝，雷达图轮廓）/ `#BC4749`（朱红，当前节点强调）/ `#F7F5EF`（米白纸，背景）
+- 演变折线图同样 recharts（统一库）
+
+**诚实工程评估**：UI 动画工程量 ≈ 200-300 行 + 1-2 天调试（含边界值、维度归一化、深色模式回退）。spec § 附录 A 的"~1200 行前端代码"上调为 **1800-2200 行**。
+
+### 10.5 隐藏成本 #1：demo-serif → frontend 重命名引用更新
+
+**范围**：`git mv demo-serif frontend` 后**至少有 4-6 处引用需更新**：
+- `.gitignore`（如有 demo-serif 路径）
+- `README.md`（如有 demo-serif 章节）
+- `backend/scripts/smoke_mvp.sh`（如有 demo-serif 引用）
+- `backend/scripts/seed_map.py`（注释里引用 demo-serif 作为 demo 来源）
+- `docs/产品需求修订说明.md` / v4 spec / Stage 3 spec 中的旧名引用
+- `.claude/CLAUDE.md` 或项目内任何 `demo-serif` 字符串
+
+**修法**：Plan 第 1 task 必做；`git grep -l demo-serif` 全量扫描一遍。
+
+### 10.6 隐藏成本 #2：student_id 多用户管理
+
+**问题**：spec § 7.1 写"首次访问存 localStorage"——但 demo 期间**新用户怎么重新走一遍画像**？**多用户切换**怎么设计？
+
+**修法**（Plan 阶段展开，本 spec 锁定最小集）：
+- 主路径：localStorage 存 `student_id`（UUID），首次访问 `crypto.randomUUID()` 生成
+- 提供 **"重置 demo" 按钮**（Demo 顶部右下角小图标）：点击 → 清 localStorage → 重新生成 `student_id` → 清 SSE 订阅
+- **不做**：用户登录、用户切换、用户列表（v4 spec 后续阶段）
+- **不做**：学生身份持久化到后端（DB `students` 表仅业务字段，不关联 token）
+
+### 10.7 隐藏成本 #3：OpenAI 凭证 .env 管理
+
+**问题**：你说"OpenAI 兼容接口"——具体哪个 provider？API key 怎么注入？
+
+**修法**（Plan 阶段 frontend/backend 启动任务同步）：
+- 在 `backend/.env.example` 加：
+  ```
+  OPENAI_API_KEY=sk-...       # DeepSeek / 通义千问 / OpenAI 任一
+  OPENAI_BASE_URL=https://api.deepseek.com/v1  # 或其他兼容 endpoint
+  OPENAI_MODEL=deepseek-chat
+  ```
+- `backend/src/selflearn/config.py` 用 `pydantic-settings` 读取（Stage 2/3 已用 pydantic，沿用模式）
+- frontend 不接触 key（SSE/REST 走后端代理，前端永远不直连 LLM provider）
+- **fallback 行为**：`OPENAI_API_KEY` 未设置时，**LlmRegistry 自动 fallback 到 Mock adapter**（Stage 3 § 9.2 已有此机制），demo 仍可启动但看到的是 mock 响应
+
+**Demo 默认推荐**：DeepSeek（便宜、中文友好、有 reasoning_content 支持）。
+
+---
+
+### 10.8 风险清单总表
+
+| # | 风险 | 触发 task | 必修？ | 验证手段 |
+|---|---|---|---|---|
+| 10.1 | CORS | Task 1 backend 启动 | ✅ 必修 | Playwright e2e 首步 |
+| 10.2 | Vite SSE buffer | Task 2 frontend 启动 | ✅ 必修 | 浏览器 Network 看 SSE chunk 时序 |
+| 10.3 | SSE 缺字段 | Task 5/6 Agent 微调 | ✅ 必修 | integration test |
+| 10.4 | 画像动画选型 | Task 8 frontend desk/ProfilePanel | ⚠️ Plan 展开 | 视觉效果走查 |
+| 10.5 | 重命名引用 | Task 1 | ✅ 必修 | `git grep demo-serif` 0 结果 |
+| 10.6 | student_id 重置 | Task 2 frontend | ⚠️ Plan 展开 | 手动测试 |
+| 10.7 | .env 凭证管理 | Task 1 backend | ✅ 必修 | `.env.example` 存在 + fallback 路径 OK |
+
+---
+
 ## 附录 A · Stage 4 与 Stage 3 工作量对比
 
 | 维度 | Stage 3 (实装) | Stage 4 (本 spec) |
@@ -614,6 +757,15 @@ useEffect(() => {
 | Agent 代码改动 | 5 个新文件 | 2 个微调（profile_agent + director_agent 末 publish 字段） |
 | 前端代码 | 0（demo-serif 静态） | ~1200 行（api/ panes/ desk/ e2e/） |
 | 测试 | unit 58 / integration 3 / Stage 2 1 | unit +18 / integration +5 / Playwright +1 |
+
+> **修订说明（诚实工程评估）**：
+> - 上方"前端代码 ~1200 行"为**乐观估计**。真实工作量含雷达图库选型与动画补间、3 窗口拖拽状态机、6 维→雷达图坐标映射等不可压缩 UI 工程。**保守估计 1800-2200 行**。
+> - 下方新增"§ 10 已知风险与硬骨头"把以下 4 项真实工程障碍**前置**到 spec：
+>   1. CORS（FastAPI 未配 → 前端必然跨域报错）
+>   2. Vite proxy SSE buffering（流式变批量）
+>   3. SSE `completed` 事件缺字段（Stage 3 真没塞，Plan 必须改 Agent + 加 integration test）
+>   4. 画像动画选型（雷达图库 + 补间动画，~1-2 天）
+> - 3 项隐藏成本：**demo-serif 重命名引用更新** / **student_id 多用户管理** / **OpenAI 凭证 .env 管理**
 
 ---
 
@@ -637,3 +789,7 @@ useEffect(() => {
 - [x] Type consistency：Stage / SSEEvent / ProfileDimensions 与 Stage 3 `progress/stages.py` 一致
 - [x] 项目级硬约束：明确声明不引入鉴权（§ 1.3）
 - [x] 与 v4 spec 一致：仅声明范围取舍，不修订 v4 正文
+- [x] 已知风险前置：4 硬骨头 + 3 隐藏成本 → § 10.1-10.7，每项含修法 + 触发 task + 验证手段
+- [x] 关联选型显式：DeepSeek / recharts / framer-motion / react-rnd → § 2.3
+- [x] 保守工程评估：前端代码 1200 → 1800-2200 行（雷达图 + 动画 + 状态机）→ 附录 A 修订说明
+- [x] Plan 阶段任务依赖清晰：§ 10.8 风险清单总表标注每个风险归属 Task
