@@ -25,6 +25,8 @@ from selflearn.domain.profile import Profile
 from selflearn.domain.profile_snapshot import ProfileSnapshot
 from selflearn.gateway.app import create_app
 from selflearn.infra.repositories.profile_repo import ProfileRepository
+from selflearn.domain.level import Level
+from selflearn.domain.exercise import Exercise
 
 
 def _make_fake_profile(student_id: uuid.UUID) -> Profile:
@@ -292,3 +294,114 @@ async def test_get_map_nodes_empty_when_no_match(app_client: AsyncClient) -> Non
     assert resp.status_code == 200
     data = resp.json()
     assert data["nodes"] == []
+
+
+def _make_fake_level(
+    level_id: uuid.UUID,
+    node_id: uuid.UUID | None = None,
+    status: str = "generated",
+) -> Level:
+    """构造未 attached 的 Level 对象（mock 返回值用）。"""
+    lv = Level(
+        node_id=node_id or uuid.uuid4(),
+        status=status,
+    )
+    lv.level_id = level_id  # 确保 PK 存在
+    return lv
+
+
+def _make_fake_exercise(
+    level_id: uuid.UUID,
+    prompt: str,
+    exercise_type: str = "single_choice",
+    options: list[str] | None = None,
+) -> Exercise:
+    """构造未 attached 的 Exercise 对象。"""
+    ex = Exercise(
+        level_id=level_id,
+        exercise_type=exercise_type,
+        prompt=prompt,
+        options=options or [],
+        correct_answer="A",
+    )
+    ex.exercise_id = uuid.uuid4()
+    return ex
+
+
+@pytest.mark.asyncio
+async def test_get_level_returns_exercises(app_client: AsyncClient) -> None:
+    """level 端点：返回关卡详情 + exercise 列表。"""
+    level_id = uuid.uuid4()
+    node_id = uuid.uuid4()
+    fake_level = _make_fake_level(level_id, node_id=node_id, status="in_progress")
+    fake_ex1 = _make_fake_exercise(
+        level_id, prompt="What is attention?", exercise_type="single_choice",
+        options=["A", "B", "C"],
+    )
+    fake_ex2 = _make_fake_exercise(
+        level_id, prompt="Explain Q/K/V.", exercise_type="short_answer",
+    )
+
+    # session.get(Level, level_id) 返回 fake_level
+    # session.execute(select(Exercise).where(...)).scalars().all() 返回 [fake_ex1, fake_ex2]
+    mock_session = AsyncMock()
+
+    async def fake_get(model: type, key: object) -> object:
+        if model is Level and key == level_id:
+            return fake_level
+        return None
+
+    mock_session.get = fake_get
+
+    mock_result = MagicMock()  # sync result, 同 T7 历史教训
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = [fake_ex1, fake_ex2]
+    mock_result.scalars.return_value = mock_scalars
+    mock_session.execute.return_value = mock_result
+
+    with patch(
+        "selflearn.gateway.routes.level.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/level/{level_id}")
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["level_id"] == str(level_id)
+    assert data["node_id"] == str(node_id)
+    assert data["status"] == "in_progress"
+    assert len(data["exercises"]) == 2
+
+    # 第一题：single_choice
+    ex1 = data["exercises"][0]
+    assert ex1["prompt"] == "What is attention?"
+    assert ex1["type"] == "single_choice"
+    assert ex1["options"] == ["A", "B", "C"]
+
+    # 第二题：short_answer + options=None
+    ex2 = data["exercises"][1]
+    assert ex2["type"] == "short_answer"
+    assert ex2["options"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_level_404_when_not_found(app_client: AsyncClient) -> None:
+    """level_id 不存在时返回 404。"""
+    level_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    async def fake_get_none(model: type, key: object) -> object:
+        return None
+
+    mock_session.get = fake_get_none
+
+    with patch(
+        "selflearn.gateway.routes.level.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/level/{level_id}")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "level_not_found"

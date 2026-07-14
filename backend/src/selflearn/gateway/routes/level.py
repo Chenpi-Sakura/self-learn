@@ -5,7 +5,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import select
@@ -18,6 +18,7 @@ from selflearn.domain.map_node import MapNode
 from selflearn.infra.bus import publish_envelope
 from selflearn.infra.db import get_session_factory
 from selflearn.progress.stream import progress_consume
+from selflearn.schemas.level import ExerciseResponse, LevelDetailResponse
 
 
 router = APIRouter(prefix="/api/level", tags=["level"])
@@ -113,3 +114,33 @@ async def submit_level(
         level.status = "completed"
         await session.commit()
     return {"status": "submitted", "score": score}
+
+
+@router.get("/{level_id}", response_model=LevelDetailResponse)
+async def get_level(level_id: uuid.UUID) -> LevelDetailResponse:
+    """Stage 4 spec § 4.3: 加载关卡详情（exercises + 题干）。"""
+    factory = get_session_factory()
+    async with factory() as session:
+        level = await session.get(Level, level_id)
+        if level is None:
+            raise HTTPException(status_code=404, detail="level_not_found")
+        exs = (
+            await session.execute(
+                select(Exercise).where(Exercise.level_id == level_id)
+            )
+        ).scalars().all()
+
+    return LevelDetailResponse(
+        level_id=level.level_id,
+        node_id=level.node_id,
+        status=level.status,
+        exercises=[
+            ExerciseResponse(
+                exercise_id=ex.exercise_id,
+                prompt=ex.prompt,
+                options=list(ex.options) if ex.options else None,
+                type=ex.exercise_type,  # ORM 字段叫 exercise_type
+            )
+            for ex in exs
+        ],
+    )
