@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, func
+from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,8 +16,8 @@ class LevelCompletion(Base):
     level_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("levels.level_id", ondelete="CASCADE"), nullable=False
     )
-    student_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False
+    student_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True
     )
     score: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)

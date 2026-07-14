@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import json
-import uuid
 from collections.abc import AsyncIterator
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/level", tags=["level"])
 
 
 class LevelStartRequest(BaseModel):
-    student_id: uuid.UUID
+    student_id: str
 
 
 class LevelSubmitRequest(BaseModel):
@@ -45,7 +45,7 @@ async def start_level(body: LevelStartRequest) -> dict[str, str]:
 
 
 @router.get("/{level_id}/stream")
-async def stream_level(level_id: uuid.UUID, trace_id: str) -> EventSourceResponse:
+async def stream_level(level_id: UUID, trace_id: str) -> EventSourceResponse:
     async def event_gen() -> AsyncIterator[dict[str, str]]:
         async for ev in progress_consume(trace_id):
             data = json.dumps(
@@ -72,9 +72,7 @@ async def stream_level(level_id: uuid.UUID, trace_id: str) -> EventSourceRespons
 
 
 @router.post("/{level_id}/submit")
-async def submit_level(
-    level_id: uuid.UUID, body: LevelSubmitRequest
-) -> dict[str, object]:
+async def submit_level(level_id: UUID, body: LevelSubmitRequest) -> dict[str, object]:
     factory = get_session_factory()
     async with factory() as session:
         # Level 没有声明 relationship；用显式 JOIN 拿 student_id
@@ -117,7 +115,7 @@ async def submit_level(
 
 
 @router.get("/{level_id}", response_model=LevelDetailResponse)
-async def get_level(level_id: uuid.UUID) -> LevelDetailResponse:
+async def get_level(level_id: UUID) -> LevelDetailResponse:
     """Stage 4 spec § 4.3: 加载关卡详情（exercises + 题干）。"""
     factory = get_session_factory()
     async with factory() as session:

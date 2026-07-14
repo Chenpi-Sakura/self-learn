@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getLevel, submitLevel } from '../api/level';
 import type { ExerciseResponse } from '../api/types';
 
-export function ExercisePane({ levelId, onClose }: { levelId: string; onClose: () => void }) {
+export function ExercisePane({ levelId }: { levelId: string }) {
   const [exercises, setExercises] = useState<ExerciseResponse[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<string | null>(null);
@@ -25,11 +25,7 @@ export function ExercisePane({ levelId, onClose }: { levelId: string; onClose: (
   };
 
   return (
-    <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid #E4E4E0', height: '100%', overflow: 'auto', fontFamily: 'HedvigLettersSerif, serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <h4 style={{ margin: 0, color: '#1B3B6F' }}>习题</h4>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
-      </div>
+    <div style={{ padding: 16, height: '100%', overflow: 'auto', fontFamily: 'HedvigLettersSerif, serif' }}>
       {exercises.length === 0 ? (
         <p style={{ color: '#6B6B70' }}>请先启动关卡</p>
       ) : (

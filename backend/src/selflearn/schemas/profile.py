@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID
-
 from pydantic import BaseModel, Field
 
 
 class ProfileInitRequest(BaseModel):
-    student_id: UUID
+    student_id: str
     topic: str = Field(min_length=1, max_length=200)
 
 
@@ -25,7 +23,7 @@ class ProfileStatusResponse(BaseModel):
 class ProfileBuildRequest(BaseModel):
     """Stage 3 /api/profile/build 入参：基础画像 + 维度/标签。"""
 
-    student_id: UUID
+    student_id: str
     dimensions: dict[str, float] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
 
@@ -37,7 +35,7 @@ class ProfileBuildResponse(BaseModel):
 class ProfileDetailResponse(BaseModel):
     """Stage 4 spec § 4.1: GET /api/profile/{student_id} 出参。"""
 
-    student_id: UUID
+    student_id: str
     dimensions: dict[str, float]
     tags: list[str]
     snapshot_count: int
@@ -55,5 +53,5 @@ class ProfileHistoryEntry(BaseModel):
 class ProfileHistoryResponse(BaseModel):
     """Stage 4 spec § 5.3: GET /api/profile/{student_id}/history 出参。"""
 
-    student_id: UUID
+    student_id: str
     snapshots: list[ProfileHistoryEntry] = Field(default_factory=list)

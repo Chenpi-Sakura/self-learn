@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getLevel } from '../api/level';
 
-export function LecturePane({ levelId, onClose }: { levelId: string; onClose: () => void }) {
+export function LecturePane({ levelId }: { levelId: string }) {
   const [content, setContent] = useState<string>('加载讲义...');
 
   useEffect(() => {
@@ -17,13 +17,5 @@ export function LecturePane({ levelId, onClose }: { levelId: string; onClose: ()
       .catch(() => setContent('加载失败'));
   }, [levelId]);
 
-  return (
-    <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid #E4E4E0', height: '100%', overflow: 'auto', fontFamily: 'HedvigLettersSerif, serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h4 style={{ margin: 0, color: '#1B3B6F' }}>讲义</h4>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#BC4749' }}>×</button>
-      </div>
-      <div style={{ marginTop: 12 }}>{content}</div>
-    </div>
-  );
+  return <div style={{ padding: 16, height: '100%', overflow: 'auto', fontFamily: 'HedvigLettersSerif, serif' }}>{content}</div>;
 }

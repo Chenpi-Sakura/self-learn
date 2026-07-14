@@ -55,20 +55,66 @@ interface Props {
 export function TreasureMap({ studentId }: Props) {
   const [nodes, setNodes] = useState<InternalNode[]>([]);
   const [edges] = useState<{ from: string; to: string; kind: string }[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadNodes = () => {
     if (!studentId) return;
     getMapNodes(studentId)
       .then((r) => setNodes(r.nodes.map(mapApiNode)))
       .catch(() => setNodes([]));
+  };
+
+  useEffect(() => {
+    loadNodes();
   }, [studentId]);
+
+  const handleGenerate = async () => {
+    if (!studentId || generating) return;
+    setGenerating(true);
+    setMsg('正在生成地图...');
+    try {
+      const res = await fetch('http://localhost:8000/api/map/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
+      });
+      const data = await res.json();
+      setMsg(`已提交（trace: ${data.trace_id.slice(0, 8)}…），2 秒后刷新`);
+      setTimeout(() => {
+        loadNodes();
+        setMsg(null);
+        setGenerating(false);
+      }, 2500);
+    } catch (e) {
+      setMsg(`生成失败：${String(e)}`);
+      setGenerating(false);
+    }
+  };
 
   return (
     <div className="tm">
       <div className="tm-head">
         <div className="h">深度学习路径</div>
         <div className="s">{nodes.length} 站</div>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            marginLeft: 'auto',
+            padding: '4px 10px',
+            fontSize: 12,
+            background: generating ? '#ccc' : '#1B3B6F',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            cursor: generating ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {generating ? '生成中…' : '生成地图'}
+        </button>
       </div>
+      {msg && <p style={{ margin: '4px 0 0 16px', fontSize: 12, color: '#6B6B70' }}>{msg}</p>}
       <svg className="tm-svg" viewBox="0 0 760 240" preserveAspectRatio="xMidYMid meet">
         {edges.map((e, i) => {
           const a = nodes.find((n) => n.id === e.from);

@@ -7,7 +7,7 @@ recent_snapshots: T8 history 路由用。
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ class ProfileRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def _get_by_student(self, student_id: UUID) -> Profile | None:
+    async def _get_by_student(self, student_id: str) -> Profile | None:
         rs = await self.session.execute(
             select(Profile).where(Profile.student_id == student_id)
         )
@@ -32,7 +32,7 @@ class ProfileRepository:
 
     async def upsert(
         self,
-        student_id: UUID,
+        student_id: str,
         profile: dict[str, float],
         tags: list[str] | None = None,
     ) -> Profile:
@@ -55,7 +55,7 @@ class ProfileRepository:
 
     async def apply_delta(
         self,
-        student_id: UUID,
+        student_id: str,
         delta: dict[str, float],
         trigger: str = "level_completed",
     ) -> dict[str, float]:
@@ -75,7 +75,7 @@ class ProfileRepository:
 
     async def recent_snapshots(
         self,
-        student_id: UUID,
+        student_id: str,
         limit: int = 10,
     ) -> list[ProfileSnapshot]:
         rs = await self.session.execute(

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
 
 from selflearn.agents.base import AbstractAgent
 from selflearn.core.envelope import ActorRef, Envelope
@@ -32,7 +31,7 @@ class ProfileAgent(AbstractAgent):
     async def run(self, env: Envelope) -> Envelope:
         trace_id = env.trace_id
         student_id_raw = env.payload["student_id"]
-        student_id = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw
+        student_id = str(student_id_raw) if not isinstance(student_id_raw, str) else student_id_raw
 
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.PROFILE, status="running",

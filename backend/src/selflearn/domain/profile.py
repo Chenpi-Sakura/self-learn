@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, func
+from sqlalchemy import DateTime, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,10 +15,8 @@ class Profile(Base):
     profile_id: Mapped[UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    student_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True),
-        ForeignKey("students.student_id", ondelete="CASCADE"),
-        nullable=False,
+    student_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True
     )
     dimensions: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)

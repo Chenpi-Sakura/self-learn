@@ -1,9 +1,6 @@
 """Map 路由（Stage 3）：生成初始藏宝图 / 拉取节点。"""
 from __future__ import annotations
 
-import uuid
-from uuid import UUID
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -17,7 +14,7 @@ router = APIRouter(prefix="/api/map", tags=["map"])
 
 
 class MapGenerateRequest(BaseModel):
-    student_id: uuid.UUID
+    student_id: str
 
 
 @router.post("/generate", status_code=202)
@@ -38,7 +35,7 @@ async def generate_map(body: MapGenerateRequest) -> dict[str, str]:
 
 
 @router.get("/{student_id}/nodes", response_model=MapNodesResponse)
-async def get_map_nodes(student_id: UUID) -> MapNodesResponse:
+async def get_map_nodes(student_id: str) -> MapNodesResponse:
     """Stage 4 spec § 4.2: 加载藏宝图节点列表。
 
     按 student_id 过滤 MapNode，join KnowledgePoint 取 title，

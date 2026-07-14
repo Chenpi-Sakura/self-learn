@@ -1,12 +1,8 @@
-export function ChatPane({ onClose }: { onClose: () => void }) {
+export function ChatPane() {
   // Stage 4 简化：AI 聊天占位
   return (
-    <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid #E4E4E0', height: '100%', overflow: 'auto', fontFamily: 'HedvigLettersSerif, serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <h4 style={{ margin: 0, color: '#1B3B6F' }}>小书 · Always on</h4>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#BC4749' }}>×</button>
-      </div>
-      <p style={{ color: '#6B6B70', marginTop: 12 }}>AI 对话占位。Stage 5+ 接 LLM 流式输出。</p>
+    <div style={{ padding: 16, height: '100%', overflow: 'auto', fontFamily: 'HedvigLettersSerif, serif' }}>
+      <p style={{ color: '#6B6B70' }}>AI 对话占位。Stage 5+ 接 LLM 流式输出。</p>
     </div>
   );
 }

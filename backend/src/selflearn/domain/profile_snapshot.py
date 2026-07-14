@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
 
 from sqlalchemy import JSON, BigInteger, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -18,7 +17,7 @@ class ProfileSnapshot(Base):
     __tablename__ = "profile_snapshots"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    student_id: Mapped[UUID] = mapped_column(String(36), nullable=False, index=True)
+    student_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     profile: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     trigger: Mapped[str] = mapped_column(String(32), nullable=False)  # 'level_completed' | 'manual_edit' | 'build'
     created_at: Mapped[datetime] = mapped_column(

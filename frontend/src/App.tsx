@@ -31,15 +31,14 @@ const WIN_CONTENT: Record<string, WinDef> = {
 };
 
 function renderBody(appId: string, win: WindowState, studentId: string): ReactNode {
-  const closeWin = () => useWorkspace.getState().closeWindow(win.id);
   switch (appId) {
     case 'treasure_map': return <TreasureMap studentId={studentId} />;
     case 'task_list':    return <TaskList />;
     case 'profile':      return <ProfileRadar studentId={studentId} />;
     case 'chat':         return <ChatFloat win={win} />;
     case 'dashboard':    return <CalendarPanel />;
-    case 'document':     return <LecturePane levelId="" onClose={closeWin} />;
-    case 'exercise':     return <ExercisePane levelId="" onClose={closeWin} />;
+    case 'document':     return <LecturePane levelId="" />;
+    case 'exercise':     return <ExercisePane levelId="" />;
     default:             return null;
   }
 }

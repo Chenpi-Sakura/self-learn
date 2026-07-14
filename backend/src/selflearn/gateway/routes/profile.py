@@ -7,8 +7,6 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from typing import cast
-from uuid import UUID
-
 from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import func, select
@@ -131,7 +129,7 @@ async def stream_init(trace_id: str) -> EventSourceResponse:
 
 
 @router.get("/{student_id}", response_model=ProfileDetailResponse)
-async def get_profile(student_id: UUID) -> ProfileDetailResponse:
+async def get_profile(student_id: str) -> ProfileDetailResponse:
     """Stage 4 spec § 4.1: 启动时拉画像渲染雷达图。
 
     按 student_id 查（业务语义：一学生一画像），不存在返回 404。
@@ -166,7 +164,7 @@ async def get_profile(student_id: UUID) -> ProfileDetailResponse:
 
 @router.get("/{student_id}/history", response_model=ProfileHistoryResponse)
 async def get_profile_history(
-    student_id: UUID, limit: int = Query(default=10, ge=1, le=100)
+    student_id: str, limit: int = Query(default=10, ge=1, le=100)
 ) -> ProfileHistoryResponse:
     """Stage 4 spec § 5.3: 画像演变历史（前端演变迷你折线图）。
 

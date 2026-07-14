@@ -10,8 +10,6 @@
 """
 from __future__ import annotations
 
-from uuid import UUID
-
 from sqlalchemy import select
 
 from selflearn.agents.base import AbstractAgent
@@ -59,7 +57,7 @@ class DirectorAgent(AbstractAgent):
         skill = get_skill("skill.director.start")
 
         student_id_raw = env.payload["student_id"]
-        student_id: UUID = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw  # type: ignore[assignment]
+        student_id: str = str(student_id_raw) if not isinstance(student_id_raw, str) else student_id_raw
 
         # 1. 选第一个 active 节点
         await progress_publish(trace_id, ProgressEvent(
