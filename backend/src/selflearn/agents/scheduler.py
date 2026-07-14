@@ -47,8 +47,7 @@ def _resolve_agent_class(skill_id: str):  # type: ignore[no-untyped-def]
 
     raise NotImplementedError(
         f"Agent not yet implemented for {skill_id!r}: "
-        f"add the class to `_AGENT_FOR_SKILL` in agents/scheduler.py "
-        f"(TODO references Task 7/8/9/10/11)."
+        f"add the class to `_AGENT_FOR_SKILL` in agents/scheduler.py."
     )
 
 
