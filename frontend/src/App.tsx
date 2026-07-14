@@ -13,6 +13,7 @@ import { shortcutManager, parseKeyEvent, registerSystemShortcuts } from './lib/s
 import { DockPositionsProvider } from './lib/dockPositions';
 import type { WindowState } from './types/window';
 import type { ReactNode } from 'react';
+import { Desktop } from './desk/Desktop';
 
 type WinDef = { title: string; isKey?: boolean };
 
@@ -70,6 +71,7 @@ export default function App() {
           ))}
         </div>
         <Dock />
+        <Desktop />
       </div>
     </DockPositionsProvider>
   );
