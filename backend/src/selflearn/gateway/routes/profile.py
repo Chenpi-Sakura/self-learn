@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import cast
 from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import func, select
@@ -135,6 +134,8 @@ async def get_profile(student_id: str) -> ProfileDetailResponse:
     """Stage 4 spec § 4.1: 启动时拉画像渲染雷达图。
 
     按 student_id 查（业务语义：一学生一画像），不存在返回 404。
+    Stage 4-fix: API 层把长名 dimensions 映射成短名（spec § 7.4 line 552 要求前端
+    ProfileDimensions 用 kb/vp/as/ge/ept/fd）。
     """
     factory = get_session_factory()
     async with factory() as session:
@@ -150,9 +151,26 @@ async def get_profile(student_id: str) -> ProfileDetailResponse:
             )
         ).scalar_one()
 
+    # 长名 → 短名（spec § 7.4 前端契约）
+    _LONG_TO_SHORT: dict[str, str] = {
+        "knowledge_base": "kb",
+        "visual_preference": "vp",
+        "analytic_style": "as",
+        "goal_employment": "ge",
+        "error_prone_type": "ept",
+        "focus_duration": "fd",
+    }
+    short_dims: dict[str, float] = {}
+    for long_k, short_k in _LONG_TO_SHORT.items():
+        v = profile.dimensions.get(long_k)
+        if isinstance(v, (int, float)):
+            short_dims[short_k] = float(v)
+        else:
+            short_dims[short_k] = 0.5  # 默认值
+
     return ProfileDetailResponse(
         student_id=student_id,
-        dimensions={k: float(v) for k, v in profile.dimensions.items()},
+        dimensions=short_dims,
         tags=list(profile.tags),
         snapshot_count=int(snap_count),
         last_updated_at=profile.last_updated,
@@ -180,14 +198,28 @@ async def get_profile_history(
         repo = ProfileRepository(session)
         snaps = await repo.recent_snapshots(student_id, limit=limit)
 
+    # 长名 → 短名映射（spec § 7.4 前端契约）
+    _LONG_TO_SHORT: dict[str, str] = {
+        "knowledge_base": "kb",
+        "visual_preference": "vp",
+        "analytic_style": "as",
+        "goal_employment": "ge",
+        "error_prone_type": "ept",
+        "focus_duration": "fd",
+    }
+
+    def _shorten(dims: dict[str, object]) -> dict[str, float]:
+        return {
+            short_k: float(dims[long_k])
+            for long_k, short_k in _LONG_TO_SHORT.items()
+            if long_k in dims and isinstance(dims[long_k], (int, float))
+        }
+
     return ProfileHistoryResponse(
         student_id=student_id,
         snapshots=[
             ProfileHistoryEntry(
-                profile={
-                    k: float(cast(float, v))
-                    for k, v in s.profile.items()
-                },
+                profile=_shorten(s.profile),
                 trigger=s.trigger,
                 created_at=s.created_at,
             )
