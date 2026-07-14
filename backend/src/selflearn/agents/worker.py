@@ -16,7 +16,17 @@ log = get_logger("worker")
 
 async def handle(env: Envelope) -> None:
     """Worker 主循环的每条消息处理函数。
-    写 Redis 给 gateway 读（status + reply）+ publish reply envelope。"""
+    写 Redis 给 gateway 读（status + reply）+ publish reply envelope。
+
+    Task 9 fix：reply envelope（action='skill.completed'）与原始 envelope 共享
+    `agent.mvp.work` 队列 + topic '#' 通配 → 会被自己再次消费。
+    防御式早退：reply 不再 dispatch。
+    """
+    # 防御：replies 走 dispatch 会撞 target.id='smoke'（sender.id），_AGENT_FOR_SKILL 找不到。
+    # skill.completed 是 5 个 Stage 3 Agent + PingAgent 唯一终止 action。
+    if env.action == "skill.completed":
+        log.info("agent.skip_reply", trace_id=env.trace_id, action=env.action)
+        return
     from selflearn.agents.scheduler import dispatch
     from selflearn.infra.redis_client import get_redis
     from selflearn.infra.bus import publish_envelope
