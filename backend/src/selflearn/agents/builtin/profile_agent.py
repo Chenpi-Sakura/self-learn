@@ -63,9 +63,27 @@ class ProfileAgent(AbstractAgent):
             await session.refresh(profile)
             profile_id = str(profile.profile_id)
 
+        # Stage 4 spec § 5.1 / § 10.3: SSE completed payload 用 spec 缩写维度键 + 含 tags
+        # 前端 spec § 7.4 line 552 直接读 payload.profile as ProfileDimensions（kb/vp/as/ge/ept/fd）。
+        _DIMENSION_KEY_MAP: dict[str, str] = {
+            "knowledge_base": "kb", "visual_preference": "vp",
+            "analytic_style": "as", "goal_employment": "ge",
+            "error_prone_type": "ept", "focus_duration": "fd",
+        }
+        _short_dims: dict[str, float] = {
+            _DIMENSION_KEY_MAP[k]: float(v)
+            for k, v in dimensions.items()
+            if k in _DIMENSION_KEY_MAP
+        }
+        _tags_raw = env.payload.get("tags", [])
+        _tags: list[object] = list(_tags_raw) if isinstance(_tags_raw, list) else []
+
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.PROFILE, status="completed",
-            payload={"profile_id": profile_id, "dimensions": dimensions},
+            payload={
+                "profile_id": profile_id,  # 保留：reply envelope 测试要这个
+                "profile": {"dimensions": _short_dims, "tags": _tags},
+            },
         ))
 
         return Envelope(

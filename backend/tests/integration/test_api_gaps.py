@@ -405,3 +405,80 @@ async def test_get_level_404_when_not_found(app_client: AsyncClient) -> None:
 
     assert resp.status_code == 404
     assert resp.json()["detail"] == "level_not_found"
+
+
+@pytest.mark.asyncio
+async def test_profile_agent_sse_completed_includes_profile_field() -> None:
+    """SSE completed 事件 payload 必须含 profile（含 dimensions + tags），供前端雷达图动画。
+
+    spec § 10.3 line 670-671 + § 7.4 line 552。直接 mock progress_publish，调用
+    ProfileAgent.run()，断言最后一次 publish 的 ProgressEvent.payload 含
+    profile.dimensions（用 spec 缩写键 kb/vp/as/ge/ept/fd）+ profile.tags。
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from selflearn.agents.builtin.profile_agent import ProfileAgent
+    from selflearn.core.envelope import ActorRef, Envelope
+    from selflearn.progress.stages import Stage
+    from selflearn.skills.library import load_all
+
+    # ProfileAgent.run() 会 get_skill("skill.profile.build") 做 sanity check → 需先加载
+    load_all()
+
+    # 用 Stage 3 测试同样的 mock 模式（参考 test_profile_agent.py:15-53）
+    fake_uuid = "11111111-2222-3333-4444-666666666666"
+    fake_session = AsyncMock()
+    fake_session.add = MagicMock()
+    fake_session.commit = AsyncMock()
+    fake_session.refresh = AsyncMock(
+        side_effect=lambda obj: setattr(obj, "profile_id", __import__("uuid").UUID(fake_uuid))
+    )
+
+    with patch("selflearn.agents.builtin.profile_agent.get_session_factory") as mock_factory, \
+         patch("selflearn.agents.builtin.profile_agent.progress_publish", new=AsyncMock()) as mock_pub:
+        factory_callable = MagicMock()
+        factory_callable.return_value.__aenter__ = AsyncMock(return_value=fake_session)
+        factory_callable.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_factory.return_value = factory_callable
+
+        env = Envelope(
+            action="skill.execute",
+            sender=ActorRef(type="gateway", id="g"),
+            target=ActorRef(type="skill", id="skill.profile.build"),
+            payload={
+                "student_id": "00000000-0000-0000-0000-000000000002",
+                # Stage 3 长名（ProfileAgent.DIMENSION_KEYS 实际期望）
+                "dimensions": {k: 0.5 for k in [
+                    "knowledge_base", "visual_preference", "analytic_style",
+                    "goal_employment", "error_prone_type", "focus_duration",
+                ]},
+                "tags": ["integration-test"],
+            },
+        )
+
+        await ProfileAgent().run(env)
+
+    # 找最后一次 progress_publish（Stage.PROFILE, "completed"）的 payload
+    completed_call = next(
+        c for c in mock_pub.call_args_list
+        if c.args[1].stage == Stage.PROFILE and c.args[1].status == "completed"
+    )
+    payload = completed_call.args[1].payload
+
+    # 断言：含 profile 字段
+    assert "profile" in payload, f"SSE completed payload 缺 profile 字段：{payload}"
+    profile = payload["profile"]
+    assert "dimensions" in profile
+    assert "tags" in profile
+
+    # 维度键用 spec 缩写（前端 § 7.4 line 553 直接读 as ProfileDimensions）
+    dims = profile["dimensions"]
+    assert set(dims.keys()) == {"kb", "vp", "as", "ge", "ept", "fd"}, \
+        f"维度键必须用 spec 缩写：{sorted(dims.keys())}"
+    assert dims["kb"] == 0.5  # knowledge_base → kb
+
+    # tags 透传
+    assert profile["tags"] == ["integration-test"]
+
+    # 既有 profile_id 字段保留（兼容 reply envelope 测试）
+    assert "profile_id" in payload
