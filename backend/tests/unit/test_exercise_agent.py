@@ -166,3 +166,49 @@ async def test_exercise_agent_uses_mock_llm_adapter_end_to_end() -> None:
         )
         assert isinstance(result, list)
         assert len(result) >= 1
+
+
+async def test_exercise_agent_failed_event_contains_traceback() -> None:
+    """ExerciseAgent.run_sync 抛 unhandled 异常时，推 FAILED 事件 payload 含 tb（stage=exercise）。"""
+    from unittest.mock import AsyncMock, patch
+
+    from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+    from selflearn.core.envelope import ActorRef, Envelope
+    from selflearn.core.errors import AppError, ErrorCode
+    from selflearn.progress.stages import ProgressEvent, Stage
+
+    published: list[ProgressEvent] = []
+
+    async def collect(trace_id: str, ev: ProgressEvent) -> None:
+        published.append(ev)
+
+    from selflearn.skills.library import load_all as _load_all
+    _load_all()
+
+    with patch("selflearn.agents.builtin.exercise_agent.llm_registry") as mock_reg_local, \
+         patch("selflearn.agents.builtin.exercise_agent.progress_publish",
+               new=AsyncMock(side_effect=collect)):
+        # llm_registry.default().chat() 抛 ValueError → 走到 except Exception 分支
+        mock_reg_local.default.return_value.chat = AsyncMock(
+            side_effect=ValueError("boom_exercise_tb")
+        )
+
+        env = Envelope(
+            action="skill.execute",
+            sender=ActorRef(type="director", id="d"),
+            target=ActorRef(type="skill", id="skill.exercise.generate"),
+            payload={"node_id": "00000000-0000-0000-0000-000000000004"},
+            trace_id="ex-tb-test",
+        )
+        with pytest.raises(AppError) as exc:
+            await ExerciseAgent().run_sync(
+                env,
+                node_id="00000000-0000-0000-0000-000000000004",
+                kp_title="Mock KP",
+            )
+        assert exc.value.code == ErrorCode.INTERNAL
+
+    failed = [e for e in published if e.stage == Stage.EXERCISE]
+    assert failed, "FAILED (stage=exercise) event 必须推"
+    assert failed[0].payload.get("tb"), "FAILED payload 必须含 tb 字段"
+    assert "boom_exercise_tb" in failed[0].payload["tb"]

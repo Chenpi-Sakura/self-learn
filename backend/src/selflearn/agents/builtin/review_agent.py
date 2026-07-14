@@ -6,8 +6,13 @@ from typing import Any
 
 from selflearn.agents.base import AbstractAgent
 from selflearn.core.envelope import Envelope
+from selflearn.core.logging import get_logger
+from selflearn.progress.stages import ProgressEvent, Stage
+from selflearn.progress.stream import progress_publish
 from selflearn.skills.library import get as get_skill
 from selflearn.tools.protocol import ToolRegistry
+
+log = get_logger("review")
 
 
 @dataclass
@@ -28,9 +33,30 @@ class ReviewAgent(AbstractAgent):
         return env  # pragma: no cover - synchronous call mode
 
     async def run_sync(self, env: Envelope, exercises: list[dict[str, Any]]) -> Review:
-        return await self.review(exercises)
+        return await self.review(exercises, trace_id=env.trace_id)
 
-    async def review(self, exercises: list[dict[str, Any]]) -> Review:
+    async def review(self, exercises: list[dict[str, Any]], *, trace_id: str | None = None) -> Review:
+        """业务规则过滤。
+
+        T13.5 Task 8: 包 try/except，异常时推 FAILED 事件 payload 含 tb（stage=review），
+        让前端 SSE 能直接看到完整 traceback。
+        """
+        try:
+            return await self._review_inner(exercises)
+        except Exception as e:  # noqa: BLE001
+            if trace_id is None:
+                # 没有 trace_id 时退化为非 FAILED 推送（保持原有行为，仅重抛）
+                raise
+            import traceback as _tb
+            tb_str = _tb.format_exc()
+            log.error("review.unhandled_exception", trace_id=trace_id, error=repr(e), tb=tb_str)
+            await progress_publish(trace_id, ProgressEvent(
+                stage=Stage.REVIEW, status="failed",
+                payload={"code": "review_unhandled", "message": repr(e), "tb": tb_str},
+            ))
+            raise
+
+    async def _review_inner(self, exercises: list[dict[str, Any]]) -> Review:
         issues: list[dict[str, Any]] = []
 
         # 1. tool.lint_json first (cold post-validation)

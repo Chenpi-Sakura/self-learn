@@ -50,9 +50,10 @@ class DirectorAgent(AbstractAgent):
             await self._emit_failed(trace_id, "agent_internal_error", "Director 处理失败")
             raise
         except Exception as e:  # noqa: BLE001
-            import traceback
-            log.error("director.unhandled_exception", trace_id=trace_id, error=repr(e), tb=traceback.format_exc())
-            await self._emit_failed(trace_id, "agent_internal_error", "Director 处理失败")
+            import traceback as _tb
+            tb_str = _tb.format_exc()
+            log.error("director.unhandled_exception", trace_id=trace_id, error=repr(e), tb=tb_str)
+            await self._emit_failed(trace_id, "internal_unhandled", repr(e), tb=tb_str)
             raise AppError(ErrorCode.INTERNAL, "Director 处理失败", trace_id=trace_id) from e
 
     async def _run_inner(self, env: Envelope) -> Envelope:
@@ -103,7 +104,7 @@ class DirectorAgent(AbstractAgent):
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.REVIEW, status="running"
         ))
-        review = await ReviewAgent().review(ex_dicts)
+        review = await ReviewAgent().review(ex_dicts, trace_id=trace_id)
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.REVIEW, status="completed",
             payload={"verdict": review.verdict, "issues_count": len(review.issues)},
@@ -159,10 +160,12 @@ class DirectorAgent(AbstractAgent):
             parent_id=env.span_id,
         )
 
-    async def _emit_failed(self, trace_id: str, code: str, message: str) -> None:
+    async def _emit_failed(self, trace_id: str, code: str, message: str, tb: str | None = None) -> None:
+        payload: dict[str, object] = {"code": code, "message": message}
+        if tb:
+            payload["tb"] = tb
         await progress_publish(trace_id, ProgressEvent(
-            stage=Stage.FAILED, status="failed",
-            payload={"code": code, "message": message},
+            stage=Stage.FAILED, status="failed", payload=payload,
         ))
 
 

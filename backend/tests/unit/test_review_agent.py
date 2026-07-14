@@ -77,3 +77,46 @@ async def test_review_rejects_choice_with_no_matching_answer() -> None:
         "answer" in (i.get("rule") or "") or "options" in (i.get("rule") or "")
         for i in review.issues
     )
+
+
+async def test_review_failed_event_contains_traceback() -> None:
+    """ReviewAgent.review 抛异常时，推 FAILED 事件 payload 含 tb（stage=review）。"""
+    from unittest.mock import AsyncMock, patch
+
+    from selflearn.progress.stages import ProgressEvent, Stage
+
+    published: list[ProgressEvent] = []
+
+    async def collect(trace_id: str, ev: ProgressEvent) -> None:
+        published.append(ev)
+
+    # 直接 patch ToolRegistry.call 抛错（绕过其内置 try/except 包 ToolResult 的兜底）。
+    # 注意：patch 路径必须是 selflearn.tools.protocol.ToolRegistry.call（不是 review_agent 模块的），
+    # 因为 review_agent.py 用的是 `from ... import ToolRegistry`，访问 .call 会沿 MRO 找。
+    async def fake_call(**kwargs: object) -> object:  # noqa: ARG001
+        raise ValueError("boom_review_tb")
+
+    with patch("selflearn.tools.protocol.ToolRegistry.call",
+               side_effect=fake_call), \
+         patch("selflearn.agents.builtin.review_agent.progress_publish",
+               new=AsyncMock(side_effect=collect)):
+        with pytest.raises(Exception):
+            await ReviewAgent().review(
+                [
+                    {
+                        "prompt": "Q?",
+                        "exercise_type": "single_choice",
+                        "options": ["A", "B", "C", "D"],
+                        "correct_answer": "A",
+                        "explanation": "x",
+                        "difficulty": 1,
+                        "score": 1.0,
+                    },
+                ],
+                trace_id="rev-tb-test",
+            )
+
+    failed = [e for e in published if e.stage == Stage.REVIEW]
+    assert failed, "FAILED event 必须推 (stage=REVIEW)"
+    assert failed[0].payload.get("tb"), "FAILED payload 必须含 tb 字段"
+    assert "boom_review_tb" in failed[0].payload["tb"]
