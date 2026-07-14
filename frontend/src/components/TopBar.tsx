@@ -1,6 +1,7 @@
 import './TopBar.css';
 import { ModeToggle } from './ModeToggle';
 import { LayoutIcons } from './LayoutIcons';
+import { ResetButton } from '../reset/ResetButton';
 
 export function TopBar() {
   return (
@@ -16,6 +17,7 @@ export function TopBar() {
       <LayoutIcons />
       <div className="right">
         <span className="cmdk">⌘K</span>
+        <ResetButton />
         <span className="avatar">林</span>
       </div>
     </header>

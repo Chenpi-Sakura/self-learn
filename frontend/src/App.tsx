@@ -8,12 +8,15 @@ import { TreasureMap } from './components/TreasureMap';
 import { TaskList } from './components/TaskList';
 import { ProfileRadar } from './components/ProfileRadar';
 import { ChatFloat } from './components/ChatFloat';
+import { CalendarPanel } from './desk/CalendarPanel';
+import { LecturePane } from './panes/LecturePane';
+import { ExercisePane } from './panes/ExercisePane';
 import { useWorkspace } from './store/useWorkspace';
+import { useSession } from './store/session';
 import { shortcutManager, parseKeyEvent, registerSystemShortcuts } from './lib/shortcuts';
 import { DockPositionsProvider } from './lib/dockPositions';
 import type { WindowState } from './types/window';
 import type { ReactNode } from 'react';
-import { Desktop } from './desk/Desktop';
 
 type WinDef = { title: string; isKey?: boolean };
 
@@ -22,20 +25,28 @@ const WIN_CONTENT: Record<string, WinDef> = {
   task_list:    { title: '今日学习' },
   profile:      { title: '六维画像' },
   chat:         { title: '小书' },
+  dashboard:    { title: '日历' },
+  document:     { title: '讲义' },
+  exercise:     { title: '习题' },
 };
 
-function renderBody(appId: string, win: WindowState): ReactNode {
+function renderBody(appId: string, win: WindowState, studentId: string): ReactNode {
+  const closeWin = () => useWorkspace.getState().closeWindow(win.id);
   switch (appId) {
-    case 'treasure_map': return <TreasureMap />;
+    case 'treasure_map': return <TreasureMap studentId={studentId} />;
     case 'task_list':    return <TaskList />;
-    case 'profile':      return <ProfileRadar />;
+    case 'profile':      return <ProfileRadar studentId={studentId} />;
     case 'chat':         return <ChatFloat win={win} />;
+    case 'dashboard':    return <CalendarPanel />;
+    case 'document':     return <LecturePane levelId="" onClose={closeWin} />;
+    case 'exercise':     return <ExercisePane levelId="" onClose={closeWin} />;
     default:             return null;
   }
 }
 
 export default function App() {
   const windows = useWorkspace((s) => s.windows);
+  const studentId = useSession((s) => s.studentId);
 
   useEffect(() => {
     registerSystemShortcuts();
@@ -66,12 +77,11 @@ export default function App() {
         <div className="windows-layer">
           {entries.map(([win, def]) => (
             <Window key={win.id} win={win} title={def.title} isKey={def.isKey}>
-              {renderBody(win.appId, win)}
+              {renderBody(win.appId, win, studentId)}
             </Window>
           ))}
         </div>
         <Dock />
-        <Desktop />
       </div>
     </DockPositionsProvider>
   );

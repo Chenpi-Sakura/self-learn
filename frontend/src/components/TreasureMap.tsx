@@ -1,5 +1,18 @@
-import { useWorkspace } from '../store/useWorkspace';
+import { useEffect, useState } from 'react';
+import { getMapNodes } from '../api/map';
+import type { MapNode as ApiMapNode } from '../api/types';
 import './TreasureMap.css';
+
+interface InternalNode {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  status: string;
+  minutes: number;
+  visual?: { badge?: 'key' | null };
+  branchStatus?: string;
+}
 
 const STATUS_FILL: Record<string, string> = {
   completed:   '#F4F4F0',
@@ -7,7 +20,6 @@ const STATUS_FILL: Record<string, string> = {
   unlocked:    '#FFFFFF',
   locked:      '#F4F4F0',
   mastered:    '#D1FAE5',
-  // demo 兜底：
   current:     '#1B3B6F',
   key:         '#BC4749',
   interest:    '#FFFFFF',
@@ -19,22 +31,43 @@ const STATUS_TEXT: Record<string, string> = {
   unlocked:    '#1A1A1A',
   locked:      '#A1A1AA',
   mastered:    '#1A1A1A',
-  // demo 兜底：
   current:     '#FFFFFF',
   key:         '#FFFFFF',
   interest:    '#1B3B6F',
   sleeping:    '#A1A1AA',
 };
 
-export function TreasureMap() {
-  const nodes = useWorkspace((s) => s.nodes);
-  const edges = useWorkspace((s) => s.edges);
+function mapApiNode(n: ApiMapNode): InternalNode {
+  return {
+    id: n.node_id,
+    x: n.position.x,
+    y: n.position.y,
+    label: n.title,
+    status: n.status,
+    minutes: 0,
+  };
+}
+
+interface Props {
+  studentId?: string;
+}
+
+export function TreasureMap({ studentId }: Props) {
+  const [nodes, setNodes] = useState<InternalNode[]>([]);
+  const [edges] = useState<{ from: string; to: string; kind: string }[]>([]);
+
+  useEffect(() => {
+    if (!studentId) return;
+    getMapNodes(studentId)
+      .then((r) => setNodes(r.nodes.map(mapApiNode)))
+      .catch(() => setNodes([]));
+  }, [studentId]);
 
   return (
     <div className="tm">
       <div className="tm-head">
         <div className="h">深度学习路径</div>
-        <div className="s">8 站 · 3 已完成 · 1 进行中</div>
+        <div className="s">{nodes.length} 站</div>
       </div>
       <svg className="tm-svg" viewBox="0 0 760 240" preserveAspectRatio="xMidYMid meet">
         {edges.map((e, i) => {
@@ -54,7 +87,6 @@ export function TreasureMap() {
         {nodes.map((n) => {
           const fill = STATUS_FILL[n.status];
           const txt = STATUS_TEXT[n.status];
-          // v4 § 3.14.1：key 通过 visual.badge 标识；sleeping/interest 通过 branchStatus
           const isKey = n.visual?.badge === 'key';
           const stroke = isKey ? 'var(--vermilion)' :
             n.branchStatus === 'sleeping' ? 'var(--mute)' :
