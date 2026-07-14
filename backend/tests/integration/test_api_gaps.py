@@ -84,9 +84,9 @@ async def test_get_profile_returns_dimensions_and_tags(app_client: AsyncClient) 
     fake = _make_fake_profile(sid)
 
     async def fake_get_by_student(
-        self: ProfileRepository, student_id: uuid.UUID
+        self: ProfileRepository, student_id: str
     ) -> Profile | None:
-        return fake if student_id == sid else None
+        return fake if student_id == str(sid) else None
 
     mock_session = AsyncMock()
     # 注意：session.execute 是 awaitable，但 execute() 返回的 Result.scalar_one 是同步方法，
@@ -118,7 +118,7 @@ async def test_get_profile_404_when_not_found(app_client: AsyncClient) -> None:
     sid = uuid.uuid4()
 
     async def fake_get_by_student_none(
-        self: ProfileRepository, student_id: uuid.UUID
+        self: ProfileRepository, student_id: str
     ) -> Profile | None:
         return None
 
@@ -149,10 +149,11 @@ async def test_get_profile_history_returns_snapshots_in_desc_order(
 
     async def fake_recent_snapshots(
         self: ProfileRepository,
-        student_id: uuid.UUID,
+        student_id: str,
         limit: int = 10,
     ) -> list[ProfileSnapshot]:
         # 真实 repo 已经按 created_at DESC 返回；这里 fake 也按 DESC 顺序给
+        return [fake_snap_3, fake_snap_2, fake_snap_1] if student_id == str(sid) else []
         return [fake_snap_3, fake_snap_2, fake_snap_1] if student_id == sid else []
 
     mock_session = AsyncMock()
@@ -188,10 +189,10 @@ async def test_get_profile_history_respects_limit(app_client: AsyncClient) -> No
 
     async def fake_recent_snapshots_limited(
         self: ProfileRepository,
-        student_id: uuid.UUID,
+        student_id: str,
         limit: int = 10,
     ) -> list[ProfileSnapshot]:
-        return fake_snaps[:limit] if student_id == sid else []
+        return fake_snaps[:limit] if student_id == str(sid) else []
 
     mock_session = AsyncMock()
     with patch.object(
