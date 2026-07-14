@@ -42,3 +42,18 @@ class ProfileDetailResponse(BaseModel):
     tags: list[str]
     snapshot_count: int
     last_updated_at: datetime | None = None
+
+
+class ProfileHistoryEntry(BaseModel):
+    """Stage 4 spec § 5.3: 单条快照（演变迷你折线图数据点）。"""
+
+    profile: dict[str, float]
+    trigger: str
+    created_at: datetime
+
+
+class ProfileHistoryResponse(BaseModel):
+    """Stage 4 spec § 5.3: GET /api/profile/{student_id}/history 出参。"""
+
+    student_id: UUID
+    snapshots: list[ProfileHistoryEntry] = Field(default_factory=list)

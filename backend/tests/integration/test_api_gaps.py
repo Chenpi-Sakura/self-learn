@@ -1,10 +1,11 @@
 """Stage 4 API 5 缺口补全测试（T7+T8+T9+T10 集中放这里）。
 
 T7: GET /api/profile/{student_id} — 启动时加载画像（spec § 4.1）。
+T8: GET /api/profile/{student_id}/history — 演变迷你折线图（spec § 5.3）。
 
 mock 模式：profile 表含 JSONB/PgUUID/FK，SQLite fixture 不兼容，
-故直接 mock 路由层调用的具体函数（ProfileRepository._get_by_student
-+ get_session_factory 返回的 mock session.execute），
+故直接 mock 路由层调用的具体函数（ProfileRepository._get_by_student /
+recent_snapshots + get_session_factory 返回的 mock session.execute），
 断言响应 JSON 字段对。参考 Stage 3 tests/unit/test_sse_endpoint.py。
 """
 from __future__ import annotations
@@ -18,6 +19,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from selflearn.domain.profile import Profile
+from selflearn.domain.profile_snapshot import ProfileSnapshot
 from selflearn.gateway.app import create_app
 from selflearn.infra.repositories.profile_repo import ProfileRepository
 
@@ -32,6 +34,22 @@ def _make_fake_profile(student_id: uuid.UUID) -> Profile:
     )
     p.last_updated = datetime(2026, 7, 13, 10, 0, 0, tzinfo=timezone.utc)
     return p
+
+
+def _make_fake_snapshot(
+    student_id: uuid.UUID,
+    kb_value: float,
+    trigger: str = "level_completed",
+    created_at: datetime | None = None,
+) -> ProfileSnapshot:
+    """构造未 attached 的 ProfileSnapshot 对象（mock 返回值用）。"""
+    s = ProfileSnapshot(
+        student_id=student_id,
+        profile={"kb": kb_value, "vp": 0.5, "as": 0.5, "ge": 0.5, "ept": 0.5, "fd": 0.5},
+        trigger=trigger,
+    )
+    s.created_at = created_at or datetime(2026, 7, 13, 10, 0, 0, tzinfo=timezone.utc)
+    return s
 
 
 def _make_async_session_cm(mock_session: Any) -> Any:
@@ -112,3 +130,74 @@ async def test_get_profile_404_when_not_found(app_client: AsyncClient) -> None:
 
     assert resp.status_code == 404
     assert resp.json()["detail"] == "profile_not_found"
+
+
+@pytest.mark.asyncio
+async def test_get_profile_history_returns_snapshots_in_desc_order(
+    app_client: AsyncClient,
+) -> None:
+    """history 端点：返回 N 条按 created_at DESC 的快照。"""
+    sid = uuid.uuid4()
+    fake_snap_1 = _make_fake_snapshot(sid, kb_value=0.50, created_at=datetime(2026, 7, 13, 10, 0, tzinfo=timezone.utc))
+    fake_snap_2 = _make_fake_snapshot(sid, kb_value=0.60, created_at=datetime(2026, 7, 13, 11, 0, tzinfo=timezone.utc))
+    fake_snap_3 = _make_fake_snapshot(sid, kb_value=0.70, created_at=datetime(2026, 7, 13, 12, 0, tzinfo=timezone.utc))
+
+    async def fake_recent_snapshots(
+        self: ProfileRepository,
+        student_id: uuid.UUID,
+        limit: int = 10,
+    ) -> list[ProfileSnapshot]:
+        # 真实 repo 已经按 created_at DESC 返回；这里 fake 也按 DESC 顺序给
+        return [fake_snap_3, fake_snap_2, fake_snap_1] if student_id == sid else []
+
+    mock_session = AsyncMock()
+    with patch.object(
+        ProfileRepository, "recent_snapshots", new=fake_recent_snapshots
+    ), patch(
+        "selflearn.gateway.routes.profile.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/profile/{sid}/history?limit=10")
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["student_id"] == str(sid)
+    assert len(data["snapshots"]) == 3
+    # 最新一条 kb=0.70（fake_snap_3）
+    assert data["snapshots"][0]["profile"]["kb"] == 0.7
+    assert data["snapshots"][0]["trigger"] == "level_completed"
+    assert "created_at" in data["snapshots"][0]
+    # 最早一条 kb=0.50
+    assert data["snapshots"][-1]["profile"]["kb"] == 0.5
+
+
+@pytest.mark.asyncio
+async def test_get_profile_history_respects_limit(app_client: AsyncClient) -> None:
+    """limit=2 时只返回 2 条。"""
+    sid = uuid.uuid4()
+    fake_snaps = [
+        _make_fake_snapshot(sid, kb_value=0.5 + i * 0.01, created_at=datetime(2026, 7, 13, 10, i, tzinfo=timezone.utc))
+        for i in range(3)
+    ]
+
+    async def fake_recent_snapshots_limited(
+        self: ProfileRepository,
+        student_id: uuid.UUID,
+        limit: int = 10,
+    ) -> list[ProfileSnapshot]:
+        return fake_snaps[:limit] if student_id == sid else []
+
+    mock_session = AsyncMock()
+    with patch.object(
+        ProfileRepository, "recent_snapshots", new=fake_recent_snapshots_limited
+    ), patch(
+        "selflearn.gateway.routes.profile.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/profile/{sid}/history?limit=2")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["snapshots"]) == 2

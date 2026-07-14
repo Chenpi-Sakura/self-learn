@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from typing import cast
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import func, select
 
@@ -23,6 +24,8 @@ from selflearn.schemas.profile import (
     ProfileBuildRequest,
     ProfileBuildResponse,
     ProfileDetailResponse,
+    ProfileHistoryEntry,
+    ProfileHistoryResponse,
     ProfileInitRequest,
     ProfileInitResponse,
     ProfileStatusResponse,
@@ -153,4 +156,41 @@ async def get_profile(student_id: UUID) -> ProfileDetailResponse:
         tags=list(profile.tags),
         snapshot_count=int(snap_count),
         last_updated_at=profile.last_updated,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stage 4 扩展：GET /api/profile/{student_id}/history（spec § 5.3，演变迷你折线图）
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{student_id}/history", response_model=ProfileHistoryResponse)
+async def get_profile_history(
+    student_id: UUID, limit: int = Query(default=10, ge=1, le=100)
+) -> ProfileHistoryResponse:
+    """Stage 4 spec § 5.3: 画像演变历史（前端演变迷你折线图）。
+
+    复用 ProfileRepository.recent_snapshots(student_id, limit)（按 created_at DESC 排序）。
+    """
+    from selflearn.infra.db import get_session_factory  # noqa: PLC0415
+    from selflearn.infra.repositories.profile_repo import ProfileRepository  # noqa: PLC0415
+
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = ProfileRepository(session)
+        snaps = await repo.recent_snapshots(student_id, limit=limit)
+
+    return ProfileHistoryResponse(
+        student_id=student_id,
+        snapshots=[
+            ProfileHistoryEntry(
+                profile={
+                    k: float(cast(float, v))
+                    for k, v in s.profile.items()
+                },
+                trigger=s.trigger,
+                created_at=s.created_at,
+            )
+            for s in snaps
+        ],
     )
