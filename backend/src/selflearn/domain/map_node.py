@@ -5,9 +5,10 @@ from datetime import datetime
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from selflearn.domain.base import Base
+from selflearn.domain.knowledge_point import KnowledgePoint
 
 
 class MapNode(Base):
@@ -24,6 +25,10 @@ class MapNode(Base):
     position: Mapped[dict[str, float]] = mapped_column(JSONB, nullable=False, default=lambda: {"x": 0.0, "y": 0.0})
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+    # Stage 4-fix: 满足 Node Protocol（ExerciseAgent 需访问 node.kp.title）
+    # 默认 selectin lazy——joinedload 可显式加速
+    kp: Mapped[KnowledgePoint] = relationship("KnowledgePoint")
 
     __table_args__ = (
         CheckConstraint("status IN ('active','sleeping','completed','locked')", name="ck_mn_status"),

@@ -24,6 +24,8 @@ const STATUS_FILL: Record<string, string> = {
   current:     '#1B3B6F',
   key:         '#BC4749',
   interest:    '#FFFFFF',
+  // T13-fix: 后端 PlanAgent 写入的 status="active"（main 分支第一站）
+  active:      '#FFFFFF',
   sleeping:    'transparent',
 };
 const STATUS_TEXT: Record<string, string> = {
@@ -35,6 +37,7 @@ const STATUS_TEXT: Record<string, string> = {
   current:     '#FFFFFF',
   key:         '#FFFFFF',
   interest:    '#1B3B6F',
+  active:      '#1A1A1A',
   sleeping:    '#A1A1AA',
 };
 
@@ -55,7 +58,15 @@ interface Props {
 
 export function TreasureMap({ studentId }: Props) {
   const [nodes, setNodes] = useState<InternalNode[]>([]);
-  const [edges] = useState<{ from: string; to: string; kind: string }[]>([]);
+  // T13-fix: edges 由 nodes 自动派生（按当前 y,x 顺序串成 main 主干），不再硬编码空数组
+  const edges: { from: string; to: string; kind: string }[] = (() => {
+    const sorted = [...nodes].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const out: { from: string; to: string; kind: string }[] = [];
+    for (let i = 0; i < sorted.length - 1; i++) {
+      out.push({ from: sorted[i].id, to: sorted[i + 1].id, kind: 'main' });
+    }
+    return out;
+  })();
   const [generating, setGenerating] = useState(false);
   const [starting, setStarting] = useState<string | null>(null); // node.id being started
   const [msg, setMsg] = useState<string | null>(null);

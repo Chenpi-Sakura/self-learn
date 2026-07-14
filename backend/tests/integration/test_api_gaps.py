@@ -497,6 +497,7 @@ async def test_director_sse_completed_includes_level_id_and_exercise_ids() -> No
     from selflearn.agents.builtin import director_agent as director_mod
     from selflearn.agents.builtin import exercise_agent, review_agent
     from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+    from selflearn.agents.builtin.review_agent import ReviewAgent
     from selflearn.core.envelope import ActorRef, Envelope
     from selflearn.domain.map_node import MapNode
     from selflearn.domain.level import Level
@@ -539,14 +540,14 @@ async def test_director_sse_completed_includes_level_id_and_exercise_ids() -> No
     async def fake_bulk_create(level_id: object, ex_dicts: list[object]) -> list[Exercise]:
         return [fake_ex1, fake_ex2]
 
-    # exercise_agent.run_sync 是类方法（ExerciseAgent.run_sync）；因为 director_agent 通过
-    # `from ... import exercise_agent` 模块属性查找，需要 patch 模块属性（用 create=True）。
+    # Stage 4-fix: director 改为 `ExerciseAgent().run_sync(...)` 类实例调用，
+    # patch 类方法而不是模块属性。
     with patch.object(director_mod, "get_session_factory") as mock_factory, \
-         patch.object(exercise_agent, "run_sync", new=AsyncMock(return_value=[
+         patch.object(ExerciseAgent, "run_sync", new=AsyncMock(return_value=[
              {"exercise_type": "single_choice", "prompt": "Q1"},
              {"exercise_type": "short_answer", "prompt": "Q2"},
-         ]), create=True), \
-         patch.object(review_agent, "review", new=AsyncMock(return_value=fake_review), create=True), \
+         ])), \
+         patch.object(ReviewAgent, "review", new=AsyncMock(return_value=fake_review)), \
          patch("selflearn.agents.builtin.director_agent.ExerciseRepository") as mock_repo_cls, \
          patch("selflearn.agents.builtin.director_agent.LevelRepository") as mock_level_repo_cls, \
          patch("selflearn.agents.builtin.director_agent.ProfileRepository") as mock_profile_repo_cls, \

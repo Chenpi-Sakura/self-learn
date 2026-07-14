@@ -11,9 +11,11 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from selflearn.agents.base import AbstractAgent
-from selflearn.agents.builtin import exercise_agent, review_agent
+from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+from selflearn.agents.builtin.review_agent import ReviewAgent
 from selflearn.core.envelope import ActorRef, Envelope
 from selflearn.core.errors import AppError, ErrorCode
 from selflearn.core.logging import get_logger
@@ -48,8 +50,8 @@ class DirectorAgent(AbstractAgent):
             await self._emit_failed(trace_id, "agent_internal_error", "Director 处理失败")
             raise
         except Exception as e:  # noqa: BLE001
-            await self._emit_failed(trace_id, "internal_unhandled", repr(e))
-            log.error("director.unhandled_exception", trace_id=trace_id, error=repr(e))
+            import traceback
+            log.error("director.unhandled_exception", trace_id=trace_id, error=repr(e), tb=traceback.format_exc())
             raise AppError(ErrorCode.INTERNAL, "Director 处理失败", trace_id=trace_id) from e
 
     async def _run_inner(self, env: Envelope) -> Envelope:
@@ -66,14 +68,20 @@ class DirectorAgent(AbstractAgent):
         ))
         factory = get_session_factory()
         async with factory() as session:
-            stmt = select(MapNode).where(
-                MapNode.student_id == student_id, MapNode.status == "active"
-            ).limit(1)
+            stmt = (
+                select(MapNode)
+                .where(MapNode.student_id == student_id, MapNode.status == "active")
+                .options(joinedload(MapNode.kp))
+                .limit(1)
+            )
+            log.info("director.query_node", student_id=student_id)
             node = (await session.execute(stmt)).scalars().first()
+            log.info("director.node_selected", node_id=str(node.node_id) if node else None)
             if node is None:
                 raise AppError(ErrorCode.INTERNAL, "无 active 节点，请先跑 plan.generate")
-            # node 满足 Node Protocol（MapNode ORM 实体）
-            node.kp  # type: ignore[attr-defined]  # noqa: B018  触发 lazy load；Stage 4 改 joined load
+            # joinedload 已把 kp 一起拉出来；exercise_agent 后面访问 node.kp.title 不会 lazy-load 报错
+            kp_title = node.kp.title
+            log.info("director.kp_title", title=kp_title)
 
         # 2. 同步调 Exercise Agent（spec § 5.2 难度梯度先算）
         await progress_publish(trace_id, ProgressEvent(
@@ -85,7 +93,7 @@ class DirectorAgent(AbstractAgent):
             recent = await LevelRepository(session).recent_scores(student_id, limit=3)
         difficulty = _compute_difficulty(recent)
         log.info("director.difficulty_chosen", difficulty=difficulty, recent=recent)
-        ex_dicts = await exercise_agent.run_sync(env, node, difficulty=difficulty)  # type: ignore[attr-defined]
+        ex_dicts = await ExerciseAgent().run_sync(env, str(node.node_id), kp_title, difficulty=difficulty)
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.EXERCISE, status="completed", payload={"count": len(ex_dicts)}
         ))
@@ -94,7 +102,7 @@ class DirectorAgent(AbstractAgent):
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.REVIEW, status="running"
         ))
-        review = await review_agent.review(ex_dicts)  # type: ignore[attr-defined]
+        review = await ReviewAgent().review(ex_dicts)
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.REVIEW, status="completed",
             payload={"verdict": review.verdict, "issues_count": len(review.issues)},

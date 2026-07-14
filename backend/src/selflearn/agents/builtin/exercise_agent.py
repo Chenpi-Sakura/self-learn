@@ -4,14 +4,16 @@ from __future__ import annotations
 from typing import Any
 
 from selflearn.agents.base import AbstractAgent
-from selflearn.agents.builtin._node_protocol import Node
 from selflearn.core.envelope import Envelope
 from selflearn.core.errors import AppError, ErrorCode
+from selflearn.core.logging import get_logger
 from selflearn.core.thinking import extract_json_from_fence
 from selflearn.llm.base import ChatMessage, ChatRequest
 from selflearn.llm.registry import llm_registry
 from selflearn.skills.library import get as get_skill
 from selflearn.tools.protocol import ToolRegistry
+
+log = get_logger("exercise")
 
 
 class ExerciseAgent(AbstractAgent):
@@ -26,17 +28,18 @@ class ExerciseAgent(AbstractAgent):
         return env  # pragma: no cover - 同步调用模式
 
     async def run_sync(
-        self, env: Envelope, node: Node, difficulty: str = "medium"
+        self, env: Envelope, node_id: str, kp_title: str, difficulty: str = "medium"
     ) -> list[dict[str, Any]]:
         """Director 同步调；返回 list[dict]，由 Director 写库。
 
-        V1.1 Rule #15: lint 拒收时抛 AppError，让 Director.try/except 兜底推 FAILED。
+        Stage 4-fix: 接收字符串而不是 Node 对象，避免 director 在 detached session 后访问
+        node.kp.title 触发 lazy-load 错误。
         """
         skill = get_skill("skill.exercise.generate")
 
         # 前置打包 1) 拉模板
         tmpl = await ToolRegistry.call(
-            "tool.fetch_template", name="exercise_generation_v1"
+            "tool.fetch_template", template_name="exercise_generation_v1"
         )
         if not tmpl.ok:
             raise AppError(ErrorCode.INTERNAL, f"fetch_template 失败: {tmpl.error}")
@@ -55,7 +58,7 @@ class ExerciseAgent(AbstractAgent):
                 ChatMessage(role="system", content=prompt),
                 ChatMessage(
                     role="user",
-                    content=f"node_id={node.node_id}; kp_title={node.kp.title}",
+                    content=f"node_id={node_id}; kp_title={kp_title}",
                 ),
             ],
             reasoning=True,
@@ -65,10 +68,13 @@ class ExerciseAgent(AbstractAgent):
         last_err: str | None = None
         for _attempt in range(2):
             raw = await llm_registry.default().chat(req)
+            log.info("exercise.llm_raw", attempt=_attempt, raw_len=len(raw), raw_head=raw[:200])
             parsed = extract_json_from_fence(raw)
+            log.info("exercise.parsed_type", type=type(parsed).__name__, value_preview=str(parsed)[:200])
             lint = await ToolRegistry.call(
                 "tool.lint_json", payload=parsed, schema="exercise"
             )
+            log.info("exercise.lint_result", ok=lint.ok, error=lint.error)
             if lint.ok:
                 if not isinstance(parsed, list):
                     parsed = [parsed]

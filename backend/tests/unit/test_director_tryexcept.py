@@ -18,13 +18,13 @@ async def test_director_uncaught_exception_publishes_failed_and_raises() -> None
     V1.1 修复点：避免 SSE 端点陷入死等。
     """
     from selflearn.agents.builtin.director_agent import DirectorAgent
+    from selflearn.agents.builtin.exercise_agent import ExerciseAgent
     from selflearn.core.envelope import ActorRef, Envelope
     from selflearn.core.errors import AppError, ErrorCode
     from selflearn.progress.stages import ProgressEvent, Stage
 
-    # 让 Director 调 exercise_agent.run_sync(...) 时 throw → 让 `_run_inner` 内层跑不下去
-    with patch("selflearn.agents.builtin.director_agent.exercise_agent") as mock_ex:
-        mock_ex.run_sync = AsyncMock(side_effect=RuntimeError("boom in ExerciseAgent"))
+    # 让 Director 调 ExerciseAgent().run_sync(...) 时 throw → 让 `_run_inner` 内层跑不下去
+    with patch.object(ExerciseAgent, "run_sync", new=AsyncMock(side_effect=RuntimeError("boom in ExerciseAgent"))):
 
         # 让 progress_publish 收集事件
         published: list[ProgressEvent] = []
