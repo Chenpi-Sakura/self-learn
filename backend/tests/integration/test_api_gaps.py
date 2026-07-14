@@ -154,7 +154,6 @@ async def test_get_profile_history_returns_snapshots_in_desc_order(
     ) -> list[ProfileSnapshot]:
         # 真实 repo 已经按 created_at DESC 返回；这里 fake 也按 DESC 顺序给
         return [fake_snap_3, fake_snap_2, fake_snap_1] if student_id == str(sid) else []
-        return [fake_snap_3, fake_snap_2, fake_snap_1] if student_id == sid else []
 
     mock_session = AsyncMock()
     with patch.object(
