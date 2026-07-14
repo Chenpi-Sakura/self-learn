@@ -94,7 +94,7 @@ async def build_profile(body: ProfileBuildRequest) -> ProfileBuildResponse:
 
 
 async def _stream_events(trace_id: str) -> AsyncIterator[dict[str, str]]:
-    """SSE 事件生成器：从 Redis Stream 读取进度，FAILED/COMPLETED 时关闭。"""
+    """SSE 事件生成器：从 Redis Stream 读取进度，status=completed/failed 时关闭。"""
     async for ev in progress_consume(trace_id):
         data = json.dumps(
             {
@@ -105,13 +105,15 @@ async def _stream_events(trace_id: str) -> AsyncIterator[dict[str, str]]:
             ensure_ascii=False,
         )
         yield {"event": "progress", "data": data}
-        if ev.stage.value in ("completed", "failed"):
+        # Stage 4-fix: ProfileAgent 发 stage=Stage.PROFILE+status=completed；按 status 终态判定
+        # 关闭 SSE，而不仅看 stage==Stage.COMPLETED。
+        if ev.status in ("completed", "failed"):
             final_payload = json.dumps(
                 {"status": ev.status, "payload": ev.payload},
                 ensure_ascii=False,
             )
             yield {
-                "event": "completed" if ev.stage.value == "completed" else "error",
+                "event": "completed" if ev.status == "completed" else "error",
                 "data": final_payload,
             }
             return

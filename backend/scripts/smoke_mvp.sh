@@ -152,7 +152,7 @@ async def main():
     async with factory() as s:
         rs = await s.get(Level, '$LEVEL_ID')
         assert rs is not None and rs.status == 'completed', f'level status={rs.status if rs else None}'
-        print(f'[smoke_mvp] level.status = {rs.status} ✓')
+        print(f'[smoke_mvp] level.status = {rs.status} OK')
 asyncio.run(main())
 "
 

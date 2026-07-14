@@ -57,13 +57,14 @@ async def stream_level(level_id: UUID, trace_id: str) -> EventSourceResponse:
                 ensure_ascii=False,
             )
             yield {"event": "progress", "data": data}
-            if ev.stage.value in ("completed", "failed"):
+            # Stage 4-fix: 按 status 终态判定关闭 SSE（与 profile 路由一致）
+            if ev.status in ("completed", "failed"):
                 final = json.dumps(
                     {"status": ev.status, "payload": ev.payload},
                     ensure_ascii=False,
                 )
                 yield {
-                    "event": "completed" if ev.stage.value == "completed" else "error",
+                    "event": "completed" if ev.status == "completed" else "error",
                     "data": final,
                 }
                 return
