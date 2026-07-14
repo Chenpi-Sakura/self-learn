@@ -52,6 +52,7 @@ class DirectorAgent(AbstractAgent):
         except Exception as e:  # noqa: BLE001
             import traceback
             log.error("director.unhandled_exception", trace_id=trace_id, error=repr(e), tb=traceback.format_exc())
+            await self._emit_failed(trace_id, "agent_internal_error", "Director 处理失败")
             raise AppError(ErrorCode.INTERNAL, "Director 处理失败", trace_id=trace_id) from e
 
     async def _run_inner(self, env: Envelope) -> Envelope:
