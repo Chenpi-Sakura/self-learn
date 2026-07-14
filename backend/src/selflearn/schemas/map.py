@@ -1,6 +1,8 @@
 """Stage 4 Map schema（spec § 4.2 + ORM map_node.py 真实字段）。"""
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel
 
 

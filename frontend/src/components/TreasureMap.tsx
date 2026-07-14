@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getMapNodes } from '../api/map';
+import { useSession } from '../store/session';
 import type { MapNode as ApiMapNode } from '../api/types';
 import './TreasureMap.css';
 
@@ -56,18 +57,19 @@ export function TreasureMap({ studentId }: Props) {
   const [nodes, setNodes] = useState<InternalNode[]>([]);
   const [edges] = useState<{ from: string; to: string; kind: string }[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [starting, setStarting] = useState<string | null>(null); // node.id being started
   const [msg, setMsg] = useState<string | null>(null);
 
-  const loadNodes = () => {
+  const loadNodes = useCallback(() => {
     if (!studentId) return;
     getMapNodes(studentId)
       .then((r) => setNodes(r.nodes.map(mapApiNode)))
       .catch(() => setNodes([]));
-  };
+  }, [studentId]);
 
   useEffect(() => {
     loadNodes();
-  }, [studentId]);
+  }, [loadNodes]);
 
   const handleGenerate = async () => {
     if (!studentId || generating) return;
@@ -80,7 +82,7 @@ export function TreasureMap({ studentId }: Props) {
         body: JSON.stringify({ student_id: studentId }),
       });
       const data = await res.json();
-      setMsg(`已提交（trace: ${data.trace_id.slice(0, 8)}…），2 秒后刷新`);
+      setMsg(`已提交，2 秒后刷新`);
       setTimeout(() => {
         loadNodes();
         setMsg(null);
@@ -89,6 +91,31 @@ export function TreasureMap({ studentId }: Props) {
     } catch (e) {
       setMsg(`生成失败：${String(e)}`);
       setGenerating(false);
+    }
+  };
+
+  const handleNodeClick = async (node: InternalNode) => {
+    if (!studentId || starting) return;
+    setStarting(node.id);
+    setMsg(`启动 ${node.label}...`);
+    try {
+      // 调 DirectorAgent 生成关卡
+      const res = await fetch('http://localhost:8000/api/level/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
+      });
+      const data = await res.json();
+      setMsg(`${node.label} 已启动（trace: ${data.trace_id.slice(0, 8)}…），3 秒后加载`);
+      // 等 Worker 处理完，再刷新节点（状态会变 in_progress）
+      setTimeout(() => {
+        loadNodes();
+        setMsg(null);
+        setStarting(null);
+      }, 3500);
+    } catch (e) {
+      setMsg(`启动失败：${String(e)}`);
+      setStarting(null);
     }
   };
 
@@ -141,13 +168,22 @@ export function TreasureMap({ studentId }: Props) {
           const strokeDash = n.branchStatus === 'sleeping' ? '3 3' : n.branchStatus === 'active' ? '4 3' : '';
           const op = n.branchStatus === 'sleeping' ? 0.55 : 1;
           return (
-            <g key={n.id} className="node-g" transform={`translate(${n.x}, ${n.y})`} opacity={op}>
+            <g
+              key={n.id}
+              className={`node-g${starting === n.id ? ' starting' : ''}`}
+              transform={`translate(${n.x}, ${n.y})`}
+              opacity={op}
+              onClick={() => handleNodeClick(n)}
+              style={{ cursor: starting ? 'wait' : 'pointer' }}
+            >
               <rect className="node-rect" x="0" y="0" width="100" height="40" rx="6"
                     fill={fill} stroke={stroke}
                     strokeWidth={isKey || n.status === 'in_progress' ? 1.5 : 1}
                     strokeDasharray={strokeDash} />
-              <text className="node-num" x="8" y="14" fill={txt}>№{n.id.slice(1)} · {n.minutes}min</text>
-              <text className="node-lbl" x="50" y="30" textAnchor="middle" fill={txt}>{n.label}</text>
+              <text className="node-num" x="8" y="14" fill={txt}>{n.label}</text>
+              <text className="node-lbl" x="50" y="30" textAnchor="middle" fill={txt}>
+                {n.status === 'locked' ? '🔒' : n.status === 'completed' ? '✅' : starting === n.id ? '⏳' : '▶'}
+              </text>
               {n.status === 'in_progress' && (
                 <circle cx="100" cy="0" r="6" fill="var(--indigo)">
                   <animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite" />
