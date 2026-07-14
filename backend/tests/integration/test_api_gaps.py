@@ -2,6 +2,7 @@
 
 T7: GET /api/profile/{student_id} — 启动时加载画像（spec § 4.1）。
 T8: GET /api/profile/{student_id}/history — 演变迷你折线图（spec § 5.3）。
+T9: GET /api/map/{student_id}/nodes — 启动时加载藏宝图节点列表（spec § 4.2）。
 
 mock 模式：profile 表含 JSONB/PgUUID/FK，SQLite fixture 不兼容，
 故直接 mock 路由层调用的具体函数（ProfileRepository._get_by_student /
@@ -18,6 +19,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from selflearn.domain.knowledge_point import KnowledgePoint
+from selflearn.domain.map_node import MapNode
 from selflearn.domain.profile import Profile
 from selflearn.domain.profile_snapshot import ProfileSnapshot
 from selflearn.gateway.app import create_app
@@ -201,3 +204,91 @@ async def test_get_profile_history_respects_limit(app_client: AsyncClient) -> No
     assert resp.status_code == 200
     data = resp.json()
     assert len(data["snapshots"]) == 2
+
+
+def _make_fake_map_node(
+    student_id: uuid.UUID,
+    kp_id: uuid.UUID,
+    status: str = "active",
+    position: dict[str, float] | None = None,
+) -> MapNode:
+    """构造未 attached 的 MapNode 对象（mock 返回值用）。"""
+    n = MapNode(
+        student_id=student_id,
+        kp_id=kp_id,
+        status=status,
+        branch_type="main",
+        position=position or {"x": 0.5, "y": 0.3},
+    )
+    n.node_id = uuid.uuid4()  # 确保 PK 存在（ORM default 在 PG 才生效，fake 需手动）
+    return n
+
+
+@pytest.mark.asyncio
+async def test_get_map_nodes_returns_list(app_client: AsyncClient) -> None:
+    """map nodes 端点：返回按 student_id 过滤的节点列表。"""
+    sid = uuid.uuid4()
+    kp1_id = uuid.uuid4()
+    kp2_id = uuid.uuid4()
+    fake_node1 = _make_fake_map_node(sid, kp1_id, status="active", position={"x": 0.1, "y": 0.2})
+    fake_node2 = _make_fake_map_node(sid, kp2_id, status="completed", position={"x": 0.5, "y": 0.5})
+    fake_node_other = _make_fake_map_node(uuid.uuid4(), uuid.uuid4(), status="locked")
+
+    # 路由逻辑：session.execute(select(MapNode, KP.title).join(...).where(student_id==sid))
+    # mock 整个 query chain 返回 fake rows
+    fake_rows = [
+        (fake_node1, "Attention 机制"),
+        (fake_node2, "Self-Attention"),
+    ]
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()  # sync result, 同 T7 历史教训
+    mock_result.all.return_value = fake_rows
+    mock_session.execute.return_value = mock_result
+
+    with patch(
+        "selflearn.gateway.routes.map.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/map/{sid}/nodes")
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "nodes" in data
+    assert len(data["nodes"]) == 2
+
+    # 第一个节点：active status + (0.1, 0.2)
+    n1 = data["nodes"][0]
+    assert n1["node_id"] == str(fake_node1.node_id)
+    assert n1["kp_id"] == str(kp1_id)
+    assert n1["title"] == "Attention 机制"
+    assert n1["position"]["x"] == pytest.approx(0.1, 0.001)
+    assert n1["position"]["y"] == pytest.approx(0.2, 0.001)
+    assert n1["status"] == "active"
+
+    # 第二个节点：completed + (0.5, 0.5)
+    n2 = data["nodes"][1]
+    assert n2["status"] == "completed"
+    assert n2["title"] == "Self-Attention"
+
+
+@pytest.mark.asyncio
+async def test_get_map_nodes_empty_when_no_match(app_client: AsyncClient) -> None:
+    """student 无节点时返回 nodes=[]。"""
+    sid = uuid.uuid4()
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    with patch(
+        "selflearn.gateway.routes.map.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/map/{sid}/nodes")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["nodes"] == []
