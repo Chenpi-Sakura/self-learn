@@ -209,11 +209,12 @@ async def get_profile_history(
     }
 
     def _shorten(dims: dict[str, object]) -> dict[str, float]:
-        return {
-            short_k: float(dims[long_k])
-            for long_k, short_k in _LONG_TO_SHORT.items()
-            if long_k in dims and isinstance(dims[long_k], (int, float))
-        }
+        out: dict[str, float] = {}
+        for long_k, short_k in _LONG_TO_SHORT.items():
+            v = dims.get(long_k)
+            if isinstance(v, (int, float)):
+                out[short_k] = float(v)
+        return out
 
     return ProfileHistoryResponse(
         student_id=student_id,

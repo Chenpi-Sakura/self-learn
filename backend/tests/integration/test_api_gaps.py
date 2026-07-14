@@ -34,7 +34,9 @@ def _make_fake_profile(student_id: uuid.UUID) -> Profile:
     p = Profile(
         profile_id=uuid.uuid4(),
         student_id=student_id,
-        dimensions={"kb": 0.7, "vp": 0.5, "as": 0.6, "ge": 0.4, "ept": 0.5, "fd": 0.5},
+        # Stage 4-fix: fixture 用 DB 真实存储格式（长名）+ API 层做长→短映射
+        dimensions={"knowledge_base": 0.7, "visual_preference": 0.5, "analytic_style": 0.6,
+                    "goal_employment": 0.4, "error_prone_type": 0.5, "focus_duration": 0.5},
         tags=["demo"],
     )
     p.last_updated = datetime(2026, 7, 13, 10, 0, 0, tzinfo=timezone.utc)
@@ -50,7 +52,9 @@ def _make_fake_snapshot(
     """构造未 attached 的 ProfileSnapshot 对象（mock 返回值用）。"""
     s = ProfileSnapshot(
         student_id=student_id,
-        profile={"kb": kb_value, "vp": 0.5, "as": 0.5, "ge": 0.5, "ept": 0.5, "fd": 0.5},
+        # Stage 4-fix: 长名 + API 层做长→短映射
+        profile={"knowledge_base": kb_value, "visual_preference": 0.5, "analytic_style": 0.5,
+                 "goal_employment": 0.5, "error_prone_type": 0.5, "focus_duration": 0.5},
         trigger=trigger,
     )
     s.created_at = created_at or datetime(2026, 7, 13, 10, 0, 0, tzinfo=timezone.utc)
