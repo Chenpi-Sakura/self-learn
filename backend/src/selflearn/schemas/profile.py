@@ -1,6 +1,7 @@
 """Profile 相关的 Pydantic 模型（v4 § 4.3 smoke 路由）。"""
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -31,3 +32,13 @@ class ProfileBuildRequest(BaseModel):
 
 class ProfileBuildResponse(BaseModel):
     trace_id: str
+
+
+class ProfileDetailResponse(BaseModel):
+    """Stage 4 spec § 4.1: GET /api/profile/{student_id} 出参。"""
+
+    student_id: UUID
+    dimensions: dict[str, float]
+    tags: list[str]
+    snapshot_count: int
+    last_updated_at: datetime | None = None

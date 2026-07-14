@@ -6,17 +6,23 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
+from sqlalchemy import func, select
 
 from selflearn.core.envelope import ActorRef, Envelope
+from selflearn.domain.profile_snapshot import ProfileSnapshot
 from selflearn.infra.bus import publish_envelope
+from selflearn.infra.db import get_session_factory
 from selflearn.infra.redis_client import get_redis
+from selflearn.infra.repositories.profile_repo import ProfileRepository
 from selflearn.progress.stream import progress_consume
 from selflearn.schemas.profile import (
     ProfileBuildRequest,
     ProfileBuildResponse,
+    ProfileDetailResponse,
     ProfileInitRequest,
     ProfileInitResponse,
     ProfileStatusResponse,
@@ -114,3 +120,37 @@ async def _stream_events(trace_id: str) -> AsyncIterator[dict[str, str]]:
 async def stream_init(trace_id: str) -> EventSourceResponse:
     """Stage 3 SSE 真流（替代 Stage 2 轮询 fallback）。"""
     return EventSourceResponse(_stream_events(trace_id))
+
+
+# ---------------------------------------------------------------------------
+# Stage 4 扩展：GET /api/profile/{student_id}（spec § 4.1，前端启动加载画像）
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{student_id}", response_model=ProfileDetailResponse)
+async def get_profile(student_id: UUID) -> ProfileDetailResponse:
+    """Stage 4 spec § 4.1: 启动时拉画像渲染雷达图。
+
+    按 student_id 查（业务语义：一学生一画像），不存在返回 404。
+    """
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = ProfileRepository(session)
+        profile = await repo._get_by_student(student_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="profile_not_found")
+        snap_count = (
+            await session.execute(
+                select(func.count())
+                .select_from(ProfileSnapshot)
+                .where(ProfileSnapshot.student_id == student_id)
+            )
+        ).scalar_one()
+
+    return ProfileDetailResponse(
+        student_id=student_id,
+        dimensions={k: float(v) for k, v in profile.dimensions.items()},
+        tags=list(profile.tags),
+        snapshot_count=int(snap_count),
+        last_updated_at=profile.last_updated,
+    )
