@@ -39,7 +39,7 @@ class ExerciseAgent(AbstractAgent):
 
         # 前置打包 1) 拉模板
         tmpl = await ToolRegistry.call(
-            "tool.fetch_template", template_name="exercise_generation_v1"
+            name="tool.fetch_template", template_name="exercise_generation_v1"
         )
         if not tmpl.ok:
             raise AppError(ErrorCode.INTERNAL, f"fetch_template 失败: {tmpl.error}")
@@ -72,7 +72,7 @@ class ExerciseAgent(AbstractAgent):
             parsed = extract_json_from_fence(raw)
             log.info("exercise.parsed_type", type=type(parsed).__name__, value_preview=str(parsed)[:200])
             lint = await ToolRegistry.call(
-                "tool.lint_json", payload=parsed, schema="exercise"
+                name="tool.lint_json", payload=parsed, schema="exercise"
             )
             log.info("exercise.lint_result", ok=lint.ok, error=lint.error)
             if lint.ok:

@@ -29,7 +29,15 @@ class ToolRegistry:
         cls._tools[tool.tool_name] = tool
 
     @classmethod
-    async def call(cls, name: str, **kwargs: Any) -> ToolResult:
+    async def call(cls, **kwargs: Any) -> ToolResult:
+        """调用 tool。kwargs 必须含 name=tool_name，其余为 tool 参数。
+
+        设计：name 收进 kwargs，让所有 tool 内部可用任意参数名（不再有
+        "name" 形参被 ToolRegistry 占用的问题）。
+        """
+        name = kwargs.pop("name", None)
+        if not name:
+            return ToolResult(ok=False, error="missing_tool_name")
         tool = cls._tools.get(name)
         if not tool:
             return ToolResult(ok=False, error=f"tool_not_found:{name}")

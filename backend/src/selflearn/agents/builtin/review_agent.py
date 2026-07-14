@@ -35,7 +35,7 @@ class ReviewAgent(AbstractAgent):
 
         # 1. tool.lint_json first (cold post-validation)
         lint = await ToolRegistry.call(
-            "tool.lint_json", payload=exercises, schema="exercise"
+            name="tool.lint_json", payload=exercises, schema="exercise"
         )
         if not lint.ok:
             return Review(

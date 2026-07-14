@@ -15,8 +15,8 @@ class FetchTemplateTool(Tool):
     description = "读 prompts/{name}.yaml 模板内容，返回 string"
 
     async def call(self, **kwargs: Any) -> ToolResult:
-        # Stage 4-fix: ToolRegistry.call(name=..., **kwargs) 已经占了 `name` 参数；
-        # 调用方传 template_name= 避开冲突。
+        # T13.5 Task 7: ToolRegistry.call 把 name 收进 kwargs 后 pop 出去，
+        # tool 内部可以用任意参数名。保留 template_name + name 两套 key 兼容。
         name: str = kwargs.get("template_name") or kwargs.get("name", "")
         path = PROMPT_DIR / f"{name}.yaml"
         if not path.exists():
