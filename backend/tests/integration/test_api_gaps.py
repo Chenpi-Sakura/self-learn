@@ -482,3 +482,125 @@ async def test_profile_agent_sse_completed_includes_profile_field() -> None:
 
     # 既有 profile_id 字段保留（兼容 reply envelope 测试）
     assert "profile_id" in payload
+
+
+@pytest.mark.asyncio
+async def test_director_sse_completed_includes_level_id_and_exercise_ids() -> None:
+    """SSE completed 事件 payload 必须包含 level_id + exercise_ids（spec § 4.4 + § 10.3）。
+
+    简化策略：不真起 DirectorAgent.run()（涉及 LLM + 多表 + 5 步串联），
+    直接调 _run_inner 之外的最小路径 + mock 关键依赖（exercise_agent.run_sync /
+    review_agent.review / get_session_factory / progress_publish）。
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from selflearn.agents.builtin import director_agent as director_mod
+    from selflearn.agents.builtin import exercise_agent, review_agent
+    from selflearn.agents.builtin.exercise_agent import ExerciseAgent
+    from selflearn.core.envelope import ActorRef, Envelope
+    from selflearn.domain.map_node import MapNode
+    from selflearn.domain.level import Level
+    from selflearn.domain.exercise import Exercise
+    from selflearn.progress.stages import Stage, ProgressEvent
+    from selflearn.skills.library import load_all
+
+    # DirectorAgent._run_inner 会 get_skill("skill.director.start") → 需先加载所有 skill
+    load_all()
+
+    sid = uuid.uuid4()
+    node_id = uuid.uuid4()
+    kp_id = uuid.uuid4()
+    fake_node = MapNode(student_id=sid, kp_id=kp_id, status="active")
+    fake_node.node_id = node_id
+    fake_node.kp = MagicMock(title="Attention")  # type: ignore[attr-defined]
+
+    fake_level = Level(node_id=node_id, status="generated", form="exercise")
+    fake_level.level_id = uuid.uuid4()
+
+    fake_ex1 = Exercise(level_id=fake_level.level_id, exercise_type="single_choice",
+                        prompt="Q1", options=["A"], correct_answer="A")
+    fake_ex1.exercise_id = uuid.uuid4()
+    fake_ex2 = Exercise(level_id=fake_level.level_id, exercise_type="short_answer",
+                        prompt="Q2", options=[], correct_answer="answer")
+    fake_ex2.exercise_id = uuid.uuid4()
+
+    # review.score = 0.9 (high → kb delta +0.05)
+    fake_review = MagicMock(verdict="accepted", score=0.9, issues=[])
+
+    fake_session = AsyncMock()
+
+    # session.execute 多种返回：scalar/.first/.all
+    # 1) select(MapNode).where(...).scalars().first() → fake_node
+    # 2) LevelRepository.recent_scores: select(score).where(...).scalars().all() → []
+    # 3) ExerciseRepository.bulk_create 返回 [fake_ex1, fake_ex2]
+    # 4) ProfileRepository.apply_delta / .upsert / recent_snapshots 等的内部 execute
+
+    # bulk_create 是 repo 方法，需要 patch 返回 [fake_ex1, fake_ex2]
+    async def fake_bulk_create(level_id: object, ex_dicts: list[object]) -> list[Exercise]:
+        return [fake_ex1, fake_ex2]
+
+    # exercise_agent.run_sync 是类方法（ExerciseAgent.run_sync）；因为 director_agent 通过
+    # `from ... import exercise_agent` 模块属性查找，需要 patch 模块属性（用 create=True）。
+    with patch.object(director_mod, "get_session_factory") as mock_factory, \
+         patch.object(exercise_agent, "run_sync", new=AsyncMock(return_value=[
+             {"exercise_type": "single_choice", "prompt": "Q1"},
+             {"exercise_type": "short_answer", "prompt": "Q2"},
+         ]), create=True), \
+         patch.object(review_agent, "review", new=AsyncMock(return_value=fake_review), create=True), \
+         patch("selflearn.agents.builtin.director_agent.ExerciseRepository") as mock_repo_cls, \
+         patch("selflearn.agents.builtin.director_agent.LevelRepository") as mock_level_repo_cls, \
+         patch("selflearn.agents.builtin.director_agent.ProfileRepository") as mock_profile_repo_cls, \
+         patch.object(director_mod, "progress_publish", new=AsyncMock()) as mock_pub:
+        factory_callable = MagicMock()
+        factory_callable.return_value.__aenter__ = AsyncMock(return_value=fake_session)
+        factory_callable.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_factory.return_value = factory_callable
+        mock_repo_cls.return_value.bulk_create = fake_bulk_create
+        mock_level_repo_cls.return_value.recent_scores = AsyncMock(return_value=[])
+        mock_profile_repo_cls.return_value.apply_delta = AsyncMock(return_value={
+            "kb": 0.55, "vp": 0.5, "as": 0.52, "ge": 0.5, "ept": 0.5, "fd": 0.5,
+        })
+
+        env = Envelope(
+            action="skill.execute",
+            sender=ActorRef(type="gateway", id="g"),
+            target=ActorRef(type="skill", id="skill.director.start"),
+            payload={"student_id": str(sid)},
+        )
+
+        # 关键：让 select(MapNode).scalars().first() 返回 fake_node
+        async def fake_execute_with_node(stmt: object) -> object:
+            m = MagicMock()
+            m.scalars.return_value.first.return_value = fake_node
+            m.scalars.return_value.all.return_value = []
+            m.scalar_one.return_value = 0
+            return m
+
+        fake_session.execute = fake_execute_with_node
+
+        # Level.flush() 后才能拿到 level.level_id — fake_level 已预设
+        async def fake_flush() -> None:
+            pass
+
+        fake_session.flush = fake_flush
+        fake_session.add = MagicMock()
+        fake_session.commit = AsyncMock()
+
+        reply = await director_mod.DirectorAgent().run(env)
+
+    # 断言 reply.payload 含 level_id（Stage 3 兼容）
+    assert "level_id" in reply.payload
+
+    # 找最后一次 COMPLETED publish 的 payload
+    completed_call = next(
+        c for c in mock_pub.call_args_list
+        if c.args[1].stage == Stage.COMPLETED and c.args[1].status == "completed"
+    )
+    payload = completed_call.args[1].payload
+    assert "level_id" in payload
+    assert "exercise_ids" in payload
+    assert len(payload["exercise_ids"]) == 2
+    # 既有的 exercises_count 字段保留
+    assert payload["exercises_count"] == 2
+    # 新增 score 字段
+    assert payload["score"] == pytest.approx(0.9, 0.01)

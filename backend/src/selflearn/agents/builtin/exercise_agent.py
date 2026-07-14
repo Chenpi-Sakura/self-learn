@@ -25,7 +25,9 @@ class ExerciseAgent(AbstractAgent):
         """Dispatcher 走 Envelope 入口（Stage 3 MVP 仅通过 Director 同步调用 run_sync）。"""
         return env  # pragma: no cover - 同步调用模式
 
-    async def run_sync(self, env: Envelope, node: Node) -> list[dict[str, Any]]:
+    async def run_sync(
+        self, env: Envelope, node: Node, difficulty: str = "medium"
+    ) -> list[dict[str, Any]]:
         """Director 同步调；返回 list[dict]，由 Director 写库。
 
         V1.1 Rule #15: lint 拒收时抛 AppError，让 Director.try/except 兜底推 FAILED。
@@ -42,9 +44,15 @@ class ExerciseAgent(AbstractAgent):
         # 前置打包 2) 一次性把所有输入塞进 ChatRequest
         # ChatRequest 当前 dataclass 无 `system` 字段；system 走 messages 中
         # role="system" 的 ChatMessage（与 ping_agent 一致）。
+        # spec § 5.2: 把 difficulty 注入 prompt，让 LLM 按难度调整题目复杂度
+        prompt = (
+            skill.body
+            + "\n\n" + tmpl.data["content"]
+            + f"\n\n当前难度：{difficulty}（easy 偏概念辨析 / medium 偏应用 / hard 偏综合）"
+        )
         req = ChatRequest(
             messages=[
-                ChatMessage(role="system", content=skill.body + "\n\n" + tmpl.data["content"]),
+                ChatMessage(role="system", content=prompt),
                 ChatMessage(
                     role="user",
                     content=f"node_id={node.node_id}; kp_title={node.kp.title}",

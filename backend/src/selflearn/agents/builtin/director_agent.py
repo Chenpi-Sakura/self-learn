@@ -24,6 +24,8 @@ from selflearn.domain.map_node import MapNode
 from selflearn.domain.review_result import ReviewResult
 from selflearn.infra.db import get_session_factory
 from selflearn.infra.repositories.exercise_repo import ExerciseRepository
+from selflearn.infra.repositories.level_repo import LevelRepository
+from selflearn.infra.repositories.profile_repo import ProfileRepository
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.progress.stream import progress_publish
 from selflearn.skills.library import get as get_skill
@@ -57,7 +59,7 @@ class DirectorAgent(AbstractAgent):
         skill = get_skill("skill.director.start")
 
         student_id_raw = env.payload["student_id"]
-        student_id = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw
+        student_id: UUID = UUID(student_id_raw) if isinstance(student_id_raw, str) else student_id_raw  # type: ignore[assignment]
 
         # 1. 选第一个 active 节点
         await progress_publish(trace_id, ProgressEvent(
@@ -75,12 +77,17 @@ class DirectorAgent(AbstractAgent):
             # node 满足 Node Protocol（MapNode ORM 实体）
             node.kp  # type: ignore[attr-defined]  # noqa: B018  触发 lazy load；Stage 4 改 joined load
 
-        # 2. 同步调 Exercise Agent
+        # 2. 同步调 Exercise Agent（spec § 5.2 难度梯度先算）
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.EXERCISE, status="running",
             payload={"node_id": str(node.node_id)},
         ))
-        ex_dicts = await exercise_agent.run_sync(env, node)  # type: ignore[attr-defined]
+        # spec § 5.2: 难度梯度（基于最近 3 次关卡完成分数）
+        async with factory() as session:
+            recent = await LevelRepository(session).recent_scores(student_id, limit=3)
+        difficulty = _compute_difficulty(recent)
+        log.info("director.difficulty_chosen", difficulty=difficulty, recent=recent)
+        ex_dicts = await exercise_agent.run_sync(env, node, difficulty=difficulty)  # type: ignore[attr-defined]
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.EXERCISE, status="completed", payload={"count": len(ex_dicts)}
         ))
@@ -107,7 +114,7 @@ class DirectorAgent(AbstractAgent):
             level_id = level.level_id
 
             # ExerciseRepository commit 后 select 拿 PK 实体的 list
-            _ = await ExerciseRepository(session).bulk_create(level_id, ex_dicts)
+            ex_list = await ExerciseRepository(session).bulk_create(level_id, ex_dicts)
 
             session.add(ReviewResult(
                 level_id=level_id, verdict=review.verdict,
@@ -115,10 +122,25 @@ class DirectorAgent(AbstractAgent):
             ))
             await session.commit()
 
-        # 5. 推 completed
+        # 4.5 spec § 5.1: 关卡完成后根据 review.score 微调 kb / as + 写 snapshot
+        score_ratio = review.score  # ReviewAgent 给的 0.0 - 1.0
+        delta_kb = 0.05 if score_ratio >= 0.8 else (-0.03 if score_ratio < 0.5 else 0.0)
+        delta_as = 0.02 if score_ratio >= 0.7 else -0.02
+        async with factory() as session:
+            await ProfileRepository(session).apply_delta(
+                student_id, {"kb": delta_kb, "as": delta_as}
+            )
+            await session.commit()
+
+        # 5. 推 completed（保留 level_id + exercises_count 兼容；追加 exercise_ids + score）
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.COMPLETED, status="completed",
-            payload={"level_id": str(level_id), "exercises_count": len(ex_dicts)},
+            payload={
+                "level_id": str(level_id),
+                "exercise_ids": [str(ex.exercise_id) for ex in ex_list],
+                "exercises_count": len(ex_dicts),
+                "score": score_ratio,
+            },
         ))
 
         return Envelope(
@@ -135,3 +157,15 @@ class DirectorAgent(AbstractAgent):
             stage=Stage.FAILED, status="failed",
             payload={"code": code, "message": message},
         ))
+
+
+def _compute_difficulty(recent_scores: list[float]) -> str:
+    """spec § 5.2: 平均分 < 0.5 → easy；< 0.8 → medium；其余 → hard。无历史 → medium。"""
+    if not recent_scores:
+        return "medium"
+    avg = sum(recent_scores) / len(recent_scores)
+    if avg < 0.5:
+        return "easy"
+    if avg < 0.8:
+        return "medium"
+    return "hard"
