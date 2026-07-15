@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getMapNodes } from '../api/map';
 import { useSession } from '../store/session';
+import { useLevel } from '../store/levelStore';
 import type { MapNode as ApiMapNode } from '../api/types';
 import './TreasureMap.css';
 
@@ -25,7 +26,8 @@ const STATUS_FILL: Record<string, string> = {
   key:         '#BC4749',
   interest:    '#FFFFFF',
   // T13-fix: 后端 PlanAgent 写入的 status="active"（main 分支第一站）
-  active:      '#FFFFFF',
+  // 浅米色 + indigo 边让"可点击"和 locked (#F4F4F0) 区分开
+  active:      '#FFF8E7',
   sleeping:    'transparent',
 };
 const STATUS_TEXT: Record<string, string> = {
@@ -58,6 +60,7 @@ interface Props {
 
 export function TreasureMap({ studentId }: Props) {
   const [nodes, setNodes] = useState<InternalNode[]>([]);
+  const setActiveLevel = useLevel((s) => s.setActive);
   // T13-fix: edges 由 nodes 自动派生（按当前 y,x 顺序串成 main 主干），不再硬编码空数组
   const edges: { from: string; to: string; kind: string }[] = (() => {
     const sorted = [...nodes].sort((a, b) => (a.y - b.y) || (a.x - b.x));
@@ -110,20 +113,33 @@ export function TreasureMap({ studentId }: Props) {
     setStarting(node.id);
     setMsg(`启动 ${node.label}...`);
     try {
-      // 调 DirectorAgent 生成关卡
+      // 调 DirectorAgent 生成关卡（后端幂等：复用 in-flight 关卡则不调 LLM）
       const res = await fetch('http://localhost:8000/api/level/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: studentId }),
+        body: JSON.stringify({ student_id: studentId, node_id: node.id }),
       });
       const data = await res.json();
-      setMsg(`${node.label} 已启动（trace: ${data.trace_id.slice(0, 8)}…），3 秒后加载`);
-      // 等 Worker 处理完，再刷新节点（状态会变 in_progress）
-      setTimeout(() => {
-        loadNodes();
-        setMsg(null);
-        setStarting(null);
-      }, 3500);
+      if (data.level_id) {
+        // 立即把 levelId 推入 store，LecturePane/ExercisePane 就能拉题
+        setActiveLevel(data.level_id, node.id);
+        setMsg(
+          `${node.label} ${data.reused ? '已就绪（复用）' : '已启动'}（${data.level_id.slice(0, 8)}…）`
+        );
+        // 1s 后刷新节点（status 可能变 in_progress）
+        setTimeout(() => {
+          loadNodes();
+          setMsg(null);
+          setStarting(null);
+        }, 1000);
+      } else {
+        setMsg(`启动中：trace=${data.trace_id?.slice(0, 8) ?? '?'}…3 秒后刷新`);
+        setTimeout(() => {
+          loadNodes();
+          setMsg(null);
+          setStarting(null);
+        }, 3500);
+      }
     } catch (e) {
       setMsg(`启动失败：${String(e)}`);
       setStarting(null);
@@ -175,7 +191,8 @@ export function TreasureMap({ studentId }: Props) {
           const stroke = isKey ? 'var(--vermilion)' :
             n.branchStatus === 'sleeping' ? 'var(--mute)' :
             n.status === 'unlocked' ? 'var(--indigo)' :
-            n.status === 'in_progress' ? 'var(--indigo)' : 'var(--border)';
+            n.status === 'in_progress' ? 'var(--indigo)' :
+            n.status === 'active' ? 'var(--indigo)' : 'var(--border)';
           const strokeDash = n.branchStatus === 'sleeping' ? '3 3' : n.branchStatus === 'active' ? '4 3' : '';
           const op = n.branchStatus === 'sleeping' ? 0.55 : 1;
           return (

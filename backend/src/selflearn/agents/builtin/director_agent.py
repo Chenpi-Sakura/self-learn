@@ -63,20 +63,29 @@ class DirectorAgent(AbstractAgent):
         student_id_raw = env.payload["student_id"]
         student_id: str = str(student_id_raw) if not isinstance(student_id_raw, str) else student_id_raw
 
-        # 1. 选第一个 active 节点
+        # 1. 选 active 节点（如果 payload 给了 node_id 就用，否则取第一个 active）
         await progress_publish(trace_id, ProgressEvent(
             stage=Stage.DIRECTOR, status="running",
             payload={"action": "select_node", "student_id": str(student_id)},
         ))
+        target_node_id_raw = env.payload.get("node_id")
         factory = get_session_factory()
         async with factory() as session:
-            stmt = (
-                select(MapNode)
-                .where(MapNode.student_id == student_id, MapNode.status == "active")
-                .options(joinedload(MapNode.kp))
-                .limit(1)
-            )
-            log.info("director.query_node", student_id=student_id)
+            if target_node_id_raw:
+                stmt = (
+                    select(MapNode)
+                    .where(MapNode.node_id == target_node_id_raw)
+                    .options(joinedload(MapNode.kp))
+                    .limit(1)
+                )
+            else:
+                stmt = (
+                    select(MapNode)
+                    .where(MapNode.student_id == student_id, MapNode.status == "active")
+                    .options(joinedload(MapNode.kp))
+                    .limit(1)
+                )
+            log.info("director.query_node", student_id=student_id, node_id=str(target_node_id_raw) if target_node_id_raw else None)
             node = (await session.execute(stmt)).scalars().first()
             log.info("director.node_selected", node_id=str(node.node_id) if node else None)
             if node is None:

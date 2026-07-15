@@ -1,4 +1,8 @@
-"""Level 路由（Stage 3）：启动关卡 / 提交答案 / SSE 真流。"""
+"""Level 路由（Stage 3）：启动关卡 / 提交答案 / SSE 真流。
+
+幂等性：POST /start 对同一 student_id 复用第一个 active 节点的 in-flight
+（status='generated' 或 'in_progress'）关卡，避免重复调 LLM 出题。
+"""
 from __future__ import annotations
 
 import json
@@ -33,15 +37,48 @@ class LevelSubmitRequest(BaseModel):
 
 
 @router.post("/start", status_code=202)
-async def start_level(body: LevelStartRequest) -> dict[str, str]:
+async def start_level(body: LevelStartRequest) -> dict[str, object]:
+    student_id = str(body.student_id)
+    factory = get_session_factory()
+    async with factory() as session:
+        # 幂等性：先查 active 节点的 in-flight 关卡（status 非 completed）
+        node = (
+            await session.execute(
+                select(MapNode)
+                .where(MapNode.student_id == student_id, MapNode.status == "active")
+                .limit(1)
+            )
+        ).scalars().first()
+        if node is None:
+            raise HTTPException(status_code=409, detail="no_active_node")
+        existing = (
+            await session.execute(
+                select(Level)
+                .where(
+                    Level.node_id == node.node_id,
+                    Level.status.in_(("generated", "in_progress")),
+                )
+                .order_by(Level.created_at.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if existing is not None:
+            # 复用：直接返回已有 level_id，不调 LLM
+            return {
+                "level_id": str(existing.level_id),
+                "node_id": str(node.node_id),
+                "reused": True,
+            }
+
+    # 无 in-flight 关卡 → 发 envelope 给 DirectorAgent 出题
     env = Envelope(
         action="skill.execute",
         sender=ActorRef(type="gateway", id="smoke"),
         target=ActorRef(type="skill", id="skill.director.start"),
-        payload={"student_id": str(body.student_id)},
+        payload={"student_id": student_id, "node_id": str(node.node_id)},
     )
     await publish_envelope(env, routing_key="director.skill.director.start")
-    return {"trace_id": env.trace_id}
+    return {"trace_id": env.trace_id, "node_id": str(node.node_id), "reused": False}
 
 
 @router.get("/{level_id}/stream")

@@ -13,6 +13,7 @@ import { LecturePane } from './panes/LecturePane';
 import { ExercisePane } from './panes/ExercisePane';
 import { useWorkspace } from './store/useWorkspace';
 import { useSession } from './store/session';
+import { useLevel } from './store/levelStore';
 import { shortcutManager, parseKeyEvent, registerSystemShortcuts } from './lib/shortcuts';
 import { DockPositionsProvider } from './lib/dockPositions';
 import type { WindowState } from './types/window';
@@ -30,15 +31,15 @@ const WIN_CONTENT: Record<string, WinDef> = {
   exercise:     { title: '习题' },
 };
 
-function renderBody(appId: string, win: WindowState, studentId: string): ReactNode {
+function renderBody(appId: string, win: WindowState, studentId: string, levelId: string): ReactNode {
   switch (appId) {
     case 'treasure_map': return <TreasureMap studentId={studentId} />;
     case 'task_list':    return <TaskList />;
     case 'profile':      return <ProfileRadar studentId={studentId} />;
     case 'chat':         return <ChatFloat win={win} />;
     case 'dashboard':    return <CalendarPanel />;
-    case 'document':     return <LecturePane levelId="" />;
-    case 'exercise':     return <ExercisePane levelId="" />;
+    case 'document':     return <LecturePane levelId={levelId} />;
+    case 'exercise':     return <ExercisePane levelId={levelId} />;
     default:             return null;
   }
 }
@@ -46,6 +47,7 @@ function renderBody(appId: string, win: WindowState, studentId: string): ReactNo
 export default function App() {
   const windows = useWorkspace((s) => s.windows);
   const studentId = useSession((s) => s.studentId);
+  const levelId = useLevel((s) => s.levelId) ?? '';
 
   useEffect(() => {
     registerSystemShortcuts();
@@ -76,7 +78,7 @@ export default function App() {
         <div className="windows-layer">
           {entries.map(([win, def]) => (
             <Window key={win.id} win={win} title={def.title} isKey={def.isKey}>
-              {renderBody(win.appId, win, studentId)}
+              {renderBody(win.appId, win, studentId, levelId)}
             </Window>
           ))}
         </div>
