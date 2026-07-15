@@ -32,5 +32,6 @@ async def lint_json(payload: Any, schema_name: str) -> dict[str, Any]:
     try:
         jsonschema.validate(instance=data, schema=target)
     except jsonschema.ValidationError as e:
-        return {"ok": False, "error": f"schema_violation:{e.message}"}
+        path = "/".join(str(p) for p in e.absolute_path) or "<root>"
+        return {"ok": False, "error": f"schema_violation:{path}:{e.message}"}
     return {"ok": True, "error": None}

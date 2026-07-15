@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 import nh3
@@ -10,7 +11,7 @@ import nh3
 ALLOWED_TAGS = {"h1", "h2", "h3", "p", "ul", "ol", "li", "strong", "em", "code", "pre", "blockquote", "table", "thead", "tbody", "tr", "th", "td", "br", "hr", "span", "div"}
 ALLOWED_CLASSES_DEFAULT = {"callout", "formula", "example", "katex", "katex-display"}
 
-def _attr_filter(allowed_classes: set[str]):
+def _attr_filter(allowed_classes: set[str]) -> Callable[[str, str, str], str | None]:
     def _filter(element: str, attr: str, value: str) -> str | None:
         if attr == "class":
             return value if value in allowed_classes else None
