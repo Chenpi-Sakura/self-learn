@@ -12,7 +12,7 @@ EXPECTED = {
 }
 
 
-def test_seven_skills_loaded():
+def test_seven_skills_loaded() -> None:
     load_all()
     loaded = set(_skill_library.keys())
     missing = EXPECTED - loaded
