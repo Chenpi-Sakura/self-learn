@@ -1,8 +1,8 @@
 """SelfLearn MCP server（stdio 进程）。
 
-11 个 tool 分两类：
+13 个 tool 分两类：
 - utility: fetch_skill / lint_json / lint_html (3 个)
-- db: 8 个表操作（见各 task）
+- db: 10 个表操作（见各 task）
 
 启动方式：python -m selflearn.mcp_server
 """
@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from selflearn.mcp_server.tools.bulk_create_exercises import bulk_create_exercises
+from selflearn.mcp_server.tools.create_level import create_level
 from selflearn.mcp_server.tools.create_map_nodes import create_map_nodes
 from selflearn.mcp_server.tools.create_profile import create_profile
 from selflearn.mcp_server.tools.fetch_skill import fetch_skill
@@ -35,6 +37,8 @@ mcp.add_tool(create_profile, name="tool.create_profile")
 mcp.add_tool(get_existing_nodes, name="tool.get_existing_nodes")
 mcp.add_tool(get_kps, name="tool.get_kps")
 mcp.add_tool(create_map_nodes, name="tool.create_map_nodes")
+mcp.add_tool(create_level, name="tool.create_level")
+mcp.add_tool(bulk_create_exercises, name="tool.bulk_create_exercises")
 
 
 def main() -> None:
