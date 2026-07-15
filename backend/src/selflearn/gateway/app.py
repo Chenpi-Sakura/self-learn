@@ -16,7 +16,6 @@ from selflearn.gateway.routes import health, profile
 from selflearn.gateway.routes.level import router as level_router
 from selflearn.gateway.routes.map import router as map_router
 from selflearn.infra.rabbit import setup_topology
-from selflearn.skills.builtin.ping import register as register_ping_skill
 
 log = get_logger("gateway")
 
@@ -32,7 +31,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     s = get_settings()
     setup_tracing(s.otel_service_name + "-gateway", s.otel_exporter_otlp_endpoint)
-    register_ping_skill()
     app = FastAPI(title="selflearn-gateway", version="0.1.0", lifespan=lifespan)
     # Stage 4: dev CORS（spec § 10.1 + plan T1）
     # STAGE5_PROD_HARDEN: 上生产时收紧 allow_origins

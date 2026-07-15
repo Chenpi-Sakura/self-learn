@@ -40,22 +40,17 @@ def _coerce_str(v: object) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Stage 2 兼容入口（不要改：smoke 测试依赖）
+# Stage 2 兼容入口（P5 移除 PingAgent 后已无效 — 保留路由以避免 404，
+# 但返回 410 Gone 提示调用方改用 POST /api/profile/build）
 # ---------------------------------------------------------------------------
 
 
-@router.post("/init", response_model=ProfileInitResponse, status_code=202)
+@router.post("/init", response_model=ProfileInitResponse, status_code=410)
 async def init_profile(body: ProfileInitRequest) -> ProfileInitResponse:
-    env = Envelope(
-        action="skill.execute",
-        sender=ActorRef(type="gateway", id="smoke"),
-        target=ActorRef(type="skill", id="skill.profile.init"),
-        payload={"student_id": str(body.student_id), "topic": body.topic},
+    raise HTTPException(
+        status_code=410,
+        detail="profile_init_removed: P5 removed PingAgent. Use POST /api/profile/build instead.",
     )
-    r = get_redis()
-    await r.set(f"trace:{env.trace_id}:status", "running", ex=60)
-    await publish_envelope(env, routing_key="ping_agent.skill.profile.init")
-    return ProfileInitResponse(trace_id=env.trace_id)
 
 
 @router.get("/init/{trace_id}/status", response_model=ProfileStatusResponse)

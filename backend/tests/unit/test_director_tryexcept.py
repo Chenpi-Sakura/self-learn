@@ -1,144 +1,114 @@
-"""DirectorAgent try/except 兜底测试（Task 11，V1.1 修复）。
+"""Director 链 try/except 单测。
 
-Director.run 任何未捕获异常必须先推 FAILED 进度事件，再抛 AppError。
-避免 SSE 端点陷入死等。
+P5 refactor: 旧的 `DirectorAgent.run` 包装层（selflearn.agents.builtin.director_agent）
+已被删除；Director 链现在直接由 `run_director_chain` + `run_director_chain_with_retry`
+暴露。失败时由 `worker.handle_with_dispatch` 捕获 AppError/Exception 并写 trace:status=failed。
+
+本测试覆盖 Director 链失败路径：
+1. 链内 MCP 调失败 → run_director_chain 抛 AppError（含原始 error message）。
+2. run_director_chain_with_retry 多次失败后抛最后 1 次异常（retry 耗尽兜底）。
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-pytestmark = pytest.mark.asyncio
+from selflearn.agents.director import run_director_chain, run_director_chain_with_retry
+from selflearn.core.envelope import ActorRef, Envelope
+from selflearn.core.errors import AppError, ErrorCode
 
 
-async def test_director_uncaught_exception_publishes_failed_and_raises() -> None:
-    """ExerciseAgent.run_sync 抛异常时，Director 必须推 FAILED + 抛 AppError(INTERNAL)。"""
-    from selflearn.agents.builtin.director_agent import DirectorAgent
-    from selflearn.core.envelope import ActorRef, Envelope
-    from selflearn.core.errors import AppError, ErrorCode
-    from selflearn.progress.stages import ProgressEvent, Stage
+def _make_env(trace_id: str = "trace-try-except") -> Envelope:
+    return Envelope(
+        action="skill.execute",
+        sender=ActorRef(type="test", id="unit"),
+        target=ActorRef(type="skill", id="skill.director.start"),
+        payload={"student_id": "s1"},
+        trace_id=trace_id,
+    )
 
-    published: list[ProgressEvent] = []
 
-    async def collect(trace_id: str, ev: ProgressEvent) -> None:
-        published.append(ev)
+@pytest.mark.asyncio
+async def test_director_chain_propagates_app_error_on_mcp_failure() -> None:
+    """MCP get_active_node 失败 → Director 链抛 AppError(INTERNAL)。"""
+    agent = MagicMock()
+    agent.mcp = MagicMock()
+    agent.mcp.call = AsyncMock(return_value={"ok": False, "error": "db_unreachable"})
+    review = MagicMock()
 
-    # mock get_skill 避免 KeyError
-    fake_skill = MagicMock()
-    fake_skill.body = "skill body"
-    # mock session 返回 active node
-    fake_node = MagicMock()
-    fake_node.node_id = "00000000-0000-0000-0000-000000000aaa"
-    fake_node.kp.title = "Mock KP"
+    env = _make_env("trace-mcp-fail")
+    with pytest.raises(AppError) as exc_info:
+        await run_director_chain(env, agent, review)
 
-    with patch("selflearn.agents.builtin.director_agent.get_skill", return_value=fake_skill), \
-         patch("selflearn.agents.builtin.director_agent.ExerciseAgent") as mock_ex_cls, \
-         patch("selflearn.agents.builtin.director_agent.progress_publish",
-               new=AsyncMock(side_effect=collect)), \
-         patch("selflearn.agents.builtin.director_agent.get_session_factory") as mock_factory:
-        mock_ex_cls.return_value.run_sync = AsyncMock(side_effect=RuntimeError("boom in ExerciseAgent"))
-        # 让 _run_inner 的 active node 查询返回 fake_node
-        mock_session = AsyncMock()
-        mock_session.__aenter__.return_value.execute.return_value.scalars.return_value.first.return_value = fake_node
-        mock_factory.return_value.return_value = mock_session
+    assert exc_info.value.code == ErrorCode.INTERNAL
+    assert "db_unreachable" in exc_info.value.message
 
-        agent = DirectorAgent()
-        env = Envelope(
-            action="skill.execute",
-            sender=ActorRef(type="gateway", id="g"),
-            target=ActorRef(type="skill", id="skill.director.start"),
-            payload={"student_id": "00000000-0000-0000-0000-000000000aaa"},
-            trace_id="dir-fail-test",
+
+@pytest.mark.asyncio
+async def test_director_chain_propagates_app_error_on_lecture_rejected() -> None:
+    """Lecture 被 review 拒 → 抛 AppError(INTERNAL) + lecture_rejected 标记。"""
+    agent = MagicMock()
+    agent.mcp = MagicMock()
+    agent.mcp.call = AsyncMock(side_effect=lambda tool, **kwargs: {
+        "tool.get_active_node": {"ok": True, "node_id": "n1", "kp_id": "k1", "status": "active", "position": {"x": 0, "y": 0}},
+        "tool.get_kp": {"ok": True, "title": "T", "description": "x", "difficulty": 1, "prerequisites": []},
+        "tool.get_recent_scores": [],
+    }.get(tool, {}))
+    agent.run = AsyncMock(return_value="<bad>")
+    review = MagicMock()
+    review.review_lecture = AsyncMock(return_value=MagicMock(verdict="rejected", issues=["no_h1"]))
+
+    env = _make_env("trace-lec-reject")
+    with pytest.raises(AppError) as exc_info:
+        await run_director_chain(env, agent, review)
+    assert exc_info.value.code == ErrorCode.INTERNAL
+    assert "lecture_rejected" in exc_info.value.message
+    assert "no_h1" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_retry_does_not_swallow_app_error_after_exhaustion() -> None:
+    """retry 包装：3 次都失败 → 抛最后 1 次 AppError（不让 worker 误以为成功）。"""
+    agent = MagicMock()
+    review = MagicMock()
+
+    boom = AppError(ErrorCode.INTERNAL, "create_level: persistent_db_error")
+
+    async def always_fail(env: Envelope, a: object, r: object) -> dict[str, object]:
+        raise boom
+
+    env = _make_env("trace-retry-exhaust")
+    with pytest.raises(AppError) as exc_info:
+        await run_director_chain_with_retry(
+            env, agent, review, run_chain_fn=always_fail, max_attempts=3,
         )
-        with pytest.raises(AppError) as exc:
-            await agent.run(env)
-
-    failed = [e for e in published if e.stage == Stage.FAILED]
-    assert failed, f"Director 必须推 FAILED 事件，实际 {published}"
-    assert exc.value.code == ErrorCode.INTERNAL
+    assert exc_info.value is boom
+    assert "create_level: persistent_db_error" in str(exc_info.value)
 
 
-async def test_director_failed_event_contains_traceback() -> None:
-    """ExerciseAgent.run_sync 抛异常时，FAILED 事件 payload 必须含 tb 字段。"""
-    from contextlib import asynccontextmanager
-    from selflearn.agents.builtin.director_agent import DirectorAgent
-    from selflearn.core.envelope import ActorRef, Envelope
-    from selflearn.progress.stages import ProgressEvent, Stage
+@pytest.mark.asyncio
+async def test_retry_recovers_after_first_failure() -> None:
+    """第 1 次失败 → 第 2 次成功（retry 真的生效）。"""
+    agent = MagicMock()
+    review = MagicMock()
+    call_count = {"n": 0}
 
-    published: list[ProgressEvent] = []
+    async def flaky_chain(env: Envelope, a: object, r: object) -> dict[str, object]:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise AppError(ErrorCode.INTERNAL, "transient_failure")
+        return {
+            "level_id": "L1",
+            "exercise_ids": [],
+            "exercises_count": 0,
+            "score": 1.0,
+            "lecture_html_len": 0,
+        }
 
-    async def collect(trace_id: str, ev: ProgressEvent) -> None:
-        published.append(ev)
-
-    fake_skill = MagicMock()
-    fake_skill.body = "skill body"
-    fake_node = MagicMock()
-    fake_node.node_id = "00000000-0000-0000-0000-000000000bbb"
-    fake_node.kp.title = "Mock KP"
-
-    @asynccontextmanager
-    async def fake_session_cm():
-        yield AsyncMock()
-
-    def fake_factory() -> object:
-        return fake_session_cm()
-
-    with patch("selflearn.agents.builtin.director_agent.get_skill", return_value=fake_skill), \
-         patch("selflearn.agents.builtin.director_agent.ExerciseAgent") as mock_ex_cls, \
-         patch("selflearn.agents.builtin.director_agent.progress_publish",
-               new=AsyncMock(side_effect=collect)), \
-         patch("selflearn.agents.builtin.director_agent.get_session_factory", return_value=fake_factory):
-        # 让 _run_inner 的 node 查询正常返回 fake_node，再让 run_sync 抛 ValueError
-        # 第一个 session（node 查询）：让 execute().scalars().first() 返回 fake_node
-        # 第二个 session（difficulty 查询）：允许空 recent_scores
-        call_count = {"n": 0}
-
-        async def fake_execute(stmt: object) -> object:  # noqa: ARG001
-            r = MagicMock()
-            r.scalars.return_value.first.return_value = fake_node
-            call_count["n"] += 1
-            return r
-
-        # 通过 patch factory 的实现来控制 session 的 execute 行为
-        @asynccontextmanager
-        async def cm_node_query():
-            s = AsyncMock()
-            s.execute = fake_execute
-            yield s
-
-        @asynccontextmanager
-        async def cm_difficulty_query():
-            s = AsyncMock()
-            r = MagicMock()
-            r.scalars.return_value.all.return_value = []  # 无历史分数 → medium
-            s.execute.return_value = r
-            yield s
-
-        @asynccontextmanager
-        async def cm_unused():
-            yield AsyncMock()
-
-        sessions = iter([cm_node_query(), cm_difficulty_query(), cm_unused(), cm_unused()])
-
-        def factory_seq() -> object:
-            return next(sessions)
-
-        with patch("selflearn.agents.builtin.director_agent.get_session_factory", return_value=factory_seq):
-            mock_ex_cls.return_value.run_sync = AsyncMock(side_effect=ValueError("boom_with_tb"))
-
-            agent = DirectorAgent()
-            env = Envelope(
-                action="skill.execute",
-                sender=ActorRef(type="gateway", id="g"),
-                target=ActorRef(type="skill", id="skill.director.start"),
-                payload={"student_id": "00000000-0000-0000-0000-000000000bbb"},
-                trace_id="dir-tb-test",
-            )
-            with pytest.raises(Exception):
-                await agent.run(env)
-
-    failed = [e for e in published if e.stage == Stage.FAILED]
-    assert failed, "FAILED event 必须推"
-    assert failed[0].payload.get("tb"), "FAILED payload 必须含 tb 字段"
-    assert "boom_with_tb" in failed[0].payload["tb"]
+    env = _make_env("trace-retry-recover")
+    result = await run_director_chain_with_retry(
+        env, agent, review, run_chain_fn=flaky_chain, max_attempts=3,
+    )
+    assert result["level_id"] == "L1"
+    assert call_count["n"] == 2

@@ -1,146 +1,124 @@
-"""scheduler target.id 路由改造单测（Rule #13 第四子规则）。
+"""scheduler P5 dispatch 单测。
+
+P5 架构：worker 启动时构造 LLMAgent + ReviewStage，所有 envelope 走
+`dispatch(env, agent, review)` 路由到 Director chain。
 
 验证：
-1. Stage 2 `skill.profile.init`（装饰器路径）继续通过 skill_registry fallback 工作。
-2. Stage 3 五个 target.id（skill.profile.build / skill.plan.generate / skill.exercise.generate
-   / skill.review.exercise / skill.director.start）现在映射到真实的 Agent 类。
-3. 任何未知的 target.id 抛 NotImplementedError，且错误信息明确命名"Agent not yet implemented"。
+1. 必须传 agent + review；不传抛 ValueError（防止静默回退到旧 Agent class）。
+2. target.id == 'skill.director.start' 时调 `run_director_chain_with_retry`。
+3. 任何其它 target.id 走相同的 Director chain（P5 统一入口），由 Director
+   内部按需调子 skill；不要在 dispatch 层做 skill-id 路由判定。
 """
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from selflearn.agents.base import AbstractAgent
-from selflearn.agents.scheduler import (
-    _AGENT_FOR_SKILL,
-    _resolve_agent_class,
-    dispatch,
-    get_agent_class_for_skill,
-)
+from selflearn.agents.scheduler import dispatch
 from selflearn.core.envelope import ActorRef, Envelope
 
 
-def test_stage3_map_has_five_keys_with_agent_classes() -> None:
-    """Stage 3 路由表必须预占 5 个 target.id，全部映射到 AbstractAgent 子类。"""
-    expected_keys = {
-        "skill.profile.build",
-        "skill.plan.generate",
-        "skill.exercise.generate",
-        "skill.review.exercise",
-        "skill.director.start",
-    }
-    assert expected_keys.issubset(set(_AGENT_FOR_SKILL.keys()))
-    for k in expected_keys:
-        cls = _AGENT_FOR_SKILL[k]
-        assert cls is not None, f"{k} must be wired to an Agent class"
-        assert isinstance(cls, type) and issubclass(cls, AbstractAgent), (
-            f"{k} must map to an AbstractAgent subclass"
-        )
-
-
-def test_stage2_fallback_via_skill_registry() -> None:
-    """Stage 2 skill.profile.init 仍走 skill_registry 装饰器 fallback。"""
-    from selflearn.skills.builtin import ping  # noqa: F401
-
-    ping.register()
-    resolved = _resolve_agent_class("skill.profile.init")
-    assert resolved is not None
+def _make_env(target_id: str = "skill.director.start") -> Envelope:
+    return Envelope(
+        action="skill.execute",
+        sender=ActorRef(type="gateway", id="test"),
+        target=ActorRef(type="skill", id=target_id),
+        payload={"student_id": "s1"},
+    )
 
 
 @pytest.mark.asyncio
-async def test_dispatch_stage2_skill_profile_init_returns_envelope() -> None:
-    """Stage 2 smoke 路径：dispatch(skill.profile.init) 返回 Envelope。"""
-    from selflearn.skills.builtin import ping  # noqa: F401
-    ping.register()
+async def test_dispatch_requires_agent_and_review() -> None:
+    """P5: 不传 agent/review 必须显式抛错（防止裸调回退到旧路径）。"""
+    env = _make_env()
 
-    env = Envelope(
-        action="skill.execute",
-        sender=ActorRef(type="gateway", id="test"),
-        target=ActorRef(type="skill", id="skill.profile.init"),
-        payload={"topic": "smoke"},
-    )
-    reply = await dispatch(env)
-    assert reply is not None
-    assert reply.action == "skill.completed"
-    assert "reply" in reply.payload
-
-
-def test_unknown_skill_raises_not_implemented() -> None:
-    """未实现的 target.id 必须抛 NotImplementedError 且信息明确。"""
-    with pytest.raises(NotImplementedError) as exc_info:
-        _resolve_agent_class("skill.totally.fictional.skill")
+    with pytest.raises(ValueError) as exc_info:
+        await dispatch(env, agent=None, review=None)
     msg = str(exc_info.value)
-    assert "skill.totally.fictional.skill" in msg
-    assert "Agent not yet implemented" in msg
-    assert "_AGENT_FOR_SKILL" in msg
-
-
-def test_get_agent_class_for_skill_returns_none_for_unknown() -> None:
-    """公开只读 API：未知键返回 None，不抛错。"""
-    assert get_agent_class_for_skill("skill.totally.fictional.skill") is None
-    assert get_agent_class_for_skill("totally.unknown") is None
-
-
-def test_resolve_uses_agent_for_skill_when_populated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """正向 case：`_AGENT_FOR_SKILL[target.id]` 非 None 时直接返回该类。"""
-    from selflearn.agents import scheduler as sched_mod
-
-    class FakeProfileAgent(AbstractAgent):
-        agent_id = "fake-profile-01"
-        agent_type = "profile"
-        skills: list[str] = []
-        queue = "agent.profile.work"
-
-        async def run(self, env: Envelope) -> Envelope:  # pragma: no cover
-            return env
-
-    monkeypatch.setitem(sched_mod._AGENT_FOR_SKILL, "skill.profile.build", FakeProfileAgent)
-    resolved = _resolve_agent_class("skill.profile.build")
-    assert resolved is FakeProfileAgent
+    assert "P5 dispatch requires agent and review" in msg
+    assert "Legacy dispatch_old has been removed" in msg
 
 
 @pytest.mark.asyncio
-async def test_dispatch_instantiates_agent_class_for_skill(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """正向 dispatch：_AGENT_FOR_SKILL 命中时实例化 Agent class 并调 .run(env)。"""
-    from selflearn.agents import scheduler as sched_mod
+async def test_dispatch_requires_agent_when_review_only() -> None:
+    """只传 review 仍必须抛错。"""
+    env = _make_env()
+    review = MagicMock()
 
-    captured: dict[str, object] = {}
+    with pytest.raises(ValueError) as exc_info:
+        await dispatch(env, agent=None, review=review)
+    assert "P5 dispatch requires agent and review" in str(exc_info.value)
 
-    class FakeProfileAgent(AbstractAgent):
-        agent_id = "fake-profile-01"
-        agent_type = "profile"
-        skills: list[str] = []
-        queue = "agent.profile.work"
 
-        def __init__(self) -> None:
-            self.instantiated = True
+@pytest.mark.asyncio
+async def test_dispatch_requires_review_when_agent_only() -> None:
+    """只传 agent 仍必须抛错。"""
+    env = _make_env()
+    agent = MagicMock()
 
-        async def run(self, env: Envelope) -> Envelope:
-            captured["env"] = env
-            captured["instantiated"] = self.instantiated
-            return Envelope(
-                action="skill.completed",
-                sender=env.target,
-                target=env.sender,
-                payload={"ok": True},
-            )
+    with pytest.raises(ValueError) as exc_info:
+        await dispatch(env, agent=agent, review=None)
+    assert "P5 dispatch requires agent and review" in str(exc_info.value)
 
-    monkeypatch.setitem(sched_mod._AGENT_FOR_SKILL, "skill.profile.build", FakeProfileAgent)
 
-    env = Envelope(
-        action="skill.execute",
-        sender=ActorRef(type="gateway", id="test"),
-        target=ActorRef(type="skill", id="skill.profile.build"),
-        payload={"k": 1},
-    )
-    reply = await dispatch(env)
+@pytest.mark.asyncio
+async def test_dispatch_director_start_calls_chain_with_retry() -> None:
+    """target.id='skill.director.start' → 调 run_director_chain_with_retry。"""
+    env = _make_env("skill.director.start")
+    agent = MagicMock()
+    review = MagicMock()
 
-    assert isinstance(reply, Envelope)
-    assert reply.action == "skill.completed"
-    assert reply.payload == {"ok": True}
-    assert captured["env"] is env
-    assert captured["instantiated"] is True
+    fake_result: dict[str, object] = {
+        "level_id": "L1",
+        "exercise_ids": ["e1"],
+        "exercises_count": 1,
+        "score": 1.0,
+        "lecture_html_len": 100,
+    }
+
+    with patch(
+        "selflearn.agents.scheduler.run_director_chain_with_retry",
+        new=AsyncMock(return_value=fake_result),
+    ) as chain_mock:
+        reply = await dispatch(env, agent=agent, review=review)
+
+    chain_mock.assert_awaited_once_with(env, agent, review)
+    # Director chain 自己负责 publish reply；P5 dispatch 返回 None 让 worker
+    # 走 no_reply 分支（reply 由 chain 内部异步 publish）。
+    assert reply is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_other_target_id_still_uses_director_chain() -> None:
+    """P5 统一入口：target.id 非 director.start 也走同一条 Director chain
+    （Director 内部按 env 内容判断；dispatch 层不做 skill-id 路由）。"""
+    env = _make_env("skill.exercise.generate")
+    agent = MagicMock()
+    review = MagicMock()
+
+    with patch(
+        "selflearn.agents.scheduler.run_director_chain_with_retry",
+        new=AsyncMock(return_value={"level_id": "L1"}),
+    ) as chain_mock:
+        reply = await dispatch(env, agent=agent, review=review)
+
+    chain_mock.assert_awaited_once_with(env, agent, review)
+    assert reply is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_propagates_chain_exception() -> None:
+    """Director chain 抛异常时 dispatch 不吞，直接向上传。"""
+    env = _make_env("skill.director.start")
+    agent = MagicMock()
+    review = MagicMock()
+
+    boom = RuntimeError("director_chain_exploded")
+    with patch(
+        "selflearn.agents.scheduler.run_director_chain_with_retry",
+        new=AsyncMock(side_effect=boom),
+    ):
+        with pytest.raises(RuntimeError) as exc_info:
+            await dispatch(env, agent=agent, review=review)
+    assert exc_info.value is boom

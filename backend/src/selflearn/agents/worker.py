@@ -16,8 +16,11 @@ log = get_logger("worker")
 
 
 async def handle(env: Envelope) -> None:
-    """Stage 3-compatible message handler using the legacy scheduler."""
-    await handle_with_dispatch(env, dispatch_fn=None)
+    """P5 deprecated: handle() 不带 dispatch_fn 直接报错（不再有默认 fallback）。"""
+    raise RuntimeError(
+        "selflearn.agents.worker.handle() requires an explicit dispatch_fn; "
+        "P5 architecture must pass `dispatch(env, agent, review)` from main.run_worker."
+    )
 
 
 async def handle_with_dispatch(
@@ -25,8 +28,8 @@ async def handle_with_dispatch(
     dispatch_fn: Callable[[Envelope], Awaitable[Envelope | None]] | None,
 ) -> None:
     """Handle one message with an optionally injected async dispatcher."""
-    # 防御：replies 走 dispatch 会撞 target.id='smoke'（sender.id），_AGENT_FOR_SKILL 找不到。
-    # skill.completed 是 5 个 Stage 3 Agent + PingAgent 唯一终止 action。
+    # 防御：replies 走 dispatch 会撞 target.id='smoke'（sender.id），跳过。
+    # skill.completed 是 Director chain 唯一终止 action。
     if env.action == "skill.completed":
         log.info("agent.skip_reply", trace_id=env.trace_id, action=env.action)
         return
@@ -34,9 +37,10 @@ async def handle_with_dispatch(
     from selflearn.infra.bus import publish_envelope
 
     if dispatch_fn is None:
-        from selflearn.agents.scheduler import dispatch_old
-
-        dispatch_fn = dispatch_old
+        raise RuntimeError(
+            "handle_with_dispatch requires dispatch_fn; "
+            "P5 architecture: pass `dispatch(env, agent, review)` from main.run_worker."
+        )
 
     tracer = get_tracer("worker")
     with tracer.start_as_current_span("agent.consume") as span:

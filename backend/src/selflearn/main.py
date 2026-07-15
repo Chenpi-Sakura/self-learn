@@ -32,27 +32,17 @@ async def run_gateway() -> None:
 
 
 async def run_worker() -> None:
-    """Worker 进程入口：setup_logging + setup_tracing + register skill + register_agent + consume。
+    """Worker 进程入口：P5 新架构 — LLMAgent + ReviewStage + Director chain 串起来。
 
-    Stage 3 wiring（Rule #13 第四子规则 + Task 12 brief）：
-    - 订阅单队列 `agent.mvp.work`（topic exchange EXCHANGE_EVENTS 通配 `#`），
-      所有 5 个 Stage 3 Agent（Profile / Plan / Exercise / Review / Director）+ Stage 2 PingAgent
-      共享同一个 consume_loop；路由分派完全交给 SkillBasedScheduler（_AGENT_FOR_SKILL + skill_registry fallback）。
-    - 每个 Agent 都注册到 worker's agent_registry（保持 Stage 2 register_agent 语义）；
-      实际 Agent class 入口通过 dispatch(env) 拿到 target.id 命中。
+    - 订阅单队列 `agent.mvp.work`（topic exchange EX配 `#`），
+      全部 envelope 走 Director chain（dispatch(env, agent, review)）。
     - LLM adapter 由 selflearn.llm.registry 模块加载时自动注册（MockLLMAdapter），
-      所以这里不需要显式 register。
+      这里不需要显式 register。
     """
-    from selflearn.agents.builtin.director_agent import DirectorAgent
-    from selflearn.agents.builtin.exercise_agent import ExerciseAgent
-    from selflearn.agents.builtin.plan_agent import PlanAgent
-    from selflearn.agents.builtin.profile_agent import ProfileAgent
-    from selflearn.agents.builtin.review_agent import ReviewAgent
     from selflearn.agents.core import LLMAgent
-    from selflearn.agents.registry import AgentInfo
     from selflearn.agents.review_stage import ReviewStage
     from selflearn.agents.scheduler import dispatch
-    from selflearn.agents.worker import register_agent, run_worker as consume_loop
+    from selflearn.agents.worker import run_worker as consume_loop
     from selflearn.config import get_settings
     from selflearn.core.logging import setup_logging
     from selflearn.core.envelope import Envelope
@@ -60,7 +50,6 @@ async def run_worker() -> None:
     from selflearn.infra.rabbit import setup_topology
     from selflearn.llm.registry import llm_registry
     from selflearn.mcp_client import mcp_client_lifespan
-    from selflearn.skills.builtin.ping import agent_info, register as register_skill
     from selflearn.skills.library import _skill_library, load_all
 
     s = get_settings()
@@ -68,12 +57,9 @@ async def run_worker() -> None:
     setup_tracing(s.otel_service_name + "-worker", s.otel_exporter_otlp_endpoint)
     load_all()
     expected_skills = {
-        "skill.profile.build",
-        "skill.plan.generate",
-        "skill.exercise.generate",
-        "skill.review.exercise.business",
-        "skill.review.exercise.llm",
         "skill.lecture.generate",
+        "skill.exercise.generate",
+        "skill.review.exercise.llm",
         "skill.director.start",
     }
     loaded = set(_skill_library.keys())
@@ -81,22 +67,8 @@ async def run_worker() -> None:
     if missing:
         raise RuntimeError(f"skills_missing:{sorted(missing)}")
     log.info("skills.preflight_ok", count=len(loaded))
-    register_skill()
     await setup_topology()
-    # Register PingAgent（Stage 2 兼容）
-    register_agent(agent_info())
-    # Register 5 个 Stage 3 Agent（仅占 agent_registry，路由靠 SkillBasedScheduler）
-    for agent_cls in (ProfileAgent, PlanAgent, ExerciseAgent, ReviewAgent, DirectorAgent):
-        info = AgentInfo(
-            agent_id=agent_cls.agent_id,
-            agent_type=agent_cls.agent_type,
-            skills=getattr(agent_cls, "skills", []),
-            status="idle",
-            queue=agent_cls.queue,
-            max_concurrency=agent_cls.max_concurrency,
-        )
-        register_agent(info)
-    # 单队列 + topic 通配 `#` → 所有 envelope 走 Director scheduler。
+
     async with mcp_client_lifespan() as mcp:
         agent = LLMAgent(mcp, llm_registry)
         review = ReviewStage(agent, mcp)

@@ -1,5 +1,10 @@
-"""spec § 5.2 难度梯度：基于最近 N 次关卡完成分数决定 easy/medium/hard。"""
-from selflearn.agents.builtin.director_agent import _compute_difficulty
+"""spec § 5.2 难度梯度：基于最近 N 次关卡完成分数决定 easy/medium/hard。
+
+P5 refactor: `_compute_difficulty` 已从已删除的 `builtin/director_agent.py`
+迁移到 `selflearn.agents.director`（Director 链内部使用，见 director.py:18）。
+这里作为业务规则单独测试。
+"""
+from selflearn.agents.director import _compute_difficulty
 
 
 def test_difficulty_easy_when_low_scores() -> None:
