@@ -12,8 +12,8 @@ from selflearn.infra.db import get_session_factory
 
 async def create_profile(
     student_id: str,
-    dimensions: dict,
-    tags: list | None = None,
+    dimensions: dict[str, Any],
+    tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """upsert Profile：存在则覆盖 dimensions/tags/last_updated，否则新建。
 
