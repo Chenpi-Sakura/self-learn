@@ -5,6 +5,10 @@ import argparse
 import asyncio
 import sys
 
+from selflearn.core.logging import get_logger
+
+log = get_logger("main")
+
 
 def parse_role() -> str:
     p = argparse.ArgumentParser()
@@ -51,12 +55,26 @@ async def run_worker() -> None:
     from selflearn.core.tracing import setup_tracing
     from selflearn.infra.rabbit import setup_topology
     from selflearn.skills.builtin.ping import agent_info, register as register_skill
-    from selflearn.skills.library import load_all
+    from selflearn.skills.library import _skill_library, load_all
 
     s = get_settings()
     setup_logging(s.log_level)
     setup_tracing(s.otel_service_name + "-worker", s.otel_exporter_otlp_endpoint)
     load_all()
+    expected_skills = {
+        "skill.profile.build",
+        "skill.plan.generate",
+        "skill.exercise.generate",
+        "skill.review.exercise.business",
+        "skill.review.exercise.llm",
+        "skill.lecture.generate",
+        "skill.director.start",
+    }
+    loaded = set(_skill_library.keys())
+    missing = expected_skills - loaded
+    if missing:
+        raise RuntimeError(f"skills_missing:{sorted(missing)}")
+    log.info("skills.preflight_ok", count=len(loaded))
     register_skill()
     await setup_topology()
     # Register PingAgent（Stage 2 兼容）
