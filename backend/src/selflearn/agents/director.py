@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from selflearn.core.envelope import Envelope
@@ -137,3 +138,31 @@ async def run_director_chain(
         "score": score_ratio,
         "lecture_html_len": len(lecture_html),
     }
+
+
+async def run_director_chain_with_retry(
+    env: Envelope,
+    agent: Any,
+    review: Any,
+    max_attempts: int = 3,
+    run_chain_fn: Callable[[Envelope, Any, Any], Awaitable[dict[str, Any]]] = run_director_chain,
+) -> dict[str, Any]:
+    """整链 retry 包装。失败重生成（依赖 level/start 路由幂等性）。"""
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
+
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return await run_chain_fn(env, agent, review)
+        except Exception as error:  # noqa: BLE001
+            last_error = error
+            log.warning(
+                "director.chain_retry",
+                attempt=attempt + 1,
+                max_attempts=max_attempts,
+                error=repr(error),
+            )
+
+    assert last_error is not None
+    raise last_error

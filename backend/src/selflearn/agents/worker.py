@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 import time
 
 from selflearn.agents.registry import AgentInfo, agent_registry
@@ -15,28 +16,34 @@ log = get_logger("worker")
 
 
 async def handle(env: Envelope) -> None:
-    """Worker 主循环的每条消息处理函数。
-    写 Redis 给 gateway 读（status + reply）+ publish reply envelope。
+    """Stage 3-compatible message handler using the legacy scheduler."""
+    await handle_with_dispatch(env, dispatch_fn=None)
 
-    Task 9 fix：reply envelope（action='skill.completed'）与原始 envelope 共享
-    `agent.mvp.work` 队列 + topic '#' 通配 → 会被自己再次消费。
-    防御式早退：reply 不再 dispatch。
-    """
+
+async def handle_with_dispatch(
+    env: Envelope,
+    dispatch_fn: Callable[[Envelope], Awaitable[Envelope | None]] | None,
+) -> None:
+    """Handle one message with an optionally injected async dispatcher."""
     # 防御：replies 走 dispatch 会撞 target.id='smoke'（sender.id），_AGENT_FOR_SKILL 找不到。
     # skill.completed 是 5 个 Stage 3 Agent + PingAgent 唯一终止 action。
     if env.action == "skill.completed":
         log.info("agent.skip_reply", trace_id=env.trace_id, action=env.action)
         return
-    from selflearn.agents.scheduler import dispatch
     from selflearn.infra.redis_client import get_redis
     from selflearn.infra.bus import publish_envelope
+
+    if dispatch_fn is None:
+        from selflearn.agents.scheduler import dispatch_old
+
+        dispatch_fn = dispatch_old
 
     tracer = get_tracer("worker")
     with tracer.start_as_current_span("agent.consume") as span:
         span.set_attribute("selflearn.trace_id", env.trace_id)
         r = get_redis()
         try:
-            reply = await dispatch(env)
+            reply = await dispatch_fn(env)
             if reply:
                 await r.set(f"trace:{reply.trace_id}:status",
                             str(reply.payload.get("status", "completed")), ex=60)
@@ -59,9 +66,17 @@ async def handle(env: Envelope) -> None:
             log.error("agent.unexpected", error=str(e))
 
 
-async def run_worker(queue_name: str, routing_key: str) -> None:
+async def run_worker(
+    queue_name: str,
+    routing_key: str,
+    dispatch_fn: Callable[[Envelope], Awaitable[Envelope | None]] | None = None,
+) -> None:
     log.info("worker.start", queue=queue_name, routing_key=routing_key)
-    async for _ in consume_envelope(queue_name, routing_key, handle):
+
+    async def callback(env: Envelope) -> None:
+        await handle_with_dispatch(env, dispatch_fn)
+
+    async for _ in consume_envelope(queue_name, routing_key, callback):
         await asyncio.sleep(0)
 
 

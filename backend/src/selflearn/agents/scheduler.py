@@ -8,14 +8,20 @@ Stage 3 V1.3 路由改造（Rule #13 第四子规则）：
 """
 from __future__ import annotations
 
+from typing import Any
+
 from selflearn.agents.base import AbstractAgent
 from selflearn.agents.builtin.director_agent import DirectorAgent
 from selflearn.agents.builtin.exercise_agent import ExerciseAgent
 from selflearn.agents.builtin.plan_agent import PlanAgent
 from selflearn.agents.builtin.profile_agent import ProfileAgent
 from selflearn.agents.builtin.review_agent import ReviewAgent
+from selflearn.agents.director import run_director_chain_with_retry
 from selflearn.core.envelope import Envelope
+from selflearn.core.logging import get_logger
 from selflearn.skills.base import skill_registry
+
+log = get_logger("scheduler")
 
 
 # Stage 3 routing map (Rule #13 第四子规则):
@@ -51,8 +57,8 @@ def _resolve_agent_class(skill_id: str):  # type: ignore[no-untyped-def]
     )
 
 
-async def dispatch(env: Envelope) -> Envelope | None:
-    """仅认 envelope.target.id 的路由入口（Rule #13 第四子规则主路径）。"""
+async def dispatch_old(env: Envelope) -> Envelope | None:
+    """Stage 3 兼容入口：按 target.id 路由旧 Agent class。"""
     skill_id = env.target.id
     handler_or_cls = _resolve_agent_class(skill_id)
 
@@ -66,6 +72,20 @@ async def dispatch(env: Envelope) -> Envelope | None:
 
     if isinstance(result, Envelope):
         return result
+    return None
+
+
+async def dispatch(
+    env: Envelope,
+    agent: Any | None = None,
+    review: Any | None = None,
+) -> Envelope | None:
+    """统一入口：P4 调 Director；无依赖时保留 Stage 3 兼容路由。"""
+    if agent is None or review is None:
+        return await dispatch_old(env)
+    if env.target.id != "skill.director.start":
+        log.warning("scheduler.non_director_skill", skill_id=env.target.id)
+    await run_director_chain_with_retry(env, agent, review)
     return None
 
 

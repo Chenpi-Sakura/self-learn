@@ -16,6 +16,7 @@ class ReviewResult:
 @dataclass
 class LLMReviewResult:
     verdict: str
+    score: float = 0.0
     suggestions: list[str] = field(default_factory=list)
     issues: list[dict[str, Any]] = field(default_factory=list)
 
@@ -98,6 +99,7 @@ class ReviewStage:
             data = {}
         return LLMReviewResult(
             verdict=data.get("verdict", "needs_revision"),
+            score=float(data.get("score", 0.0)),
             suggestions=data.get("suggestions", []),
             issues=data.get("issues", []),
         )

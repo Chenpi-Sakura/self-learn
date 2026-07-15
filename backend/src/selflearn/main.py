@@ -48,12 +48,18 @@ async def run_worker() -> None:
     from selflearn.agents.builtin.plan_agent import PlanAgent
     from selflearn.agents.builtin.profile_agent import ProfileAgent
     from selflearn.agents.builtin.review_agent import ReviewAgent
+    from selflearn.agents.core import LLMAgent
     from selflearn.agents.registry import AgentInfo
+    from selflearn.agents.review_stage import ReviewStage
+    from selflearn.agents.scheduler import dispatch
     from selflearn.agents.worker import register_agent, run_worker as consume_loop
     from selflearn.config import get_settings
     from selflearn.core.logging import setup_logging
+    from selflearn.core.envelope import Envelope
     from selflearn.core.tracing import setup_tracing
     from selflearn.infra.rabbit import setup_topology
+    from selflearn.llm.registry import llm_registry
+    from selflearn.mcp_client import mcp_client_lifespan
     from selflearn.skills.builtin.ping import agent_info, register as register_skill
     from selflearn.skills.library import _skill_library, load_all
 
@@ -90,8 +96,19 @@ async def run_worker() -> None:
             max_concurrency=agent_cls.max_concurrency,
         )
         register_agent(info)
-    # 单队列 + topic 通配 `#` → 所有 envelope 走 SkillBasedScheduler.dispatch
-    await consume_loop(queue_name="agent.mvp.work", routing_key="#")
+    # 单队列 + topic 通配 `#` → 所有 envelope 走 Director scheduler。
+    async with mcp_client_lifespan() as mcp:
+        agent = LLMAgent(mcp, llm_registry)
+        review = ReviewStage(agent, mcp)
+
+        async def director_dispatch(env: Envelope) -> Envelope | None:
+            return await dispatch(env, agent, review)
+
+        await consume_loop(
+            queue_name="agent.mvp.work",
+            routing_key="#",
+            dispatch_fn=director_dispatch,
+        )
 
 
 def main() -> int:
