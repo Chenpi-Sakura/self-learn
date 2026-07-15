@@ -1,8 +1,8 @@
 """SelfLearn MCP server（stdio 进程）。
 
-13 个 tool 分两类：
+15 个 tool 分两类：
 - utility: fetch_skill / lint_json / lint_html (3 个)
-- db: 10 个表操作（见各 task）
+- db: 12 个表操作（见各 task）
 
 启动方式：python -m selflearn.mcp_server
 """
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from selflearn.mcp_server.tools.apply_level_completion import apply_level_completion
 from selflearn.mcp_server.tools.bulk_create_exercises import bulk_create_exercises
 from selflearn.mcp_server.tools.create_level import create_level
 from selflearn.mcp_server.tools.create_map_nodes import create_map_nodes
@@ -23,6 +24,7 @@ from selflearn.mcp_server.tools.get_profile import get_profile
 from selflearn.mcp_server.tools.get_recent_scores import get_recent_scores
 from selflearn.mcp_server.tools.lint_html import lint_html
 from selflearn.mcp_server.tools.lint_json import lint_json
+from selflearn.mcp_server.tools.update_profile import update_profile
 
 mcp = FastMCP("SelfLearn")
 
@@ -39,6 +41,8 @@ mcp.add_tool(get_kps, name="tool.get_kps")
 mcp.add_tool(create_map_nodes, name="tool.create_map_nodes")
 mcp.add_tool(create_level, name="tool.create_level")
 mcp.add_tool(bulk_create_exercises, name="tool.bulk_create_exercises")
+mcp.add_tool(update_profile, name="tool.update_profile")
+mcp.add_tool(apply_level_completion, name="tool.apply_level_completion")
 
 
 def main() -> None:
