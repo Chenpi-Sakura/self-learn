@@ -10,8 +10,15 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-# 暂不 import 任何 tool，本 task 只搭骨架
+from selflearn.mcp_server.tools.fetch_skill import fetch_skill
+from selflearn.mcp_server.tools.lint_html import lint_html
+from selflearn.mcp_server.tools.lint_json import lint_json
+
 mcp = FastMCP("SelfLearn")
+
+mcp.add_tool(fetch_skill, name="tool.fetch_skill")
+mcp.add_tool(lint_json, name="tool.lint_json")
+mcp.add_tool(lint_html, name="tool.lint_html")
 
 
 def main() -> None:
