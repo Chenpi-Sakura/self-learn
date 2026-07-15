@@ -2,13 +2,18 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
+
+# Resolve backend/ relative to this test file regardless of pytest cwd.
+# tests/unit/mcp/test_server_starts.py → parents[2] = backend/
+BACKEND_DIR = str(Path(__file__).resolve().parents[2])
 
 
 def test_mcp_server_starts_and_responds_to_initialize():
     """stdio MCP server 启动后能响应 initialize 请求。"""
     proc = subprocess.Popen(
         [sys.executable, "-m", "selflearn.mcp_server"],
-        cwd="backend",
+        cwd=BACKEND_DIR,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
