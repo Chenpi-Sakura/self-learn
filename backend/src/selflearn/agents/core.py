@@ -12,18 +12,11 @@ from selflearn.llm.registry import LLMRegistry
 class LLMAgent:
     """通用 Agent：调 Skill → MCP 预拉 → LLM → 解析。"""
 
-    def __init__(
-        self,
-        mcp_client: Any | None = None,
-        llm_registry: Any | None = None,
-        *,
-        mcp: Any | None = None,
-        llm: Any | None = None,
-    ) -> None:
-        self.mcp: Any = mcp_client if mcp is None else mcp
-        self.llm: Any = llm_registry if llm is None else llm
+    def __init__(self, mcp_client: Any, llm_registry: Any) -> None:
+        self.mcp: Any = mcp_client
+        self.llm: Any = llm_registry
 
-    async def run(self, skill_id: str, env: Envelope) -> Any:
+    async def run(self, skill_id: str, env: Envelope) -> str:
         """按 Skill 跑一次。
 
         Phase 3 简化版：prefetch + LLM + parse；lint 在 Task 13 加；tool_use 循环在后续 task 加。
@@ -38,7 +31,6 @@ class LLMAgent:
 
         prompt_args = {
             **prefetch,
-            **{tool.replace(".", "_"): value for tool, value in prefetch.items()},
             **self._env_args(env),
         }
         try:
@@ -58,7 +50,7 @@ class LLMAgent:
                 reasoning=True,
             )
         )
-        return response.content
+        return response
 
     @staticmethod
     def _env_args(env: Envelope) -> dict[str, Any]:
