@@ -94,7 +94,7 @@ backend/skills/
 ├── skill.exercise.generate/SKILL.md          # 现状重写
 ├── skill.review.exercise.business/SKILL.md   # ★ 新增 — 业务规则描述
 ├── skill.review.exercise.llm/SKILL.md         # ★ 新增 — LLM 语义审查 prompt
-├── skill.lecture.generate/SKILL.md           # ★ 新增 — 讲义生成 prompt (本 spec 不实现讲义，但 Skill 文件预留)
+├── skill.lecture.generate/SKILL.md           # ★ 新增 — 讲义生成 prompt 模板；本 spec 不调用，Skill 文件作为占位（关联 backlog 2026-07-15-html-lecture.md）
 └── skill.director.start/SKILL.md              # 现状改写 — 链编排描述
 ```
 
