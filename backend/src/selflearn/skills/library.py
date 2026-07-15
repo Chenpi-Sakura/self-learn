@@ -1,17 +1,16 @@
-"""Skill markdown 文档 loader（Stage 3 § 9.1）。"""
+"""Skill markdown 文档 loader。"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 
 from selflearn.core.logging import get_logger
 
-
 log = get_logger("skills")
-
-SKILLS_DIR = Path(__file__).resolve().parents[3] / "docs" / "skills"
+SKILLS_DIR = Path(__file__).resolve().parents[3] / "skills"  # backend/skills/
 
 
 @dataclass
@@ -20,29 +19,42 @@ class Skill:
     description: str
     body: str
     output_schema: str | None
+    mcp_prefetch: list[str] = field(default_factory=list)
+    mcp_tool_use: list[str] = field(default_factory=list)
+    max_retries: int = 0
 
 
 _skill_library: dict[str, Skill] = {}
 
 
 def load_all(skills_dir: Path | None = None) -> None:
-    """进程启动时调一次，从 markdown 读 Skill。"""
+    """进程启动时调一次，从 backend/skills/<id>/SKILL.md 读 Skill。"""
     if skills_dir is None:
         skills_dir = SKILLS_DIR
     _skill_library.clear()
-    for md_path in skills_dir.glob("*.md"):
+    if not skills_dir.exists():
+        log.warning("skills.dir_not_found", path=str(skills_dir))
+        return
+
+    for skill_dir in skills_dir.iterdir():
+        if not skill_dir.is_dir():
+            continue
+        md_path = skill_dir / "SKILL.md"
+        if not md_path.exists():
+            continue
         post = frontmatter.load(md_path)
-        metadata: dict[str, object] = post.metadata
-        if "name" not in metadata:
+        meta: dict[str, Any] = post.metadata
+        if "name" not in meta:
             log.warning("skills.skip_missing_name", path=str(md_path))
             continue
-        raw_schema = metadata.get("output_schema")
-        schema_str: str | None = raw_schema if isinstance(raw_schema, str) else None
-        _skill_library[str(metadata["name"])] = Skill(
-            name=str(metadata["name"]),
-            description=str(metadata.get("description", "")),
+        _skill_library[str(meta["name"])] = Skill(
+            name=str(meta["name"]),
+            description=str(meta.get("description", "")),
             body=post.content,
-            output_schema=schema_str,
+            output_schema=str(meta["output_schema"]) if "output_schema" in meta else None,
+            mcp_prefetch=list(meta.get("mcp_prefetch", [])),
+            mcp_tool_use=list(meta.get("mcp_tool_use", [])),
+            max_retries=int(meta.get("max_retries", 0)),
         )
     log.info("skills.loaded", count=len(_skill_library))
 
