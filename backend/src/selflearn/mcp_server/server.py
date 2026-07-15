@@ -1,8 +1,8 @@
 """SelfLearn MCP server（stdio 进程）。
 
-8 个 tool 分两类：
+11 个 tool 分两类：
 - utility: fetch_skill / lint_json / lint_html (3 个)
-- db: 5 个表操作（见各 task）
+- db: 8 个表操作（见各 task）
 
 启动方式：python -m selflearn.mcp_server
 """
@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from selflearn.mcp_server.tools.create_map_nodes import create_map_nodes
 from selflearn.mcp_server.tools.create_profile import create_profile
 from selflearn.mcp_server.tools.fetch_skill import fetch_skill
 from selflearn.mcp_server.tools.get_active_node import get_active_node
+from selflearn.mcp_server.tools.get_existing_nodes import get_existing_nodes
 from selflearn.mcp_server.tools.get_kp import get_kp
+from selflearn.mcp_server.tools.get_kps import get_kps
 from selflearn.mcp_server.tools.get_profile import get_profile
 from selflearn.mcp_server.tools.get_recent_scores import get_recent_scores
 from selflearn.mcp_server.tools.lint_html import lint_html
@@ -29,6 +32,9 @@ mcp.add_tool(get_active_node, name="tool.get_active_node")
 mcp.add_tool(get_recent_scores, name="tool.get_recent_scores")
 mcp.add_tool(get_profile, name="tool.get_profile")
 mcp.add_tool(create_profile, name="tool.create_profile")
+mcp.add_tool(get_existing_nodes, name="tool.get_existing_nodes")
+mcp.add_tool(get_kps, name="tool.get_kps")
+mcp.add_tool(create_map_nodes, name="tool.create_map_nodes")
 
 
 def main() -> None:
