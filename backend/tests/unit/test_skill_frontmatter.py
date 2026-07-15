@@ -12,6 +12,8 @@ SKILLS = [
     "skill.director.start",
 ]
 
+NEW_SKILLS = ["skill.lecture.generate", "skill.review.exercise.llm"]
+
 
 def test_all_skills_loadable():
     load_all()
@@ -22,6 +24,13 @@ def test_all_skills_loadable():
         assert isinstance(skill.mcp_prefetch, list)
         assert isinstance(skill.mcp_tool_use, list)
         assert isinstance(skill.max_retries, int)
+
+
+def test_new_skills_loadable():
+    load_all()
+    for s in NEW_SKILLS:
+        skill = get(s)
+        assert skill.name == s
 
 
 def test_skill_files_on_disk():
