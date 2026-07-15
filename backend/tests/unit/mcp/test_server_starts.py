@@ -1,14 +1,11 @@
 """验证 MCP server 进程能启动并响应 initialize 请求。"""
-import asyncio
 import json
 import subprocess
 import sys
 
-import pytest
-
 
 def test_mcp_server_starts_and_responds_to_initialize():
-    """stdio MCP server 启动后能响应 initialize + list_tools。"""
+    """stdio MCP server 启动后能响应 initialize 请求。"""
     proc = subprocess.Popen(
         [sys.executable, "-m", "selflearn.mcp_server"],
         cwd="backend",
