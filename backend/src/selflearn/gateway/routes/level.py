@@ -1,7 +1,9 @@
 """Level 路由（Stage 3）：启动关卡 / 提交答案 / SSE 真流。
 
-幂等性：POST /start 对同一 student_id 复用第一个 active 节点的 in-flight
-（status='generated' 或 'in_progress'）关卡，避免重复调 LLM 出题。
+幂等性：POST /start 对给定节点复用其 in-flight（status='generated' 或
+'in_progress'）关卡，避免重复调 LLM 出题。节点定位优先按前端传入的
+node_id 精确匹配（点不同节点拿不同关卡）；未传 node_id 时 fallback 到
+该 student 第一个 status='active' 节点（向后兼容）。
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ router = APIRouter(prefix="/api/level", tags=["level"])
 
 class LevelStartRequest(BaseModel):
     student_id: str
+    node_id: str | None = None  # 新增：精确按节点启动/复用关卡（前端点不同节点时传）
 
 
 class LevelSubmitRequest(BaseModel):
@@ -41,16 +44,37 @@ async def start_level(body: LevelStartRequest) -> dict[str, object]:
     student_id = str(body.student_id)
     factory = get_session_factory()
     async with factory() as session:
-        # 幂等性：先查 active 节点的 in-flight 关卡（status 非 completed）
-        node = (
-            await session.execute(
-                select(MapNode)
-                .where(MapNode.student_id == student_id, MapNode.status == "active")
-                .limit(1)
-            )
-        ).scalars().first()
-        if node is None:
-            raise HTTPException(status_code=409, detail="no_active_node")
+        # 节点定位：
+        # - 前端传了 node_id → 精确按 (student_id, node_id) 查（点不同节点拿不同关卡）
+        # - 没传 → 向后兼容，fallback 到该 student 第一个 status='active' 节点
+        if body.node_id is not None:
+            node = (
+                await session.execute(
+                    select(MapNode)
+                    .where(
+                        MapNode.student_id == student_id,
+                        MapNode.node_id == body.node_id,
+                    )
+                    .limit(1)
+                )
+            ).scalars().first()
+            if node is None:
+                raise HTTPException(status_code=409, detail="node_not_found")
+            if node.status == "locked":
+                # 前置知识点未完成，不允许启动
+                raise HTTPException(status_code=409, detail="node_locked")
+        else:
+            node = (
+                await session.execute(
+                    select(MapNode)
+                    .where(MapNode.student_id == student_id, MapNode.status == "active")
+                    .limit(1)
+                )
+            ).scalars().first()
+            if node is None:
+                raise HTTPException(status_code=409, detail="no_active_node")
+
+        # 幂等性：查该节点的 in-flight 关卡（status='generated' 或 'in_progress'）
         existing = (
             await session.execute(
                 select(Level)
