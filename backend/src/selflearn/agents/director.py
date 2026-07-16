@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from selflearn.agents.lecture_outline import extract_lecture_outline
 from selflearn.core.envelope import Envelope
@@ -100,7 +100,8 @@ async def run_director_chain(
         )
         exercises_raw = await agent.run("skill.exercise.generate", env_ex)
         try:
-            exercises = extract_json_from_fence(exercises_raw) if isinstance(exercises_raw, str) else exercises_raw
+            parsed = extract_json_from_fence(exercises_raw) if isinstance(exercises_raw, str) else exercises_raw
+            exercises = cast(list[dict[str, Any]], parsed)
         except (json.JSONDecodeError, ValueError) as e:
             raise AppError(ErrorCode.INTERNAL, f"exercise parse failed: {e}")
 
