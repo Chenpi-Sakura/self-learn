@@ -72,8 +72,14 @@ Frontend                Gateway               Worker (Director chain)           
    │                       │                          │ 5. ReviewStage.review_lecture(html)
    │                       │                          │    verdict=rejected → AppError → 整链 retry
    │                       │                          │                                │
-   │                       │                          │ 6. LLMAgent.run("skill.exercise.generate") ─> DeepSeek
-   │                       │                          │ <─ exercises JSON               │
+   │                       │                          │ 5.5 _extract_lecture_outline(html)
+   │                       │                          │   → {sections, callouts, examples}
+   │                       │                          │   注入到下一轮 exercise env.payload
+   │                       │                          │                                │
+   │                       │                          │ 6. LLMAgent.run("skill.exercise.generate")
+   │                       │                          │    user_msg 含 lecture_outline  │
+   │                       │                          │ ─> DeepSeek                    │
+   │                       │                          │ <─ exercises JSON (每题 explanation 引用 lecture_outline)
    │                       │                          │ 7. review_exercise_biz (rev 0) + review_exercise_llm (rev 0/1)
    │                       │                          │                                │
    │                       │                          │ 8. tool.create_level(node_id, lecture_html)
@@ -102,7 +108,10 @@ Frontend                Gateway               Worker (Director chain)           
 | `LevelDetailResponse.lecture_html` | Pydantic schema | 新增 | `str \| None` |
 | `tool.create_level` | MCP DB tool | 修改 | 截断 lecture_html 到 50000；去掉 hasattr 防御 |
 | `tool.lint_html` | MCP utility | 不改 | 已实现 nh3 白名单清洗 |
-| `skill.lecture.generate/SKILL.md` | Skill 声明 | 重写 | 从占位 → 真实 prompt 模板 |
+| `skill.lecture.generate/SKILL.md` | Skill 声明 | 重写 | 知识点讲解 prompt（不含题目答案解释） |
+| `_extract_lecture_outline` | Agent 工具函数 | 新增 | 从 lecture_html 提取 {sections, callouts, examples} 三类纲要注入 exercise env |
+| `skill.exercise.generate/SKILL.md` | Skill 声明 | 修改 | prefetch 去掉 `tool.get_kp`；explanation 强制首句引用 lecture_outline |
+| `Director chain` (`agents/director.py`) | 编排器 | 修改 | lecture 后跑 `_extract_lecture_outline`，结果注入 exercise env.payload |
 | `ReviewStage.review_lecture` | Review stage | 不改 | 已实现 lint_html + not_empty |
 | `Gateway GET /api/level/{id}` | API 路由 | 修改 | 返回 lecture_html 字段 |
 | `LecturePane.tsx` | 前端组件 | 重写 | 渲染 lecture_html（dangerouslySetInnerHTML） |
@@ -290,7 +299,18 @@ max_retries: 1
 # Skill: 讲义生成
 
 ## 任务
-为给定知识点生成 HTML 讲义，800-1500 字（含核心概念、关键细节、1-2 个 example）。
+为给定知识点生成 HTML **知识点讲解**（800-1500 字），不含题目答案解释。答案解释由 skill.exercise.generate 在生成题目时一并产出（在 explanation 字段里引用讲义内容）。
+
+## 输出范围
+**只讲知识点本身**：
+- 核心概念定义
+- 关键细节、原理、推导
+- 类比、例子
+- 总结
+
+**不要输出**：
+- 任何"题目 N 答案" / "针对本题" / "本题考察"等针对题目的内容
+- 习题相关提示（这些在 exercise skill 里管）
 
 ## 输出格式
 **直接输出 HTML 字符串**（不要包 JSON，不要 markdown fence）。
@@ -313,6 +333,7 @@ h2, h3, p, ul, ol, li, strong, em, code, pre, blockquote, div, span
 2. 关键细节用 `<div class="callout">...</div>` 强调
 3. 1-2 个 `<div class="example">...</div>` 给具体例子
 4. 收尾用一段总结
+5. **不要**追加题目答案区块
 
 ## 输入（来自 prefetch）
 - tool.get_kp → {title, description, difficulty, prerequisites}
@@ -329,6 +350,7 @@ h2, h3, p, ul, ol, li, strong, em, code, pre, blockquote, div, span
 - 任何 `style="..."` 内联样式
 - 不要在 HTML 前后加 ```json fence 或解释文字
 - 不要包 JSON（直接输出 HTML 字符串）
+- 不要追加题目答案解释（那是 exercise skill 的职责）
 
 ## 示例（仅作格式参考）
 <h2>核心概念</h2>
@@ -338,7 +360,159 @@ h2, h3, p, ul, ol, li, strong, em, code, pre, blockquote, div, span
 <div class="example">例：d_model=512, d_k=64 时...</div>
 ```
 
-### 5.3 ReviewStage.review_lecture（已实现，确认逻辑）
+### 5.3 Director chain 的 lecture_outline 提取与传递
+
+Director chain 在 lecture 跑完后、exercise 跑前，把 `lecture_html` 提取为 `lecture_outline`（结构化纲要）注入到 exercise 的 env.payload：
+
+```python
+# backend/src/selflearn/agents/director.py  (新增步骤 4.5)
+# 4. lecture 生成
+lecture_html = await agent.run("skill.lecture.generate", env)
+
+# 4.5 提取讲义纲要，注入到 exercise env（让 exercise 的 explanation 引用讲义内容）
+lecture_outline = _extract_lecture_outline(lecture_html)
+
+# 5. lecture 业务规则（lint_html + not_empty）
+review_lec = await review.review_lecture(lecture_html)
+if review_lec.verdict == "rejected":
+    raise AppError(...)
+
+# 6. exercise 0-2 轮
+for revision in range(2):
+    env_ex = Envelope(
+        ...
+        payload={
+            **env.payload,
+            "node_id": node["node_id"],
+            "kp_title": kp["title"],
+            "difficulty": difficulty,
+            "revision_suggestions": suggestions,
+            "lecture_outline": lecture_outline,   # ★ 新增：让 exercise LLM 写 explanation 时引用讲义
+        },
+        ...
+    )
+    ...
+```
+
+新工具函数 `_extract_lecture_outline`（放在 `backend/src/selflearn/agents/director.py` 或独立 `backend/src/selflearn/agents/lecture_outline.py`）：
+
+```python
+"""lecture_outline: 从 lecture_html 提取结构化纲要供 exercise LLM 引用。"""
+from __future__ import annotations
+
+import re
+
+_OUTLINE_RE_SECTION = re.compile(r"<h[23][^>]*>(.*?)</h[23]>", re.DOTALL)
+_OUTLINE_RE_CALLOUT = re.compile(r'<div class="callout"[^>]*>(.*?)</div>', re.DOTALL)
+_OUTLINE_RE_EXAMPLE = re.compile(r'<div class="example"[^>]*>(.*?)</div>', re.DOTALL)
+_TAG_STRIP_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_tags(html_fragment: str) -> str:
+    """去掉 HTML 标签 + 收尾空白。"""
+    return _TAG_STRIP_RE.sub("", html_fragment).strip()
+
+
+def extract_lecture_outline(lecture_html: str) -> dict[str, list[str]]:
+    """从 lecture_html 提取结构化纲要，供 exercise LLM 在 explanation 里引用。
+
+    Returns:
+        {
+            "sections": ["核心概念：self-attention", ...],  # h2/h3 标题
+            "callouts": ["缩放因子是 √d_k...", ...],       # callout 块文本
+            "examples": ["d_model=512 时...", ...],         # example 块文本
+        }
+    """
+    return {
+        "sections": [_strip_tags(m) for m in _OUTLINE_RE_SECTION.findall(lecture_html)],
+        "callouts": [_strip_tags(m) for m in _OUTLINE_RE_CALLOUT.findall(lecture_html)],
+        "examples": [_strip_tags(m) for m in _OUTLINE_RE_EXAMPLE.findall(lecture_html)],
+    }
+```
+
+**为什么不直接传 lecture_html 给 exercise LLM**：HTML 含大量标签字符，挤占 LLM 上下文且增加 token 成本；结构化纲要（标题 + 关键块文本）能让 LLM 更精准地引用讲义。
+
+**为什么不让 LLM 自己解析 lecture_html**：可控性差（LLM 看到完整 HTML 容易分心去"重写讲义"），显式纲要约束 LLM 只用纲要引用。
+
+### 5.4 skill.exercise.generate SKILL.md 改动
+
+`backend/skills/skill.exercise.generate/SKILL.md` 在现有版本基础上加 lecture_outline 引用要求 + 调整 prefetch：
+
+```yaml
+---
+name: skill.exercise.generate
+description: "Use when generating a batch of 2-4 exercises for a knowledge point. Inputs are kp_title, difficulty, lecture_outline (讲义纲要，用于 explanation 引用), optional revision_suggestions."
+output_schema: schemas/exercise.schema.json
+mcp_prefetch:
+  - tool.get_recent_scores            # 改：去掉 tool.get_kp（lecture 已用过）
+  # lecture_outline 不通过 prefetch 走 —— 它在 env.payload 里（director.py 注入）
+mcp_tool_use:
+  - tool.lint_json
+max_retries: 1
+---
+
+# 习题生成器
+
+## 任务
+为给定知识点出一组 2-4 道考察题。**每道题的 explanation 字段必须显式引用 lecture_outline 中的内容**（让讲义与答案解释互为补充，学生做完题看 explanation 时能直接串回讲义）。
+
+## 输入（来自 prefetch + env.payload）
+- tool.get_recent_scores → 最近 3 次得分
+- env.payload.lecture_outline → 讲义结构化纲要：
+  ```json
+  {
+    "sections": ["核心概念：self-attention", "..."],
+    "callouts": ["缩放因子是 √d_k，防止方差爆炸"],
+    "examples": ["d_model=512, d_k=64 时..."]
+  }
+  ```
+- env.payload.kp_title → 知识点标题
+- env.payload.difficulty → easy / medium / hard
+- env.payload.revision_suggestions → 第二轮 review LLM 给的修改意见（仅 revision 1 时存在）
+
+## explanation 字段强制要求
+每道题的 explanation 必须：
+1. **首句引用 lecture_outline 中的某个 section / callout / example**（用"如讲义『XXX』所言：..." 或 "讲义中提到：..." 等显式引用形式）
+2. 解释为什么正确答案是这个（不是机械重复题干）
+3. 简要指出其他选项错在哪（如果是 single_choice）
+
+## 示例
+```json
+[
+  {
+    "exercise_type": "single_choice",
+    "prompt": "Transformer 中 self-attention 缩放因子是？",
+    "options": ["√d_k", "d_k", "d_model", "1"],
+    "correct_answer": "√d_k",
+    "explanation": "如讲义『关键细节』中所言：缩放因子是 √d_k，目的是防止 QK^T 方差爆炸。其他选项错在：d_k 是未缩放的，会导致 softmax 进入饱和区；d_model 是模型维度，跟缩放无关；1 是无缩放，效果等同于 d_k。",
+    "difficulty": 2,
+    "score": 1.5
+  }
+]
+```
+
+## 严格输出格式
+- **顶层必须是 JSON array（列表）**
+- 每道题必填 7 字段：exercise_type / prompt / options / correct_answer / explanation / difficulty / score
+- exercise_type 枚举: single_choice | fill_blank | short_answer | code
+- prompt ≥ 5 字符
+- single_choice: options 长度 ≥ 2，correct_answer ∈ options
+- difficulty: 1 | 2 | 3
+- score: 0.5 - 3.0
+- **explanation ≥ 30 字符**（避免 LLM 输出 "对，就是这个" 这种空洞答案）
+
+## 难度梯度
+- easy: 概念辨析
+- medium: 应用
+- hard: 综合
+
+## 注意
+- 不要输出 reasoning 过程
+- 不要在 JSON 前后加解释文字
+- 收到 revision_suggestions 时按意见改
+```
+
+### 5.5 ReviewStage.review_lecture（已实现，确认逻辑）
 
 `backend/src/selflearn/agents/review_stage.py:32-45` 的现有实现：
 
@@ -360,7 +534,7 @@ async def review_lecture(self, lecture_html: str) -> ReviewResult:
 
 **不变** —— 已实现 lint_html + not_empty，符合本 spec 的 review 要求。
 
-### 5.4 Gateway GET /api/level/{level_id}
+### 5.6 Gateway GET /api/level/{level_id}
 
 `backend/src/selflearn/gateway/routes/level.py:179-205` 的现有 `get_level` 加一行：
 
@@ -597,38 +771,46 @@ import '../styles/lecture.css';
 | 旧关卡 `lecture_html=NULL` | 兼容：前端显示占位提示 |
 | `LevelDetailResponse` 字段不变 | 新增 `lecture_html: str \| None`，向下兼容（旧调用方忽略新字段） |
 | `tool.create_level` 已接受 lecture_html 但 `hasattr` 防御 | 新行为：真写入，去掉防御 + 加截断 |
-| Director chain 已预留 lecture 调用 | 不改 |
+| Director chain 已预留 lecture 调用 | **改**：lecture 后跑 `_extract_lecture_outline` → 注入到 exercise env.payload；exercise LLM 拿到 lecture_outline 后写 explanation 引用讲义内容 |
 | `tool.lint_html` 已实现白名单清洗 | 不改 |
 | `ReviewStage.review_lecture` 已实现 lint + not_empty | 不改 |
 | 无新增后端依赖（mcp / nh3 已存在） | 无 |
 | 新增前端依赖 `katex` | code-splitting 懒加载（不污染主 bundle） |
 | 无 alembic 自动迁移 | 新增一个 migration；运行命令 `cd backend && alembic upgrade head`（dev） / `docker compose run --rm backend alembic upgrade head`（容器） |
+| `skill.exercise.generate/SKILL.md` 旧 mcp_prefetch 含 `tool.get_kp` | 去掉（lecture 阶段已用过，避免重复）；新增 `lecture_outline`（来自 env.payload 而非 prefetch）；explanation 必填 ≥30 字 + 首句引用 lecture_outline |
 
 ---
 
 ## 九、测试策略
 
-### 9.1 单元测试（新增 ~6 个）
+### 9.1 单元测试（新增 ~8 个）
 
 | 文件 | 测试 |
 |---|---|
 | `tests/unit/test_create_level.py` | lecture_html 入参正常；lecture_html 超过 50000 截断；lecture_html=None 不写列 |
 | `tests/unit/test_review_stage.py` | review_lecture 接受合法 HTML 返回 passed；空字符串返回 rejected；lint_html 后空字符串返回 rejected |
 | `tests/unit/mcp/test_lint_html.py` | 已有（如缺则补）：`<script>` 剥除；`onclick` 剥除；不允许 class 剥除 |
+| `tests/unit/test_lecture_outline.py`（新文件）| `_extract_lecture_outline` 抽 h2/h3、callout、example；HTML 标签剥除；空 lecture_html 返回空字典；嵌套标签正确处理 |
 
-### 9.2 集成测试（新增 1 个）
+### 9.2 集成测试（新增 1-2 个）
 
 `tests/integration/test_director_e2e.py`：
 - mock LLM 两次（lecture + exercise），验证 director chain 跑完
 - 验证 `level.lecture_html` 写入 DB（非空）
 - 验证 `tool.create_level` 截断逻辑
+- 验证 exercise LLM 收到的 env.payload 里有 `lecture_outline` 字段（含 sections/callouts/examples）
+
+`tests/unit/test_exercise_skill_outline.py`（新文件）：
+- 验证 exercise LLM mock 收到的 user_msg 含 lecture_outline JSON 块
+- 验证 mock 返回的 exercise 的 explanation 字段长度 ≥ 30 字
 
 ### 9.3 端到端验收
 
-- `pytest tests/` 全 PASS（旧 151 + 新增 ~7 = 约 158）
+- `pytest tests/` 全 PASS（旧 151 + 新增 ~9-10 = 约 160-161）
 - `mypy src/selflearn` clean
 - `bash scripts/smoke_mvp.sh` 8/8 PASS（兼容性验证）
-- 浏览器实测 3 个不同节点 → LecturePane 渲染讲义（公式正常）+ 习题正常
+- 浏览器实测 3 个不同节点 → LecturePane 渲染讲义（公式正常）+ ExercisePane 做题看 explanation 能直接串回讲义内容
+- 容器内 spot-check：取一个 level.exercise.explanation，验证首句包含 lecture_outline 中某个 callout / section 文本片段
 
 ### 9.4 前端验证（手工 + e2e）
 
@@ -671,9 +853,9 @@ import '../styles/lecture.css';
 | Phase | 内容 | 验证 | 预估 |
 |---|---|---|---|
 | **P1. 数据层** | migration + ORM 字段 + schema 字段 + tool.create_level 截断 + 单测 | alembic upgrade head 在容器跑通；get_level 返回 lecture_html（NULL）；create_level 截断单测 | 0.5 天 |
-| **P2. SKILL + 后端联调** | 重写 SKILL.md + 容器内 LLM 真实调用 | worker 跑一次 /start，DB 里 lecture_html 非空；review_lecture verdict=passed | 0.5 天 |
+| **P2. SKILL + Director chain 联调** | 重写 lecture SKILL.md（纯讲解） + 改 exercise SKILL.md（引用 outline） + 新增 `_extract_lecture_outline` + Director chain 注入 outline + 容器内 LLM 真实调用 | worker 跑一次 /start，DB 里 lecture_html 非空；exercise.explanation 显式引用 lecture_outline；review_lecture verdict=passed | 0.5 天 |
 | **P3. 前端渲染** | types + LecturePane + lecture.css + KaTeX 懒加载 | 浏览器打开关卡，lecture pane 显示讲义（公式正常） | 0.5 天 |
-| **P4. 回归** | pytest 全套 + 端到端 smoke + 3 节点实测 | pytest 全 PASS；用户验收 | 0.5 天 |
+| **P4. 回归** | pytest 全套 + 端到端 smoke + 3 节点实测（含 outline 引用检查） | pytest 全 PASS；用户验收 | 0.5 天 |
 
 **总预估**：2 天（1 个完整工作日 + 1 个回归日）。
 
@@ -697,6 +879,9 @@ import '../styles/lecture.css';
 | 12 | KaTeX 加载 | code-splitting 懒加载（Promise.all + dynamic import） | LecturePane 非首屏必需；懒加载控包体积 |
 | 13 | 实施顺序 | P1 数据层 → P2 后端 + P3 前端（并行） → P4 回归 | 数据层决定 schema；前后端并行加速 |
 | 14 | 模态范围 | **文字模态**（HTML + KaTeX）我做；**图片模态**由用户后续独立实现 | 用户分工 |
+| 15 | 讲义与答案解释分工 | **讲义 = 纯知识点讲解**（不含题目答案）；**答案解释 = exercise LLM 在 explanation 字段显式引用讲义纲要** | 用户反馈：讲义应超越单次题目，做到"学完能懂"。两道 LLM 调用分工明确：lecture 教概念，exercise 让学生通过题目答案串回讲义 |
+| 16 | 讲义-答案解释对齐方式 | 提取 `_extract_lecture_outline(html)` → `{sections, callouts, examples}` 三类结构化纲要 → 注入 exercise env.payload → exercise LLM 写 explanation 时显式引用纲要条目 | 不直接传 lecture_html（标签噪音挤占 LLM 上下文）；不让 LLM 自己解析 HTML（可控性差）。显式纲要约束 LLM 只用纲要引用 |
+| 17 | exercise SKILL.md 必填字段调整 | 新增 **explanation ≥ 30 字符** + **首句引用 lecture_outline** 强制要求 | 防 LLM 输出"对，就是这个"空洞答案；保证学生看完 explanation 能直接串回讲义 |
 
 ---
 
