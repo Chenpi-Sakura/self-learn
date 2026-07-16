@@ -37,7 +37,7 @@ async def test_director_chain_happy_path(mock_agent_review):
         '[{"exercise_type":"single_choice","prompt":"Q","options":["A","B"],"correct_answer":"A","explanation":"xxxxxxxxxxxxxxxxxxxx","difficulty":1,"score":1.0}]',  # exercises
     ]
 
-    review.review_lecture.return_value = MagicMock(verdict="passed")
+    review.review_lecture.return_value = MagicMock(verdict="passed", cleaned=None)
     review.review_exercise_business.return_value = MagicMock(verdict="passed")
     review.review_exercise_llm.return_value = MagicMock(verdict="passed", score=1.0)
 
@@ -73,7 +73,7 @@ async def test_director_chain_exercise_revision(mock_agent_review):
         '[{"exercise_type":"single_choice","prompt":"Q1","options":["A","B"],"correct_answer":"A","explanation":"xxxxxxxxxxxxxxxxxxxx","difficulty":1,"score":1.0}]',
         '[{"exercise_type":"single_choice","prompt":"Q2","options":["A","B"],"correct_answer":"B","explanation":"yyyyyyyyyyyyyyyyyyyy","difficulty":1,"score":1.0}]',  # 修订版
     ]
-    review.review_lecture.return_value = MagicMock(verdict="passed")
+    review.review_lecture.return_value = MagicMock(verdict="passed", cleaned=None)
     review.review_exercise_business.return_value = MagicMock(verdict="passed")
     review.review_exercise_llm.side_effect = [
         MagicMock(verdict="needs_revision", suggestions=["改 explanation"], score=0.5),

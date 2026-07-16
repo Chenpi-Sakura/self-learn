@@ -54,7 +54,7 @@ async def test_director_chain_injects_lecture_outline_into_exercise_env() -> Non
     agent.run = AsyncMock(side_effect=[lecture_html, exercises])
 
     review = MagicMock()
-    review.review_lecture = AsyncMock(return_value=MagicMock(verdict="passed", issues=[]))
+    review.review_lecture = AsyncMock(return_value=MagicMock(verdict="passed", issues=[], cleaned=None))
     review.review_exercise_business = AsyncMock(return_value=MagicMock(verdict="passed", issues=[]))
     review.review_exercise_llm = AsyncMock(return_value=MagicMock(
         verdict="passed", score=1.0, suggestions=[], issues=[],

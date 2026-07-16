@@ -12,6 +12,7 @@ class ReviewResult:
     verdict: str
     score: float = 0.0
     issues: list[dict[str, Any]] = field(default_factory=list)
+    cleaned: str | None = None
 
 
 @dataclass
@@ -38,11 +39,12 @@ class ReviewStage:
                 issues=[{"rule": "not_empty", "severity": "high", "message": "lecture_html 为空"}],
             )
         lint = await self.mcp.call("tool.lint_html", html=lecture_html)
+        cleaned_html: str | None = lint.get("cleaned")
         if lint.get("is_empty"):
             issues.append({"rule": "not_empty", "severity": "high", "message": "lecture_html 清洗后为空"})
         if any(i["severity"] == "high" for i in issues):
-            return ReviewResult(verdict="rejected", score=0.0, issues=issues)
-        return ReviewResult(verdict="passed", score=1.0, issues=[])
+            return ReviewResult(verdict="rejected", score=0.0, issues=issues, cleaned=cleaned_html)
+        return ReviewResult(verdict="passed", score=1.0, issues=[], cleaned=cleaned_html)
 
     async def review_exercise_business(self, exercises: list[dict[str, Any]]) -> ReviewResult:
         issues: list[dict[str, Any]] = []

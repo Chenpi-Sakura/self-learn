@@ -74,7 +74,11 @@ async def run_director_chain(
     if review_lec.verdict == "rejected":
         raise AppError(ErrorCode.INTERNAL, f"lecture_rejected: {review_lec.issues}")
 
+    # 用 nh3 清洗后的 HTML 落库 + 提取大纲（避免 XSS）
+    lecture_html = review_lec.cleaned or lecture_html
+
     # 5.5 提取讲义纲要，注入到 exercise env（让 exercise 的 explanation 引用讲义内容）
+    # lecture_outline is stable across revisions (lecture_html doesn't change)
     lecture_outline = extract_lecture_outline(lecture_html)
 
     # 6. exercise 0-2 轮
