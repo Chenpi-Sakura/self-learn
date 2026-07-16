@@ -1,6 +1,7 @@
 """LLMAgent: 1 个全能 Agent class。"""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from selflearn.core.envelope import Envelope
@@ -29,17 +30,21 @@ class LLMAgent:
         for tool in skill.get("mcp_prefetch", []):
             prefetch[tool] = await self.mcp.call(tool)
 
-        prompt_args = {
-            **prefetch,
-            **self._env_args(env),
-        }
-        try:
-            prompt_body = skill["body"].format(**prompt_args)
-        except KeyError as e:
-            raise AppError(
-                ErrorCode.INTERNAL,
-                f"skill prompt missing key: {e}. Skill={skill_id}",
-            )
+        # body 保留 markdown 原文，不 .format()——所有 {...} 都是普通文本，
+        # 一旦 format 会把 dict 值 str() 里的 {exercise_type} 误当占位符。
+        prompt_body = skill["body"]
+
+        # prefetch + payload 显式序列化为 markdown json code block 注入 user message
+        prefetch_text = "\n".join(
+            f"## {tool_name}\n```json\n"
+            f"{json.dumps(result, ensure_ascii=False, indent=2, default=str)}\n```"
+            for tool_name, result in prefetch.items()
+        )
+        payload_text = (
+            "## Payload\n```json\n"
+            f"{json.dumps(env.payload or {}, ensure_ascii=False, indent=2, default=str)}\n```"
+        )
+        user_msg = f"{prefetch_text}\n\n{payload_text}" if prefetch_text else payload_text
 
         max_retries = skill.get("max_retries", 0)
         schema = skill.get("output_schema")
@@ -51,7 +56,7 @@ class LLMAgent:
                 ChatRequest(
                     messages=[
                         ChatMessage("system", prompt_body),
-                        ChatMessage("user", str(env.payload)),
+                        ChatMessage("user", user_msg),
                     ],
                     reasoning=True,
                 )
@@ -75,8 +80,3 @@ class LLMAgent:
             ErrorCode.INTERNAL,
             f"llm_max_retries_exceeded: skill={skill_id} last_err={last_err}",
         )
-
-    @staticmethod
-    def _env_args(env: Envelope) -> dict[str, Any]:
-        """把 envelope payload 暴露给 prompt 模板。"""
-        return dict(env.payload or {})

@@ -58,7 +58,13 @@ async def test_llm_agent_runs_skill_with_prefetch(mock_mcp, mock_llm):
     assert any(c.args[0] == "tool_get_kp" for c in mock_mcp.call.call_args_list)
     chat_call = mock_llm.default.return_value.chat.call_args
     messages = chat_call[0][0].messages
-    assert "Transformer" in messages[0].content
+    # system message：body 原文，不做 .format() 插值（避免误解析 dict 值里的 {}）
+    assert messages[0].content == "Title: {tool_get_kp}"
+    # prefetch 结果显式注入 user message（markdown json code block）
+    assert "Transformer" in messages[1].content
+    assert "tool_get_kp" in messages[1].content
+    # payload 也序列化进 user message
+    assert "自注意力" in messages[1].content
 
 
 @pytest.mark.asyncio
