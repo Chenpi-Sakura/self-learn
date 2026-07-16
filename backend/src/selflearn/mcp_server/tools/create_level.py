@@ -4,8 +4,13 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from selflearn.core.logging import get_logger
 from selflearn.domain.level import Level
 from selflearn.infra.db import get_session_factory
+
+log = get_logger("create_level")
+
+MAX_LECTURE_HTML_LEN = 50000
 
 
 async def create_level(
@@ -14,8 +19,8 @@ async def create_level(
 ) -> dict[str, Any]:
     """给一个 MapNode 创建 Level 行。
 
-    lecture_html 是 spec backlog 中的字段（讲义系统上线后才有），当前 schema
-    暂未实现该列——这里 getattr 防御性写入：列不存在则静默忽略。
+    lecture_html 是讲义 HTML（nh3 白名单清洗后）。
+    若超过 MAX_LECTURE_HTML_LEN，截断并 log warn（prompt 已有 800-1500 字约束，截断是兜底）。
 
     Returns: {"ok": True, "level_id": "..."} 或
              {"ok": False, "error": "invalid_uuid:<node_id>"}
@@ -27,9 +32,24 @@ async def create_level(
 
     factory = get_session_factory()
     async with factory() as session:
-        level = Level(node_id=node_uuid, status="generated", form="exercise")
-        if lecture_html is not None and hasattr(Level, "lecture_html"):
-            setattr(level, "lecture_html", lecture_html)
+        truncated_html: str | None = None
+        if lecture_html is not None:
+            if len(lecture_html) > MAX_LECTURE_HTML_LEN:
+                log.warning(
+                    "create_level.lecture_html_truncated",
+                    orig_len=len(lecture_html),
+                    max_len=MAX_LECTURE_HTML_LEN,
+                )
+                truncated_html = lecture_html[:MAX_LECTURE_HTML_LEN]
+            else:
+                truncated_html = lecture_html
+
+        level = Level(
+            node_id=node_uuid,
+            status="generated",
+            form="exercise",
+            lecture_html=truncated_html,
+        )
         session.add(level)
         await session.commit()
         await session.refresh(level)
