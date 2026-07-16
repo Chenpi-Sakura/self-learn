@@ -4,7 +4,7 @@
 **Plan**: [docs/superpowers/plans/2026-07-15-agent-architecture.md](../../plans/2026-07-15-agent-architecture.md)
 **Date**: 2026-07-15 → 2026-07-16
 **Base**: `bc8818f` (Stage 4 cleanup)
-**Tag**: `agent-architecture-v1` (at `1c780e4`)
+**Tag**: `agent-architecture-v1` (at `dea9288`, after post-review routing fix)
 
 ---
 
@@ -16,11 +16,27 @@
 
 ---
 
+## 0. 整分支 review 与后置修复
+
+终审的整分支 review 抓到一个 plan-level 的路由 gap：原架构下 Director chain 只接 `skill.director.start` 一路 envelope，而 gateway 还有 `POST /api/profile/build`（路由到 `profile.skill.profile.build`）和 `POST /api/map/generate`（路由到 `plan.skill.plan.generate`）两个独立触发器，发布 envelope 后没人接。后置修复 (`dea9288`) 改了 `scheduler.dispatch`：
+
+```python
+if env.target.id == "skill.director.start":
+    return await run_director_chain_with_retry(env, agent, review)  # 关卡链
+if env.target.id in ("skill.profile.build", "skill.plan.generate"):
+    return await agent.run(env.target.id, env)  # 直接 LLMAgent.run 这个 Skill
+# else: warning + None
+```
+
+3 路 dispatch：Director chain / profile build / plan generate，每个都是一个独立工作流。新增 2 个调度测试覆盖另两路。
+
+---
+
 ## 1. 验收结果
 
 | 项目 | 目标 | 实际 | 状态 |
 |---|---|---|---|
-| 单元测试（in-scope, 无 DB） | ~150 pass | **108 + 11 = 119 pass** | ✅ |
+| 单元测试（in-scope, 无 DB） | ~150 pass | **119 in-scope + 8 dispatch** | ✅ |
 | DB-touching 测试 | ~30 pass | 需 live Postgres，本环境跳过 | ⚠️ 基础设施限制 |
 | P1 集成验收（stdio 15 tool） | 15 列齐 | **15 列齐**（Task 7 验证） | ✅ |
 | mypy strict | clean | **60 errors** (全为 test 文件 `no-untyped-def`) | ⚠️ 残留 |
@@ -28,6 +44,7 @@
 | 旧 Agent class 全删 | 5 (实际 6) | **6 全删** | ✅ |
 | `tools/` 目录全删 | 是 | 是 | ✅ |
 | `docs/skills/` + `backend/docs/` 全删 | 是 | 是（被 Task 9 一并清理） | ✅ |
+| gateway 3 路路由全接 | 是 | **是**（dea9288 后）| ✅ |
 | `tag` 标记 | `agent-architecture-v1` | ✅ | ✅ |
 
 ### MySQL 残留说明
@@ -127,9 +144,10 @@
 
 ---
 
-## 7. 完整 commit 列表（bc8818f..HEAD，共 26 commit）
+## 7. 完整 commit 列表（bc8818f..HEAD，共 27 commit）
 
 ```
+dea9288 fix(agent): scheduler.dispatch — route profile.build + plan.generate via LLMAgent
 1c780e4 fix(test): test_skill_library — rewrite to new skills/<id>/SKILL.md layout (Task 18)
 22b4e77 refactor(agent): P5.1 删 6 个旧 Agent class + tools/ + 改旧测试适配新架构
 4ef7f98 feat(agent): P4.2 Director retry + MCP client + scheduler/main rewiring
