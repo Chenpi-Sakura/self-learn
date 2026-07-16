@@ -90,20 +90,24 @@ async def test_dispatch_director_start_calls_chain_with_retry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_other_target_id_still_uses_director_chain() -> None:
-    """P5 统一入口：target.id 非 director.start 也走同一条 Director chain
-    （Director 内部按 env 内容判断；dispatch 层不做 skill-id 路由）。"""
+async def test_dispatch_other_target_id_logs_warning_and_returns_none() -> None:
+    """target.id 既非 director.start 也非 profile.build/plan.generate →
+    不进 Director chain、不调 LLMAgent，只打 warning log 然后 return None
+    （Stage 2 fallback / 未知 skill，不阻塞 worker）。
+    """
     env = _make_env("skill.exercise.generate")
     agent = MagicMock()
+    agent.run = AsyncMock()
     review = MagicMock()
 
     with patch(
         "selflearn.agents.scheduler.run_director_chain_with_retry",
-        new=AsyncMock(return_value={"level_id": "L1"}),
+        new=AsyncMock(),
     ) as chain_mock:
         reply = await dispatch(env, agent=agent, review=review)
 
-    chain_mock.assert_awaited_once_with(env, agent, review)
+    chain_mock.assert_not_awaited()
+    agent.run.assert_not_awaited()
     assert reply is None
 
 
@@ -122,3 +126,52 @@ async def test_dispatch_propagates_chain_exception() -> None:
         with pytest.raises(RuntimeError) as exc_info:
             await dispatch(env, agent=agent, review=review)
     assert exc_info.value is boom
+
+
+@pytest.mark.asyncio
+async def test_dispatch_routes_profile_build_to_llmagent() -> None:
+    """target.id='skill.profile.build' → 调 agent.run(target, env)，不走 Director chain。
+
+    profile.build 是单步 Skill（不需要 review），直接 LLMAgent.run 出 profile
+    HTML 即可；gateway POST /api/profile/build 才会发这个 envelope。
+    """
+    env = _make_env("skill.profile.build")
+    agent = MagicMock()
+    agent.run = AsyncMock(return_value="<html>profile</html>")
+    review = MagicMock()
+
+    with patch(
+        "selflearn.agents.scheduler.run_director_chain_with_retry",
+        new=AsyncMock(),
+    ) as chain_mock:
+        reply = await dispatch(env, agent=agent, review=review)
+
+    # profile.build 必须走 LLMAgent.run，绝不能进 Director chain
+    chain_mock.assert_not_awaited()
+    agent.run.assert_awaited_once_with("skill.profile.build", env)
+    # Profile skill 只产出 HTML 字符串，dispatch 不关心；前端轮询状态。
+    assert reply is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_routes_plan_generate_to_llmagent() -> None:
+    """target.id='skill.plan.generate' → 调 agent.run(target, env)，不走 Director chain。
+
+    plan.generate 是单步 Skill（不需要 review），直接 LLMAgent.run 出 node list；
+    gateway POST /api/map/generate 才会发这个 envelope。
+    """
+    env = _make_env("skill.plan.generate")
+    agent = MagicMock()
+    agent.run = AsyncMock(return_value='[{"node_id":"n1"}]')
+    review = MagicMock()
+
+    with patch(
+        "selflearn.agents.scheduler.run_director_chain_with_retry",
+        new=AsyncMock(),
+    ) as chain_mock:
+        reply = await dispatch(env, agent=agent, review=review)
+
+    # plan.generate 必须走 LLMAgent.run，绝不能进 Director chain
+    chain_mock.assert_not_awaited()
+    agent.run.assert_awaited_once_with("skill.plan.generate", env)
+    assert reply is None
