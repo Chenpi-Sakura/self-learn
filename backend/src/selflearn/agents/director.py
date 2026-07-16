@@ -49,7 +49,10 @@ async def run_director_chain(
     student_id = env.payload.get("student_id", "")
 
     # 1-3. 数据准备
-    node = await agent.mcp.call("tool.get_active_node", student_id=student_id)
+    requested_node_id = env.payload.get("node_id")
+    node = await agent.mcp.call(
+        "tool.get_active_node", student_id=student_id, node_id=requested_node_id,
+    )
     if not node.get("ok"):
         raise AppError(ErrorCode.INTERNAL, f"get_active_node: {node.get('error')}")
     kp = await agent.mcp.call("tool.get_kp", kp_id=node["kp_id"])
