@@ -194,6 +194,7 @@ async def get_level(level_id: UUID) -> LevelDetailResponse:
         level_id=level.level_id,
         node_id=level.node_id,
         status=level.status,
+        lecture_html=level.lecture_html,
         exercises=[
             ExerciseResponse(
                 exercise_id=ex.exercise_id,

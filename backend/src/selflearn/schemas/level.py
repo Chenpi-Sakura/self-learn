@@ -19,3 +19,4 @@ class LevelDetailResponse(BaseModel):
     node_id: UUID
     status: str
     exercises: list[ExerciseResponse] = []
+    lecture_html: str | None = None  # NULL 时前端显示"该关卡尚无讲义"
