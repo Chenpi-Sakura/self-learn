@@ -18,6 +18,8 @@ COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY src ./src
+COPY skills ./skills
+COPY schemas ./schemas
 COPY migrations ./migrations
 COPY scripts ./scripts
 COPY alembic.ini ./

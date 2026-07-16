@@ -16,3 +16,30 @@ async def test_lint_json_missing_field():
 async def test_lint_json_schema_not_found():
     result = await lint_json([], "nonexistent_schema")
     assert result["ok"] is False and "schema_not_found" in result["error"]
+
+@pytest.mark.asyncio
+async def test_lint_json_valid_array_with_full_schema_path():
+    """兼容 SKILL.md frontmatter 的 'schemas/exercise.schema.json' 写法。"""
+    result = await lint_json(
+        [{"exercise_type":"single_choice","prompt":"题目至少 5 字符","options":["A","B","C","D"],"correct_answer":"A","explanation":"解析至少 10 字符以上","difficulty":1,"score":1.0}],
+        "schemas/exercise.schema.json",
+    )
+    assert result["ok"] is True
+
+@pytest.mark.asyncio
+async def test_lint_json_valid_array_with_schema_no_json():
+    """兼容 'exercise.schema'（带 .schema 但不带 .json 后缀）。"""
+    result = await lint_json(
+        [{"exercise_type":"single_choice","prompt":"题目至少 5 字符","options":["A","B","C","D"],"correct_answer":"A","explanation":"解析至少 10 字符以上","difficulty":1,"score":1.0}],
+        "exercise.schema",
+    )
+    assert result["ok"] is True
+
+@pytest.mark.asyncio
+async def test_lint_json_valid_array_with_dot_json_only():
+    """兼容 'exercise.schema.json'（带 .json 后缀，无目录前缀）。"""
+    result = await lint_json(
+        [{"exercise_type":"single_choice","prompt":"题目至少 5 字符","options":["A","B","C","D"],"correct_answer":"A","explanation":"解析至少 10 字符以上","difficulty":1,"score":1.0}],
+        "exercise.schema.json",
+    )
+    assert result["ok"] is True

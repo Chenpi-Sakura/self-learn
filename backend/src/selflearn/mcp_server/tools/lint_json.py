@@ -14,7 +14,20 @@ _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
 
 def _load_schema(name: str) -> dict[str, Any]:
     if name not in _SCHEMA_CACHE:
-        path = SCHEMA_DIR / f"{name}.schema.json"
+        # 兼容 SKILL.md frontmatter 的多种写法：
+        #   "schemas/exercise.schema.json"（目录前缀 + .json 后缀）
+        #   "exercise.schema.json"       （仅 .json 后缀）
+        #   "exercise.schema"            （仅 .schema 后缀）
+        #   "exercise"                   （无后缀）
+        # 所有形式都映射到 SCHEMA_DIR/<basename>.schema.json（当未带 .json 时）。
+        p = Path(name)
+        if p.suffix == ".json":
+            filename = p.name
+        elif p.suffix == ".schema":
+            filename = f"{p.name}.json"
+        else:
+            filename = f"{p.name}.schema.json"
+        path = SCHEMA_DIR / filename
         _SCHEMA_CACHE[name] = json.loads(path.read_text(encoding="utf-8"))
     return _SCHEMA_CACHE[name]
 
