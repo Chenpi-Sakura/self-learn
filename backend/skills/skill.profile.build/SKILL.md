@@ -13,7 +13,7 @@ max_retries: 0
 
 ## Validation Rules
 - 6 维必须全填；任一缺失 → 默认 0.5
-- dimensions 类型必须是 {string: number}
+- dimensions 类型必须是 dict[str, number]
 - tags 必须是 list[str]
 
 ## Output
