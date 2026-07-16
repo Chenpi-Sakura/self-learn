@@ -6,6 +6,7 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from selflearn.agents.lecture_outline import extract_lecture_outline
 from selflearn.core.envelope import Envelope
 from selflearn.core.errors import AppError, ErrorCode
 from selflearn.core.logging import get_logger
@@ -73,6 +74,9 @@ async def run_director_chain(
     if review_lec.verdict == "rejected":
         raise AppError(ErrorCode.INTERNAL, f"lecture_rejected: {review_lec.issues}")
 
+    # 5.5 提取讲义纲要，注入到 exercise env（让 exercise 的 explanation 引用讲义内容）
+    lecture_outline = extract_lecture_outline(lecture_html)
+
     # 6. exercise 0-2 轮
     suggestions: list[str] = []
     exercises: list[dict[str, Any]] = []
@@ -89,6 +93,7 @@ async def run_director_chain(
                 "kp_title": kp["title"],
                 "difficulty": difficulty,
                 "revision_suggestions": suggestions,
+                "lecture_outline": lecture_outline,
             },
             trace_id=trace_id,
             parent_id=env.span_id,
