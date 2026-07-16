@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getProfile } from '../api/profile';
+import { buildProfile, getProfile } from '../api/profile';
+import { subscribeProfileProgress } from '../api/sse';
 import type { ProfileDimensions as ApiDim } from '../api/types';
 import './ProfileRadar.css';
 
@@ -22,6 +23,11 @@ const DIM_MAP: { key: keyof ApiDim; label: string }[] = [
   { key: 'fd', label: '专注时长' },
 ];
 
+// 默认初始维度（6 个键全 0.5；重新生成时让 LLM 用这些作为基线）
+const DEFAULT_DIMS: Record<string, number> = {
+  kb: 0.5, vp: 0.5, as: 0.5, ge: 0.5, ept: 0.5, fd: 0.5,
+};
+
 function polar(i: number, total: number, value: number) {
   const angle = (Math.PI * 2 * i) / total - Math.PI / 2;
   const r = (R * value) / 100;
@@ -32,13 +38,16 @@ interface Props {
   studentId?: string;
 }
 
+type RebuildStatus = 'idle' | 'submitting' | 'running' | 'completed' | 'failed';
+
 export function ProfileRadar({ studentId }: Props) {
   const [dims, setDims] = useState<DimItem[]>([]);
   const [studentLabel, setStudentLabel] = useState('加载中...');
+  const [rebuildStatus, setRebuildStatus] = useState<RebuildStatus>('idle');
+  const [rebuildMsg, setRebuildMsg] = useState<string>('');
 
-  useEffect(() => {
-    if (!studentId) return;
-    getProfile(studentId)
+  const loadProfile = (sid: string) => {
+    getProfile(sid)
       .then((p) => {
         setStudentLabel(p.student_id);
         setDims(
@@ -53,7 +62,46 @@ export function ProfileRadar({ studentId }: Props) {
         setStudentLabel('（加载失败）');
         setDims([]);
       });
+  };
+
+  useEffect(() => {
+    if (!studentId) return;
+    loadProfile(studentId);
   }, [studentId]);
+
+  const handleRebuild = async () => {
+    if (!studentId) return;
+    setRebuildStatus('submitting');
+    setRebuildMsg('提交...');
+    try {
+      const res = await buildProfile(studentId, DEFAULT_DIMS, ['manual-rebuild']);
+      const traceId = res.trace_id;
+      setRebuildStatus('running');
+      setRebuildMsg(`trace=${traceId.slice(0, 8)}… 后端出题中`);
+      const close = subscribeProfileProgress(traceId, (e) => {
+        if (e.event === 'progress') {
+          setRebuildMsg(`进行中：${(e.data as { stage?: string }).stage ?? '…'}`);
+        } else if (e.event === 'completed') {
+          setRebuildStatus('completed');
+          setRebuildMsg('完成！刷新中...');
+          close();
+          // 1 秒后重新拉画像（让 LLM 生成已落库）
+          setTimeout(() => loadProfile(studentId), 1000);
+          setTimeout(() => {
+            setRebuildStatus('idle');
+            setRebuildMsg('');
+          }, 4000);
+        } else if (e.event === 'error') {
+          setRebuildStatus('failed');
+          setRebuildMsg('失败');
+          close();
+        }
+      });
+    } catch (e) {
+      setRebuildStatus('failed');
+      setRebuildMsg(`提交失败：${String(e)}`);
+    }
+  };
 
   const total = dims.length;
   const points = dims
@@ -68,7 +116,41 @@ export function ProfileRadar({ studentId }: Props) {
       <div className="pr-head">
         <div className="h">{studentLabel} · 六维画像</div>
         <div className="s">最近 30 天 · 综合</div>
+        <button
+          className="pr-rebuild"
+          onClick={handleRebuild}
+          disabled={!studentId || rebuildStatus === 'submitting' || rebuildStatus === 'running'}
+          style={{
+            marginLeft: 'auto',
+            padding: '4px 10px',
+            fontSize: 12,
+            background:
+              rebuildStatus === 'running' || rebuildStatus === 'submitting'
+                ? '#ccc'
+                : rebuildStatus === 'failed'
+                  ? '#BC4749'
+                  : '#1B3B6F',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            cursor:
+              rebuildStatus === 'submitting' || rebuildStatus === 'running'
+                ? 'wait'
+                : 'pointer',
+          }}
+        >
+          {rebuildStatus === 'idle' && '重新生成'}
+          {rebuildStatus === 'submitting' && '提交中…'}
+          {rebuildStatus === 'running' && '生成中…'}
+          {rebuildStatus === 'completed' && '✓ 已完成'}
+          {rebuildStatus === 'failed' && '✗ 重试'}
+        </button>
       </div>
+      {rebuildMsg && (
+        <div style={{ fontSize: 11, color: '#6B6B70', padding: '4px 0', marginLeft: 0 }}>
+          {rebuildMsg}
+        </div>
+      )}
       {dims.length === 0 ? (
         <div style={{ padding: 20, color: '#6B6B70' }}>暂无画像数据</div>
       ) : (
