@@ -19,6 +19,34 @@ from selflearn.agents.scheduler import dispatch
 from selflearn.core.envelope import ActorRef, Envelope
 
 
+def _make_fake_session_factory() -> MagicMock:
+    """返回一个可调用的 fake session factory，async with factory() 进入后 session.execute().scalar_one_or_none()=None。
+
+    解决 plan_generate / profile_build 单测调真实 SQLAlchemy 的问题：
+    - profile_build → ProfileRepository.upsert → session.execute().scalar_one_or_none()
+    - plan_generate → session.execute().scalar_one()
+    两个 chained 调用都得返回非 coroutine 值（直接值）。
+    """
+    session = MagicMock()
+    rs = MagicMock()
+    rs.scalar_one_or_none = MagicMock(return_value=None)
+    rs.scalar_one = MagicMock(return_value=0)
+    rs.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+    session.execute = AsyncMock(return_value=rs)
+    session.commit = AsyncMock()
+    session.refresh = AsyncMock()
+    session.flush = AsyncMock()
+    session.add = MagicMock()
+
+    factory = MagicMock(return_value=session)
+    # 让 session() 返回 session 自身（async with factory() 时 factory() == session）
+    session.return_value = session
+    # 并让 session 支持 async with：session.__aenter__ 返回 session 自身
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+    return factory
+
+
 def _make_env(target_id: str = "skill.director.start") -> Envelope:
     return Envelope(
         action="skill.execute",
@@ -130,10 +158,10 @@ async def test_dispatch_propagates_chain_exception() -> None:
 
 @pytest.mark.asyncio
 async def test_dispatch_routes_profile_build_to_llmagent() -> None:
-    """target.id='skill.profile.build' → 调 agent.run(target, env)，不走 Director chain。
+    """target.id='skill.profile.build' → 走 inline Python _execute_profile_build，不进 Director chain 也不调 LLMAgent.run。
 
-    profile.build 是单步 Skill（不需要 review），直接 LLMAgent.run 出 profile
-    HTML 即可；gateway POST /api/profile/build 才会发这个 envelope。
+    profile.build 是单步 Skill（不需要 review），用确定性 Python 做维度映射 + 写库 +
+    SSE progress；gateway POST /api/profile/build 才会发这个 envelope。
     """
     env = _make_env("skill.profile.build")
     agent = MagicMock()
@@ -143,22 +171,30 @@ async def test_dispatch_routes_profile_build_to_llmagent() -> None:
     with patch(
         "selflearn.agents.scheduler.run_director_chain_with_retry",
         new=AsyncMock(),
-    ) as chain_mock:
+    ) as chain_mock, patch(
+        "selflearn.agents.scheduler.progress_publish",
+        new=AsyncMock(),
+    ) as _pub_mock, patch(
+        "selflearn.agents.scheduler.get_session_factory",
+        new=_make_fake_session_factory(),
+    ) as _sf_mock:
         reply = await dispatch(env, agent=agent, review=review)
 
-    # profile.build 必须走 LLMAgent.run，绝不能进 Director chain
+    # profile.build 走 inline Python（_execute_profile_build）；不进 Director chain 也不调 LLMAgent.run
     chain_mock.assert_not_awaited()
-    agent.run.assert_awaited_once_with("skill.profile.build", env)
+    agent.run.assert_not_awaited()
     # Profile skill 只产出 HTML 字符串，dispatch 不关心；前端轮询状态。
     assert reply is None
+    # progress_publish 应被调用（mock 真实 I/O 但验证调用发生）
+    _pub_mock.assert_awaited()
 
 
 @pytest.mark.asyncio
 async def test_dispatch_routes_plan_generate_to_llmagent() -> None:
-    """target.id='skill.plan.generate' → 调 agent.run(target, env)，不走 Director chain。
+    """target.id='skill.plan.generate' → 走 inline Python _execute_plan_generate，不进 Director chain 也不调 LLMAgent.run。
 
-    plan.generate 是单步 Skill（不需要 review），直接 LLMAgent.run 出 node list；
-    gateway POST /api/map/generate 才会发这个 envelope。
+    plan.generate 是单步 Skill（不需要 review），用确定性 Python 批量建 MapNode 行 +
+    SSE progress；gateway POST /api/map/generate 才会发这个 envelope。
     """
     env = _make_env("skill.plan.generate")
     agent = MagicMock()
@@ -168,10 +204,18 @@ async def test_dispatch_routes_plan_generate_to_llmagent() -> None:
     with patch(
         "selflearn.agents.scheduler.run_director_chain_with_retry",
         new=AsyncMock(),
-    ) as chain_mock:
+    ) as chain_mock, patch(
+        "selflearn.agents.scheduler.progress_publish",
+        new=AsyncMock(),
+    ) as _pub_mock, patch(
+        "selflearn.agents.scheduler.get_session_factory",
+        new=_make_fake_session_factory(),
+    ) as _sf_mock:
         reply = await dispatch(env, agent=agent, review=review)
 
-    # plan.generate 必须走 LLMAgent.run，绝不能进 Director chain
+    # plan.generate 走 inline Python（_execute_plan_generate）；不进 Director chain 也不调 LLMAgent.run
     chain_mock.assert_not_awaited()
-    agent.run.assert_awaited_once_with("skill.plan.generate", env)
+    agent.run.assert_not_awaited()
     assert reply is None
+    # progress_publish 应被调用（mock 真实 I/O 但验证调用发生）
+    _pub_mock.assert_awaited()
