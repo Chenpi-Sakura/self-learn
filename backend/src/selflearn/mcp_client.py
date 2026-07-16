@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -48,6 +49,7 @@ async def mcp_client_lifespan() -> AsyncIterator[_MCPClientProc]:
         command=sys.executable,
         args=["-m", "selflearn.mcp_server"],
         cwd=BACKEND_DIR,
+        env=dict(os.environ),  # MCP SDK 默认白名单不含 POSTGRES_HOST/REDIS_URL 等业务变量
     )
     async with stdio_client(params) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
