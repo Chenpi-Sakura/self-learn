@@ -83,8 +83,6 @@ class ReviewStage:
     ) -> LLMReviewResult:
         """LLM 语义审查：调 LLMAgent 跑 skill.review.exercise.llm。"""
         import json
-        from selflearn.core.logging import get_logger
-        log = get_logger("review_stage")
         raw = await self.llm.run(
             skill_id="skill.review.exercise.llm",
             env=Envelope(
