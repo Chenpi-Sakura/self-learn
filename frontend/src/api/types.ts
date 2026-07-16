@@ -34,6 +34,7 @@ export interface LevelDetail {
   node_id: string;
   status: string;
   exercises: ExerciseResponse[];
+  lecture_html: string | null;  // NULL 时显示"该关卡尚无讲义"
 }
 
 export interface ProfileHistoryEntry {

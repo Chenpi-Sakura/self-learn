@@ -1,0 +1,67 @@
+/* 讲义样式（UKIYO × Notion 主题） */
+.lecture {
+  background: #FBF7EC;        /* 米黄底（比 --paper 略深） */
+  font-family: HedvigLettersSerif, "STKaiti", "KaiTi", serif;
+  color: #1A1A1A;
+  line-height: 1.7;
+}
+.lecture h2 {
+  color: #1B3B6F;             /* 靛蓝（= --indigo） */
+  font-family: "STSong", "SimSun", "Times New Roman", serif;
+  border-bottom: 1px solid rgba(27, 59, 111, 0.15);
+  padding-bottom: 4px;
+  margin-top: 24px;
+}
+.lecture h3 {
+  color: #1B3B6F;
+  font-family: "STSong", "SimSun", "Times New Roman", serif;
+  margin-top: 16px;
+}
+.lecture p {
+  margin: 12px 0;
+}
+.lecture ul, .lecture ol {
+  padding-left: 24px;
+}
+.lecture code {
+  font-family: "SF Mono", Consolas, monospace;
+  background: rgba(27, 59, 111, 0.05);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+.lecture pre {
+  background: #FFF;
+  border: 1px solid rgba(27, 59, 111, 0.15);
+  padding: 8px 12px;
+  overflow-x: auto;
+}
+.lecture .callout {
+  border-left: 4px solid #BC4749;  /* 朱红（= --vermilion） */
+  background: rgba(188, 71, 73, 0.06);
+  padding: 8px 12px;
+  margin: 12px 0;
+  border-radius: 0 4px 4px 0;
+}
+.lecture .formula {
+  background: #FFF;
+  border: 1px solid rgba(27, 59, 111, 0.15);
+  padding: 12px;
+  margin: 12px 0;
+  font-family: "SF Mono", Consolas, monospace;
+  text-align: center;
+  overflow-x: auto;
+}
+.lecture .example {
+  background: rgba(27, 59, 111, 0.04);
+  border-left: 2px solid rgba(27, 59, 111, 0.3);
+  padding: 8px 12px;
+  margin: 12px 0;
+  font-family: "STKaiti", "KaiTi", serif;
+}
+.lecture blockquote {
+  border-left: 3px solid rgba(27, 59, 111, 0.3);
+  margin: 12px 0;
+  padding-left: 12px;
+  color: #6B6B70;
+  font-style: italic;
+}
