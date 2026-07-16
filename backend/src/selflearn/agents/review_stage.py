@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from selflearn.core.envelope import ActorRef, Envelope
 from selflearn.core.errors import AppError, ErrorCode
+from selflearn.core.thinking import extract_json_from_fence
 
 
 @dataclass
@@ -82,6 +83,8 @@ class ReviewStage:
     ) -> LLMReviewResult:
         """LLM 语义审查：调 LLMAgent 跑 skill.review.exercise.llm。"""
         import json
+        from selflearn.core.logging import get_logger
+        log = get_logger("review_stage")
         raw = await self.llm.run(
             skill_id="skill.review.exercise.llm",
             env=Envelope(
@@ -92,8 +95,8 @@ class ReviewStage:
             ),
         )
         try:
-            data = json.loads(raw) if isinstance(raw, str) else raw
-        except (json.JSONDecodeError, TypeError) as e:
+            data = extract_json_from_fence(raw) if isinstance(raw, str) else raw
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
             raise AppError(ErrorCode.INTERNAL, "review_llm parse failed: " + str(e))
         if not isinstance(data, dict):
             data = {}

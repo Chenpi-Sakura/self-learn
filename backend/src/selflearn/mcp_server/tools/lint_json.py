@@ -8,6 +8,8 @@ from typing import Any
 
 import jsonschema
 
+from selflearn.core.thinking import extract_json_from_fence
+
 SCHEMA_DIR = Path(__file__).resolve().parents[4] / "schemas"
 _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
 
@@ -35,7 +37,15 @@ def _load_schema(name: str) -> dict[str, Any]:
 async def lint_json(payload: Any, schema_name: str) -> dict[str, Any]:
     """校验 LLM 输出的 JSON 是否符合 schema。"""
     try:
-        data = json.loads(payload) if isinstance(payload, str) else payload
+        # 兼容 LLM 把 JSON 包在 ```json ... ``` code fence 里的常见输出形式
+        if isinstance(payload, str):
+            try:
+                data = extract_json_from_fence(payload)
+            except json.JSONDecodeError:
+                # 不是 JSON 也不是 fence，按原内容报错
+                return {"ok": False, "error": f"json_decode_error: payload not JSON"}
+        else:
+            data = payload
     except json.JSONDecodeError as e:
         return {"ok": False, "error": f"json_decode_error:{e}"}
     try:

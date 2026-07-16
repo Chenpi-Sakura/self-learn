@@ -9,6 +9,7 @@ from typing import Any
 from selflearn.core.envelope import Envelope
 from selflearn.core.errors import AppError, ErrorCode
 from selflearn.core.logging import get_logger
+from selflearn.core.thinking import extract_json_from_fence
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.progress.stream import progress_publish
 
@@ -91,8 +92,8 @@ async def run_director_chain(
         )
         exercises_raw = await agent.run("skill.exercise.generate", env_ex)
         try:
-            exercises = json.loads(exercises_raw) if isinstance(exercises_raw, str) else exercises_raw
-        except json.JSONDecodeError as e:
+            exercises = extract_json_from_fence(exercises_raw) if isinstance(exercises_raw, str) else exercises_raw
+        except (json.JSONDecodeError, ValueError) as e:
             raise AppError(ErrorCode.INTERNAL, f"exercise parse failed: {e}")
 
         # 6b. 业务规则（仅 revision 0）

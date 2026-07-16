@@ -43,3 +43,18 @@ async def test_lint_json_valid_array_with_dot_json_only():
         "exercise.schema.json",
     )
     assert result["ok"] is True
+
+@pytest.mark.asyncio
+async def test_lint_json_valid_fenced_json():
+    """兼容 LLM 把 JSON 包在 ```json ... ``` code fence 里的常见输出形式。"""
+    fenced = '```json\n[\n  {"exercise_type":"single_choice","prompt":"题目至少 5 字符","options":["A","B","C","D"],"correct_answer":"A","explanation":"解析至少 10 字符以上","difficulty":1,"score":1.0}\n]\n```'
+    result = await lint_json(fenced, "schemas/exercise.schema.json")
+    assert result["ok"] is True
+
+@pytest.mark.asyncio
+async def test_lint_json_invalid_fenced_json_returns_decode_error():
+    """fence 内的内容不是 JSON，应返回 json_decode_error。"""
+    fenced = '```json\nthis is not json\n```'
+    result = await lint_json(fenced, "schemas/exercise.schema.json")
+    assert result["ok"] is False
+    assert "json_decode_error" in result["error"] or "schema_violation" in result["error"]
