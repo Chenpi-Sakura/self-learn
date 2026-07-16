@@ -38,7 +38,12 @@ class E2EMCPClient:
 
 
 class DirectorMockAdapter(MockLLMAdapter):
-    """Return valid fixed outputs for each Director LLM stage."""
+    """Return valid fixed outputs for each Director LLM stage.
+
+    - lecture skill: returns a lecture with h2 + callout so outline extractor finds them.
+    - exercise skill: returns an exercise whose explanation references the callout
+      text, proving lecture_outline was injected into the exercise env and used.
+    """
 
     async def chat(self, req):  # type: ignore[no-untyped-def]
         system = req.messages[0].content
@@ -48,15 +53,22 @@ class DirectorMockAdapter(MockLLMAdapter):
             return json.dumps([
                 {
                     "exercise_type": "single_choice",
-                    "prompt": "2 + 2 = ?",
-                    "options": ["3", "4"],
-                    "correct_answer": "4",
-                    "explanation": "Two plus two equals four.",
+                    "prompt": "缩放因子是？",
+                    "options": ["√d_k", "d_k"],
+                    "correct_answer": "√d_k",
+                    "explanation": "根据讲义核心概念中的 callout，缩放因子是 √d_k，用以稳定 softmax 方差。",
                     "difficulty": 1,
                     "score": 1.0,
                 }
             ])
-        return "<h1>Test lecture</h1><p>Two plus two equals four.</p>"
+        # skill.lecture.generate：包含 h2 标题 + div.callout，使 lecture_outline
+        # 能抽到 sections + callouts，供 exercise 引用。
+        return (
+            '<h2>核心概念</h2>'
+            '<p>self-attention 用 query/key/value 计算注意力权重。</p>'
+            '<div class="callout">缩放因子是 √d_k，用以稳定 softmax 方差。</div>'
+            '<p>本节到此为止。</p>'
+        )
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -95,3 +107,73 @@ async def test_director_e2e_with_mock_llm(
     assert result["level_id"]
     assert result["exercises_count"] == 1
     assert len(result["exercise_ids"]) == 1
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_director_e2e_lecture_outline_explanation_aligned(
+    setup_kp_and_node: tuple[str, UUID, None],
+) -> None:
+    """端到端：lecture_html 写入 + lecture_outline 注入 + exercise explanation 引用 outline。
+
+    跑一次完整 Director 链，再用真 SQLAlchemy session 读 Level + Exercise 行，断言：
+    1) level.lecture_html 非空且包含结构化标记（h2 + div.callout）
+    2) exercise.explanation 至少 30 字
+    3) exercise.explanation 首句包含 lecture 的 callout 文本片段（"缩放因子" / "√d_k"），
+       证明 lecture_outline 被注入 exercise env 并被 LLM 实际采用。
+    """
+    from sqlalchemy import select
+
+    from selflearn.domain.exercise import Exercise
+    from selflearn.domain.level import Level
+
+    student_id, kp_id, _ = setup_kp_and_node
+    node_id = uuid4()
+    factory = get_session_factory()
+    async with factory() as session:
+        session.add(MapNode(
+            node_id=node_id,
+            student_id=student_id,
+            kp_id=kp_id,
+            status="active",
+            branch_type="main",
+            position={"x": 0.0, "y": 0.0},
+        ))
+        await session.commit()
+
+    registry = LLMRegistry()
+    registry.register(DirectorMockAdapter())
+    async with mcp_client_lifespan() as real_mcp:
+        mcp = E2EMCPClient(real_mcp)
+        agent = LLMAgent(mcp, registry)
+        review = ReviewStage(agent, mcp)
+        env = Envelope(
+            action="skill.execute",
+            sender=ActorRef(type="gateway", id="integration"),
+            target=ActorRef(type="skill", id="skill.director.start"),
+            payload={"student_id": student_id},
+        )
+        result = await run_director_chain_with_retry(env, agent, review)
+
+    level_id = result["level_id"]
+    exercise_ids = result["exercise_ids"]
+    assert level_id and len(exercise_ids) == 1
+
+    # DB 断言：lecture_html 写入 + explanation 引用 outline
+    async with factory() as session:
+        level = await session.get(Level, UUID(level_id))
+        assert level is not None, f"Level {level_id} not found"
+        assert level.lecture_html, "lecture_html 未写入"
+        assert "<h2>" in level.lecture_html, "lecture_html 缺 h2 标题"
+        assert 'class="callout"' in level.lecture_html, "lecture_html 缺 callout"
+
+        stmt = select(Exercise).where(Exercise.exercise_id == UUID(exercise_ids[0]))
+        ex = (await session.execute(stmt)).scalars().one()
+        assert ex.explanation, "exercise.explanation 为空"
+        assert len(ex.explanation) >= 30, (
+            f"explanation 过短 ({len(ex.explanation)} 字): {ex.explanation!r}"
+        )
+        # 首句应引用 lecture_outline 中的 callout 文本片段
+        first_sentence = ex.explanation.split("。", 1)[0]
+        assert ("缩放因子" in first_sentence) or ("√d_k" in first_sentence), (
+            f"explanation 首句未引用 lecture_outline: {first_sentence!r}"
+        )
