@@ -1,14 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { ResourceListItem } from '../api/resources';
 
 /**
- * 共用资源列表 / 网格组件。
+ * 共用资源列表 / 网格组件（UX-final）。
  *
- * 模式：
- * - 'grid'：默认缩略图网格，单击触发 onOpen；右键触发 onContextMenu；
- *           双击标题进入重命名编辑态。
- * - 'picker'：多选模式（提炼对话框），单击切换选中；隐藏拖动 / 重命名 / 右键菜单。
+ * grid 模式交互（用于 ResourceLibrary）：
+ *   - 单击资源 → 单选（替换 selected 为这 1 个）
+ *   - Shift+单击 → 切换该资源的选中（多选模式）
+ *   - 双击资源 → 打开 MD 浏览器 (onOpen)
+ *   - 鼠标在空白处按下 + 拖动 → 矩形框选
+ *   - 右键 → onContextMenu（删除/重命名）
+ *   - 双击 label → 进入重命名编辑（仅 grid 模式）
+ *   - 拖动单资源 → onMove (dataTransfer.setData('resource:id', id))
+ *
+ * picker 模式（用于 ExtractTopicsDialog）：
+ *   - 单击 = 切换选中（无 shift 区别）
  */
 export interface ResourceListViewProps {
   items: ResourceListItem[];
@@ -16,10 +23,17 @@ export interface ResourceListViewProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   onOpen?: (id: string) => void;
-  onContextMenu?: (e: MouseEvent, id: string) => void;
+  onContextMenu?: (e: ReactMouseEvent, id: string) => void;
   onRename?: (id: string, newName: string) => Promise<void>;
   onMove?: (id: string, newName: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
+}
+
+interface DragRect {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
 }
 
 export function ResourceListView({
@@ -51,8 +65,76 @@ export function ResourceListView({
     [items],
   );
 
+  // 框选状态：拖动时画一个矩形，鼠标抬起时把命中项加入 selected。
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [dragRect, setDragRect] = useState<DragRect | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const hitTest = (rect: DragRect): Set<string> => {
+    const minX = Math.min(rect.startX, rect.endX);
+    const maxX = Math.max(rect.startX, rect.endX);
+    const minY = Math.min(rect.startY, rect.endY);
+    const maxY = Math.max(rect.startY, rect.endY);
+    const hits = new Set<string>();
+    for (const [id, el] of itemRefs.current.entries()) {
+      const er = el.getBoundingClientRect();
+      // 两个矩形相交（无包含关系要求）
+      if (er.right < minX || er.left > maxX || er.bottom < minY || er.top > maxY) continue;
+      hits.add(id);
+    }
+    return hits;
+  };
+
+  const onContainerMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
+    // 只在按下的是容器本身（空白处）时启动框选，点缩略图由子 div 的 onClick 处理
+    if (mode !== 'grid') return;
+    if (e.target !== e.currentTarget) return;
+    if (e.button !== 0) return; // 只响应左键
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    setDragRect({ startX: e.clientX, startY: e.clientY, endX: e.clientX, endY: e.clientY });
+  };
+
+  const onContainerMouseMove = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current) return;
+    setDragRect({
+      startX: dragStartRef.current.x,
+      startY: dragStartRef.current.y,
+      endX: e.clientX,
+      endY: e.clientY,
+    });
+  };
+
+  const onContainerMouseUp = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current || !dragRect) {
+      dragStartRef.current = null;
+      setDragRect(null);
+      return;
+    }
+    const hits = hitTest(dragRect);
+    if (hits.size > 0 && onSelectionChange) {
+      // 替换式框选：拖框内所有项成为 selected（不含已有的全清）
+      onSelectionChange(hits);
+    } else if (hits.size === 0 && e.target === e.currentTarget) {
+      // 框选落空 + 点的是空白 → 清空 selected
+      if (onSelectionChange && selectedIds.size > 0) onSelectionChange(new Set());
+    }
+    dragStartRef.current = null;
+    setDragRect(null);
+  };
+
   return (
     <div
+      ref={containerRef}
+      onMouseDown={onContainerMouseDown}
+      onMouseMove={onContainerMouseMove}
+      onMouseUp={onContainerMouseUp}
+      onMouseLeave={() => {
+        if (dragStartRef.current) {
+          dragStartRef.current = null;
+          setDragRect(null);
+        }
+      }}
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -61,6 +143,8 @@ export function ResourceListView({
         overflow: 'auto',
         height: '100%',
         boxSizing: 'border-box',
+        position: 'relative',
+        userSelect: 'none',
       }}
     >
       {sorted.map((r) => {
@@ -70,22 +154,39 @@ export function ResourceListView({
         return (
           <div
             key={r.id}
+            ref={(el) => {
+              if (el) itemRefs.current.set(r.id, el);
+              else itemRefs.current.delete(r.id);
+            }}
             draggable={mode === 'grid'}
             onDragStart={(e) => {
               if (mode !== 'grid') return;
               e.dataTransfer.setData('resource:id', r.id);
             }}
-            onClick={() => {
-              // 默认：单击切换选中（无论 grid 或 picker 模式，缩略图单击=勾选）
+            onClick={(e) => {
+              if (mode === 'picker') {
+                if (onSelectionChange) {
+                  const ns = new Set(selectedIds);
+                  if (ns.has(r.id)) ns.delete(r.id);
+                  else ns.add(r.id);
+                  onSelectionChange(ns);
+                }
+                return;
+              }
+              // grid 模式：单击单选；Shift+单击切换多选
               if (onSelectionChange) {
-                const ns = new Set(selectedIds);
-                if (ns.has(r.id)) ns.delete(r.id);
-                else ns.add(r.id);
-                onSelectionChange(ns);
+                if (e.shiftKey) {
+                  const ns = new Set(selectedIds);
+                  if (ns.has(r.id)) ns.delete(r.id);
+                  else ns.add(r.id);
+                  onSelectionChange(ns);
+                } else {
+                  // 单击 → **单选**（只保留这一个）
+                  onSelectionChange(new Set([r.id]));
+                }
               }
             }}
             onDoubleClick={() => {
-              // 双击才打开 MD 浏览器（grid 模式专用）
               if (mode !== 'grid') return;
               if (onOpen) onOpen(r.id);
             }}
@@ -100,10 +201,9 @@ export function ResourceListView({
               border: isSelected ? '2px solid #1B3B6F' : '1px solid #E5E5E0',
               position: 'relative',
               background: isSelected ? 'rgba(27,59,111,0.04)' : 'transparent',
-              userSelect: 'none',
             }}
           >
-            {mode === 'picker' && isSelected && (
+            {isSelected && (
               <div
                 style={{
                   position: 'absolute',
@@ -111,6 +211,7 @@ export function ResourceListView({
                   right: 4,
                   color: '#1B3B6F',
                   fontWeight: 700,
+                  fontSize: 16,
                 }}
               >
                 ✓
@@ -177,6 +278,22 @@ export function ResourceListView({
           </div>
         );
       })}
+      {/* 框选矩形浮层 */}
+      {dragRect && (
+        <div
+          style={{
+            position: 'fixed',
+            left: Math.min(dragRect.startX, dragRect.endX),
+            top: Math.min(dragRect.startY, dragRect.endY),
+            width: Math.abs(dragRect.endX - dragRect.startX),
+            height: Math.abs(dragRect.endY - dragRect.startY),
+            border: '1px dashed #1B3B6F',
+            background: 'rgba(27,59,111,0.08)',
+            pointerEvents: 'none',
+            zIndex: 9999,
+          }}
+        />
+      )}
     </div>
   );
 }
