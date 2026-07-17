@@ -17,7 +17,17 @@ class LLMRegistry:
 
     def default(self) -> BaseLLMAdapter:
         s = get_settings()
-        return self._adapters.get(s.llm_default_provider) or next(iter(self._adapters.values()))
+        # PEP 479：next(iter(...)) 在空 dict 上抛 StopIteration 会被 coroutine
+        # 捕获为 RuntimeError。先取 .get()，失败时用 next(..., None) 而不是 bare next。
+        adapter = self._adapters.get(s.llm_default_provider)
+        if adapter is not None:
+            return adapter
+        adapter = next(iter(self._adapters.values()), None)
+        if adapter is None:
+            raise RuntimeError(
+                f"no LLM adapters registered (requested default='{s.llm_default_provider}')"
+            )
+        return adapter
 
 
 llm_registry = LLMRegistry()

@@ -31,7 +31,7 @@ from selflearn.domain.exercise import Exercise
 from selflearn.domain.level import Level
 from selflearn.domain.map_node import MapNode
 from selflearn.infra.db import get_session_factory
-from selflearn.llm.registry import LLMRegistry
+from selflearn.llm.registry import llm_registry
 from selflearn.mcp_client import mcp_client_lifespan
 
 
@@ -118,11 +118,13 @@ async def main() -> None:
         print("[backfill] nothing to do")
         return
 
-    registry = LLMRegistry()
+    # 用模块级 llm_registry（_register_default_adapters 已在 import 时跑过）。
+    # 新建 LLMRegistry() 会得到空 adapters，触发 registry.default() 的 PEP 479
+    # StopIteration（next(iter(...)) 在空 dict 上抛 StopIteration，泄漏出 coroutine）。
     success = 0
     failed = 0
     async with mcp_client_lifespan() as mcp:
-        agent = LLMAgent(mcp, registry)
+        agent = LLMAgent(mcp, llm_registry)
         review = ReviewStage(agent, mcp)
         for idx, (node_id, student_id) in enumerate(targets):
             print(f"[backfill] ({idx + 1}/{len(targets)}) node_id={node_id} student_id={student_id}")
