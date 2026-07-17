@@ -74,7 +74,9 @@ export function ProgressOverlay({
           source.onDone();
         }
       } else if (ev.event === 'error') {
-        setError('任务失败');
+        const d = ev.data as { status: string; payload: { error?: string; code?: string; message?: string } };
+        const reason = d.payload.error ?? d.payload.message ?? d.payload.code ?? '未知错误';
+        setError(`任务失败: ${reason}`);
       }
     };
     const close =
@@ -114,6 +116,7 @@ export function ProgressOverlay({
             const status = progressStatus[stage.key] ?? 'pending';
             const isCurrent = idx === currentStageIdx && status === 'running';
             const isDone = status === 'completed';
+            const isFailed = status === 'failed';
             return (
               <div
                 key={stage.key}
@@ -128,7 +131,9 @@ export function ProgressOverlay({
                     width: 24,
                     height: 24,
                     borderRadius: '50%',
-                    background: isDone
+                    background: isFailed
+                      ? '#BC4749'
+                      : isDone
                       ? '#5A8F4D'
                       : isCurrent
                       ? '#1B3B6F'
@@ -141,13 +146,15 @@ export function ProgressOverlay({
                     flexShrink: 0,
                   }}
                 >
-                  {isDone ? '✓' : idx + 1}
+                  {isFailed ? '✗' : isDone ? '✓' : idx + 1}
                 </div>
                 <div
                   style={{
                     marginLeft: 6,
                     fontSize: 13,
-                    color: isDone
+                    color: isFailed
+                      ? '#BC4749'
+                      : isDone
                       ? '#5A8F4D'
                       : isCurrent
                       ? '#1B3B6F'
@@ -161,7 +168,11 @@ export function ProgressOverlay({
                     style={{
                       flex: 1,
                       height: 2,
-                      background: isDone ? '#5A8F4D' : '#E5E5E0',
+                      background: isFailed
+                        ? '#BC4749'
+                        : isDone
+                        ? '#5A8F4D'
+                        : '#E5E5E0',
                       margin: '0 8px',
                     }}
                   />

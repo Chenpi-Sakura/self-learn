@@ -330,3 +330,24 @@ async def test_pipeline_writes_drafts_as_kps_and_nodes() -> None:
     # write 阶段完成 + done 阶段完成
     assert ("extract_topics.write", "completed") in events
     assert ("extract_topics.done", "completed") in events
+
+
+# ---------------------------------------------------------------------------
+# B1-fix: 超时常量稳定性 (上游 LLM 响应波动 40s-100s, 旧值 90s 易 race)
+# ---------------------------------------------------------------------------
+
+
+def test_timeouts_above_observed_llm_latency() -> None:
+    """实测 LLM 响应时间 41s-94s 不等, 常量必须留出 ≥150s 缓冲."""
+    from selflearn.agents.extract_topics import TIMEOUT_LLM_SEC, TIMEOUT_TOTAL_SEC
+
+    assert TIMEOUT_LLM_SEC >= 150, (
+        f"TIMEOUT_LLM_SEC={TIMEOUT_LLM_SEC} 低于观察到的 P99≈94s, "
+        "需 ≥150s 避免 race condition"
+    )
+    assert TIMEOUT_TOTAL_SEC >= 180, (
+        f"TIMEOUT_TOTAL_SEC={TIMEOUT_TOTAL_SEC} 总预算不足以覆盖 "
+        "parse(~1s) + llm(~94s) + validate+write(~1s)"
+    )
+    # 总超时必须 ≥ 单次 LLM 超时
+    assert TIMEOUT_TOTAL_SEC > TIMEOUT_LLM_SEC

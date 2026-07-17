@@ -51,7 +51,7 @@ export interface ProfileHistoryResponse {
 export type SSEEventData =
   | { stage: Stage; status: string; payload: Record<string, unknown> }
   | { status: 'completed'; payload: Record<string, unknown> }
-  | { status: 'failed'; payload: { code: string; message: string } };
+  | { status: 'failed'; payload: { code?: string; message?: string; error?: string } };
 
 export interface SSEEvent {
   event: 'progress' | 'completed' | 'error';

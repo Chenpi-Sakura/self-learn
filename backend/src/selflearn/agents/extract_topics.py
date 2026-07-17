@@ -29,8 +29,8 @@ from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.progress.stream import progress_publish
 
 
-TIMEOUT_LLM_SEC = 90
-TIMEOUT_TOTAL_SEC = 90
+TIMEOUT_LLM_SEC = 150
+TIMEOUT_TOTAL_SEC = 180
 
 
 @dataclass
