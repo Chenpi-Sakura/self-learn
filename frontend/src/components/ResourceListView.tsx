@@ -49,14 +49,19 @@ export function ResourceListView({
 }: ResourceListViewProps) {
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
 
-  // 网格列数自适应：视口宽度 / 140。监听 resize 重新计算。
-  const [cols, setCols] = useState<number>(() =>
-    typeof window === 'undefined' ? 4 : Math.max(2, Math.floor(window.innerWidth / 140)),
-  );
+  // 网格列数自适应：实际容器宽度 / 140（不再跟视口挂钩，窗口内部宽度 ≠ 视口宽）。
+  const [cols, setCols] = useState<number>(4);
   useEffect(() => {
-    const handler = () => setCols(Math.max(2, Math.floor(window.innerWidth / 140)));
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
+    const el = containerRef.current;
+    if (!el) return;
+    const recalc = () => {
+      const w = el.clientWidth;
+      setCols(Math.max(2, Math.floor(w / 140)));
+    };
+    recalc();
+    const ro = new ResizeObserver(recalc);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // 按中文 locale 排序（稳定排序避免 React 抖动）
@@ -162,6 +167,8 @@ export function ResourceListView({
         boxSizing: 'border-box',
         position: 'relative',
         userSelect: 'none',
+        alignItems: 'start',
+        alignContent: 'start',
       }}
     >
       {sorted.map((r) => {
@@ -218,6 +225,12 @@ export function ResourceListView({
               border: isSelected ? '2px solid #1B3B6F' : '1px solid #E5E5E0',
               position: 'relative',
               background: isSelected ? 'rgba(27,59,111,0.04)' : 'transparent',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              maxWidth: 140,
+              minWidth: 100,
+              justifySelf: 'start',
             }}
           >
             {isSelected && (
