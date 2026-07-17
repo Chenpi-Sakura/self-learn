@@ -15,6 +15,7 @@ import { ResourceLibrary } from './components/ResourceLibrary';
 import { ExtractTopicsDialog } from './components/ExtractTopicsDialog';
 import { MDBrowser } from './components/MDBrowser';
 import { EmptyStateOverlay } from './components/EmptyStateOverlay';
+import { triggerExtractTopics } from './api/extractTopics';
 import { useWorkspace } from './store/useWorkspace';
 import { useSession } from './store/session';
 import { useLevel } from './store/levelStore';
@@ -78,6 +79,7 @@ export default function App() {
       case 'resource_library':
         return (
           <ResourceLibrary
+            win={win}
             onOpenExtractDialog={(ids) =>
               openWindow('extract_topics_dialog', { preselected: ids })
             }
@@ -87,12 +89,16 @@ export default function App() {
         return (
           <ExtractTopicsDialog
             preSelectedIds={(win.metadata?.preselected as string[] | undefined) ?? []}
-            onConfirm={() => {
-              // ResourceLibrary 在本任务中通过 refresh 逻辑接管 ProgressOverlay
-              // 这里简单关掉；ResourceLibrary 在 confirm 后会触发额外 UI 更新。
-              closeWindow('extract_topics_dialog');
+            onConfirm={async (ids) => {
+              try {
+                const { task_id } = await triggerExtractTopics(ids);
+                closeWindow(appId);
+                openWindow('resource_library', { extractTaskId: task_id } as any);
+              } catch {
+                // 提炼触发失败，留在对话窗让用户重试
+              }
             }}
-            onCancel={() => closeWindow('extract_topics_dialog')}
+            onCancel={() => closeWindow(appId)}
           />
         );
       case 'md_browser':

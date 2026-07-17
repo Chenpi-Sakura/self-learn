@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { useWorkspace } from '../store/useWorkspace';
 import { ResourceListView } from './ResourceListView';
+import type { WindowState } from '../types/window';
 import {
   listResources,
   uploadResources,
@@ -22,8 +23,10 @@ import { triggerExtractTopics } from '../api/extractTopics';
  * - 点击条目 → MD 浏览器（single resource）
  */
 export function ResourceLibrary({
+  win,
   onOpenExtractDialog,
 }: {
+  win: WindowState;
   onOpenExtractDialog: (ids: string[]) => void;
 }) {
   const openWindow = useWorkspace((s) => s.openWindow);
@@ -31,6 +34,14 @@ export function ResourceLibrary({
   const [items, setItems] = useState<ResourceListItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [extractTaskId, setExtractTaskId] = useState<string | null>(null);
+
+  // 从窗口 metadata 读取已有的 extractTaskId（ExtractTopicsDialog 确认后通过 App.tsx 注入）
+  useEffect(() => {
+    const tid = (win.metadata as Record<string, unknown>)?.extractTaskId as string | undefined;
+    if (tid) {
+      setExtractTaskId(tid);
+    }
+  }, [win.metadata]);
 
   const refresh = async () => {
     try {
