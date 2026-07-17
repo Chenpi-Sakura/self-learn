@@ -21,9 +21,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from selflearn.core.envelope import Envelope
 from selflearn.domain.level import Level
 from selflearn.domain.map_node import MapNode
 from selflearn.gateway.app import create_app
+from selflearn.gateway.routes.level import LevelStartRequest, start_level
 
 
 def _make_async_session_cm(mock_session: Any) -> Any:
@@ -51,8 +53,12 @@ def _make_fake_node(student_id: uuid.UUID, status: str = "active") -> MapNode:
     return n
 
 
-def _make_fake_level(node_id: uuid.UUID, status: str = "generated") -> Level:
-    lv = Level(node_id=node_id, status=status)
+def _make_fake_level(
+    node_id: uuid.UUID,
+    status: str = "generated",
+    lecture_html: str | None = "<h2>x</h2>",  # 默认非 NULL，旧测试不受影响
+) -> Level:
+    lv = Level(node_id=node_id, status=status, lecture_html=lecture_html)
     lv.level_id = uuid.uuid4()
     return lv
 
@@ -276,3 +282,66 @@ async def test_start_level_locked_node_id_returns_409(
         "levels" in s.lower() for s in captured
     ), f"应跳过 Level 查询：{captured}"
     pub_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_start_level_skips_null_lecture_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    """lecture_html IS NULL 的关卡视为不可复用，触发新 envelope。"""
+    factory = AsyncMock()
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    null_level = _make_fake_level(uuid.uuid4(), status="generated", lecture_html=None)
+    # node 查询也返回该 null_level（reuse 路径要走完）
+    exec_result = MagicMock()
+    exec_result.scalars.return_value.first.return_value = null_level
+    session.execute = AsyncMock(return_value=exec_result)
+    session.get = AsyncMock(return_value=MagicMock(status="active", student_id="s1"))
+
+    published: list[Envelope] = []
+    async def fake_publish(env: Envelope, routing_key: str) -> None:
+        published.append(env)
+    monkeypatch.setattr("selflearn.gateway.routes.level.publish_envelope", fake_publish)
+
+    factory_ctx = MagicMock()
+    factory_ctx.return_value = session  # get_session_factory()() -> session
+    monkeypatch.setattr("selflearn.gateway.routes.level.get_session_factory", lambda: factory_ctx)
+
+    body = LevelStartRequest(student_id="s1", node_id=str(uuid.uuid4()))
+    resp = await start_level(body)
+
+    assert resp["reused"] is False
+    assert "trace_id" in resp
+    assert len(published) == 1
+
+
+@pytest.mark.asyncio
+async def test_start_level_reuses_level_with_lecture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """lecture_html 非 NULL 的关卡正常复用。"""
+    factory = AsyncMock()
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    good_level = _make_fake_level(uuid.uuid4(), status="generated", lecture_html="<h2>核心</h2>")
+    exec_result = MagicMock()
+    exec_result.scalars.return_value.first.return_value = good_level
+    session.execute = AsyncMock(return_value=exec_result)
+    session.get = AsyncMock(return_value=MagicMock(status="active", student_id="s1"))
+
+    published: list[Envelope] = []
+    async def fake_publish(env: Envelope, routing_key: str) -> None:
+        published.append(env)
+    monkeypatch.setattr("selflearn.gateway.routes.level.publish_envelope", fake_publish)
+
+    factory_ctx = MagicMock()
+    factory_ctx.return_value = session
+    monkeypatch.setattr("selflearn.gateway.routes.level.get_session_factory", lambda: factory_ctx)
+
+    body = LevelStartRequest(student_id="s1", node_id=str(uuid.uuid4()))
+    resp = await start_level(body)
+
+    assert resp["reused"] is True
+    assert resp["level_id"] == str(good_level.level_id)
+    assert len(published) == 0

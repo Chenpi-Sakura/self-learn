@@ -1,9 +1,11 @@
 """Level 路由（Stage 3）：启动关卡 / 提交答案 / SSE 真流。
 
 幂等性：POST /start 对给定节点复用其 in-flight（status='generated' 或
-'in_progress'）关卡，避免重复调 LLM 出题。节点定位优先按前端传入的
-node_id 精确匹配（点不同节点拿不同关卡）；未传 node_id 时 fallback 到
-该 student 第一个 status='active' 节点（向后兼容）。
+'in_progress'）且 lecture_html 已生成（Task 261 之后）的关卡，避免重复调
+LLM 出题。lecture_html IS NULL 的关卡视为不可复用（兜底发新 envelope 重跑
+Director 链），旧关卡保留在 DB（orphaned 状态）。
+节点定位优先按前端传入的 node_id 精确匹配（点不同节点拿不同关卡）；未传
+node_id 时 fallback 到该 student 第一个 status='active' 节点（向后兼容）。
 """
 from __future__ import annotations
 
@@ -75,18 +77,23 @@ async def start_level(body: LevelStartRequest) -> dict[str, object]:
                 raise HTTPException(status_code=409, detail="no_active_node")
 
         # 幂等性：查该节点的 in-flight 关卡（status='generated' 或 'in_progress'）
+        # 复用仅限 lecture_html 已生成的关卡（NULL 表示 Task 261 之前的关卡，
+        # 需重跑 Director 链才能产出带 outline 引用 explanation 的新版）。
         existing = (
             await session.execute(
                 select(Level)
                 .where(
                     Level.node_id == node.node_id,
                     Level.status.in_(("generated", "in_progress")),
+                    Level.lecture_html.is_not(None),
                 )
                 .order_by(Level.created_at.desc())
                 .limit(1)
             )
         ).scalars().first()
-        if existing is not None:
+        # Defense in depth：即便 SQL 过滤被绕过（如测试 mock 直接返回 Level），
+        # 兜底再校验 lecture_html，避免错误复用 Task 261 之前的孤儿关卡。
+        if existing is not None and existing.lecture_html is not None:
             # 复用：直接返回已有 level_id，不调 LLM
             return {
                 "level_id": str(existing.level_id),
