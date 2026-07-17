@@ -1,5 +1,5 @@
 import './App.css';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Backdrop } from './components/Backdrop';
 import { TopBar } from './components/TopBar';
 import { Dock } from './components/Dock';
@@ -15,10 +15,14 @@ import { ResourceLibrary } from './components/ResourceLibrary';
 import { ExtractTopicsDialog } from './components/ExtractTopicsDialog';
 import { MDBrowser } from './components/MDBrowser';
 import { EmptyStateOverlay } from './components/EmptyStateOverlay';
+import { Onboarding } from './components/Onboarding';
 import { triggerExtractTopics } from './api/extractTopics';
+import { getProfile } from './api/profile';
+import { useProfile } from './store/profile';
 import { useWorkspace } from './store/useWorkspace';
 import { useSession } from './store/session';
 import { useLevel } from './store/levelStore';
+import { isProfileInitialized } from './utils/profile';
 import { shortcutManager, parseKeyEvent, registerSystemShortcuts } from './lib/shortcuts';
 import { DockPositionsProvider } from './lib/dockPositions';
 import type { WindowState } from './types/window';
@@ -45,6 +49,8 @@ export default function App() {
   const closeWindow = useWorkspace((s) => s.closeWindow);
   const studentId = useSession((s) => s.studentId);
   const levelId = useLevel((s) => s.levelId) ?? '';
+  const [profileLoading, setProfileLoading] = useState(true);
+  const dimensions = useProfile((s) => s.dimensions);
 
   useEffect(() => {
     registerSystemShortcuts();
@@ -59,6 +65,18 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  useEffect(() => {
+    if (!studentId) return;
+    getProfile(studentId)
+      .then((res) => {
+        useProfile.getState().setDimensions(res.dimensions);
+      })
+      .catch(() => {
+        // Profile doesn't exist yet — dimensions stays null, onboarding will show
+      })
+      .finally(() => setProfileLoading(false));
+  }, [studentId]);
 
   function renderBody(appId: string, win: WindowState): ReactNode {
     switch (appId) {
@@ -112,6 +130,19 @@ export default function App() {
       default:
         return null;
     }
+  }
+
+  if (profileLoading) {
+    return <div style={{ padding: 40, fontFamily: 'HedvigLettersSerif, serif' }}>加载中...</div>;
+  }
+
+  if (!isProfileInitialized(dimensions)) {
+    return (
+      <Onboarding
+        studentId={studentId}
+        onDone={() => window.location.reload()}
+      />
+    );
   }
 
   const entries: [WindowState, WinDef][] = [];

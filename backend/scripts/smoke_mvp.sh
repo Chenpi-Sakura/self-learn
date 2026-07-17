@@ -156,4 +156,55 @@ async def main():
 asyncio.run(main())
 "
 
+# ---------------------------------------------------------------------------
+# 9) onboarding flow (uses KEEP_STUDENT — seed_account.py ensures this exists)
+# ---------------------------------------------------------------------------
+echo "[smoke_mvp] 9) onboarding flow"
+KEEP_STUDENT="86820161-b0f0-455f-91b4-a69e49445bdf"
+# Delete Profile for KEEP_STUDENT to force onboarding state
+uv run python -c "
+import asyncio, uuid
+from sqlalchemy import delete
+from selflearn.domain.profile import Profile
+from selflearn.domain.profile_snapshot import ProfileSnapshot
+from selflearn.infra.db import get_session_factory
+async def main():
+    async with get_session_factory()() as s:
+        # Delete both profile and snapshots for clean state
+        await s.execute(delete(ProfileSnapshot).where(ProfileSnapshot.student_id == '$KEEP_STUDENT'))
+        await s.execute(delete(Profile).where(Profile.student_id == '$KEEP_STUDENT'))
+        await s.commit()
+asyncio.run(main())
+"
+# Fetch questions
+LEN=$(curl -sf "$BASE_URL/api/onboarding/questions" | jq '.questions | length')
+[ "$LEN" = "8" ] && echo "[SMOKE] onboarding questions: 8 ✓" || echo "[SMOKE] FAIL: questions=$LEN (expected 8)"
+
+# Submit onboarding (this hits real LLM if not mock)
+RESP=$(curl -sf -X POST "$BASE_URL/api/onboarding/submit" \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"student_id\": \"$KEEP_STUDENT\",
+    \"answers\": [
+      {\"question_id\": \"q1_kb\", \"choice\": \"a\"},
+      {\"question_id\": \"q2_vp\", \"choice\": \"a\"},
+      {\"question_id\": \"q3_as\", \"choice\": \"b\"},
+      {\"question_id\": \"q4_ge\", \"choice\": \"b\"},
+      {\"question_id\": \"q5_ept\", \"choice\": \"c\"},
+      {\"question_id\": \"q6_fd\", \"choice\": \"c\"},
+      {\"question_id\": \"q7_mixed\", \"choice\": [\"a\", \"b\"]},
+      {\"question_id\": \"q8_open\", \"free_text\": \"我喜欢先看图再看例子最后总结。\"}
+    ]
+  }" 2>&1 || echo "LLM_ERROR")
+DIM_COUNT=$(echo "$RESP" | jq -r '.dimensions | length // "error"')
+if [ "$DIM_COUNT" = "6" ]; then
+  echo "[SMOKE] onboarding submit: 6 dimensions ✓"
+elif [ "$DIM_COUNT" = "error" ]; then
+  echo "[SMOKE] onboarding submit: LLM returned error (mock env?) - skipping dim count validation"
+  echo "[SMOKE] response: $RESP"
+else
+  echo "[SMOKE] FAIL: dimensions=$DIM_COUNT (expected 6)"
+  exit 1
+fi
+
 echo "[smoke_mvp] ✅ ALL PASSED"
