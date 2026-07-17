@@ -24,6 +24,7 @@ from selflearn.mcp_server.tools.get_profile import get_profile
 from selflearn.mcp_server.tools.get_recent_scores import get_recent_scores
 from selflearn.mcp_server.tools.lint_html import lint_html
 from selflearn.mcp_server.tools.lint_json import lint_json
+from selflearn.mcp_server.tools.onboard_profile import onboard_profile
 from selflearn.mcp_server.tools.update_profile import update_profile
 
 mcp = FastMCP("SelfLearn")
@@ -43,6 +44,7 @@ mcp.add_tool(create_level, name="tool.create_level")
 mcp.add_tool(bulk_create_exercises, name="tool.bulk_create_exercises")
 mcp.add_tool(update_profile, name="tool.update_profile")
 mcp.add_tool(apply_level_completion, name="tool.apply_level_completion")
+mcp.add_tool(onboard_profile, name="tool.onboard_profile")
 
 
 def main() -> None:
