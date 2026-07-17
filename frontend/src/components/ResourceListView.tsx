@@ -76,17 +76,17 @@ export function ResourceListView({
               e.dataTransfer.setData('resource:id', r.id);
             }}
             onClick={() => {
-              // grid 单击 = 打开 MD 浏览器（默认行为，**不要**误打开资源管理器）
-              // picker 单击 = 切换选中（提炼对话框内）
-              if (mode === 'picker') {
-                if (onSelectionChange) {
-                  const ns = new Set(selectedIds);
-                  if (ns.has(r.id)) ns.delete(r.id);
-                  else ns.add(r.id);
-                  onSelectionChange(ns);
-                }
-                return;
+              // 默认：单击切换选中（无论 grid 或 picker 模式，缩略图单击=勾选）
+              if (onSelectionChange) {
+                const ns = new Set(selectedIds);
+                if (ns.has(r.id)) ns.delete(r.id);
+                else ns.add(r.id);
+                onSelectionChange(ns);
               }
+            }}
+            onDoubleClick={() => {
+              // 双击才打开 MD 浏览器（grid 模式专用）
+              if (mode !== 'grid') return;
               if (onOpen) onOpen(r.id);
             }}
             onContextMenu={(e) => {
