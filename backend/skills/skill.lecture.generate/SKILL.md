@@ -50,11 +50,17 @@ h2, h3, p, ul, ol, li, strong, em, code, pre, blockquote, div, span
 5. **不要**追加题目答案区块
 
 ## 输入（来自 prefetch）
-- tool.get_kp → {title, description, difficulty, prerequisites}
+- tool.get_kp → {title, description, difficulty, prerequisites, source, source_content_md}
 - tool.get_recent_scores → 最近 3 次得分（用于调整讲解深度）
   - 全 ≥0.8：可深入讲公式推导
   - 全 <0.5：用大量 example
   - 混合：基础概念 + 1-2 个 example
+
+## 引用源标注规则（重要）
+若 `tool.get_kp.source_content_md` 非空（蒸馏时挑出来的"提供的材料知识"片段）：
+- 讲义每节开头或末尾标注「参考自 XXX.md」（XXX 取 `tool.get_kp.source` 文件名）。
+- 不要直接大段复制 md 内容；只引 1-2 句作为锚点，然后展开讲解。
+- 如 md 内容与 KP 不完全契合，**只引用契合部分**，不强行引用。
 
 ## 严禁
 - 任何 `<script>` / `<style>` / `<iframe>` / `<img>` / `<video>` / `<svg>`

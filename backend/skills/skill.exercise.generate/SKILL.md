@@ -17,6 +17,9 @@ max_retries: 1
 
 ## 输入（来自 prefetch + env.payload）
 - tool.get_recent_scores → 最近 3 次得分
+- tool.get_kp → {title, description, difficulty, prerequisites, source, source_content_md}
+  - **source_content_md**（可选）：蒸馏切片，如有，**explanation 必须显式引用其中片段**，引用方式："如讲义『XXX』中所言：..."，或在首句标注"参考自 XXX.md"。
+  - **source**（可选）：来源 md 文件名。
 - env.payload.lecture_outline → 讲义结构化纲要：
   ```json
   {
@@ -32,8 +35,9 @@ max_retries: 1
 ## explanation 字段强制要求
 每道题的 explanation 必须：
 1. **首句引用 lecture_outline 中的某个 section / callout / example**（用"如讲义『XXX』所言：..." 或 "讲义中提到：..." 等显式引用形式）
-2. 解释为什么正确答案是这个（不是机械重复题干）
-3. 简要指出其他选项错在哪（如果是 single_choice）
+2. **如 `tool.get_kp.source_content_md` 非空，必须从其中挑一句作为引子**（"如材料『XXX.md』中提到：..."），让题目锚定到蒸馏切片
+3. 解释为什么正确答案是这个（不是机械重复题干）
+4. 简要指出其他选项错在哪（如果是 single_choice）
 
 ## 示例
 ```json

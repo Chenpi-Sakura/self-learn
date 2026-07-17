@@ -12,7 +12,11 @@ async def get_kp(kp_id: str) -> dict[str, Any]:
     """查 KnowledgePoint。
 
     Returns: {"ok": True, "kp_id", "subject", "title", "description",
-              "difficulty", "prerequisites"} 或 {"ok": False, "error"}
+              "difficulty", "prerequisites", "source", "source_content_md"}
+              或 {"ok": False, "error"}
+
+    Task 6: 透传 source/source_content_md，供 director chain prefetch 注入
+            lecture / exercise skill 的 LLM prompt。
     """
     try:
         kp_uuid = UUID(kp_id)
@@ -32,4 +36,6 @@ async def get_kp(kp_id: str) -> dict[str, Any]:
             "description": kp.description,
             "difficulty": kp.difficulty,
             "prerequisites": list(kp.prerequisites or []),
+            "source": kp.source,
+            "source_content_md": kp.source_content_md,
         }

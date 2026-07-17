@@ -80,12 +80,14 @@ async def test_director_chain_injects_lecture_outline_into_exercise_env() -> Non
 
 
 def test_exercise_skill_md_requires_explanation_reference_lecture_outline() -> None:
-    """exercise SKILL.md 必须明确要求 explanation 引用 lecture_outline。"""
+    """exercise SKILL.md 必须明确要求 explanation 引用 lecture_outline + source_content_md。"""
     skill_path = Path(__file__).resolve().parents[2] / "skills" / "skill.exercise.generate" / "SKILL.md"
     text = skill_path.read_text(encoding="utf-8")
     # 必须显式提到 lecture_outline
     assert "lecture_outline" in text
     # 必须明确要求 explanation 引用
     assert re.search(r"explanation.*引用.*lecture_outline", text, re.DOTALL) is not None
-    # 必须说明 prefetch 不含 tool.get_kp
-    assert "tool.get_kp" not in text
+    # Task 6：exercise prefetch 现在含 tool.get_kp（用于 source_content_md 蒸馏切片引用）
+    assert "tool.get_kp" in text
+    # Task 6：必须要求 explanation 引用 source_content_md
+    assert "source_content_md" in text
