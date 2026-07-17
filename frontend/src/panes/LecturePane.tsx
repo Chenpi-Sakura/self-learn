@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getLevel } from '../api/level';
-import '../styles/lecture.css';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 
 export function LecturePane({ levelId }: { levelId: string }) {
   const [state, setState] = useState<
@@ -14,35 +14,6 @@ export function LecturePane({ levelId }: { levelId: string }) {
       .then((lv) => setState({ loaded: true, html: lv.lecture_html ?? null }))
       .catch(() => setState({ loaded: true, html: null }));
   }, [levelId]);
-
-  // KaTeX 懒加载：只在 lecture_html 非空时动态 import
-  const lectureHtml = state.loaded ? state.html : null;
-  useEffect(() => {
-    if (!lectureHtml) return;
-    Promise.all([
-      import('katex/dist/katex.min.css'),
-      import('katex'),
-      import('katex/dist/contrib/auto-render.mjs'),
-    ]).then(([, , autoRenderMod]) => {
-      // auto-render.mjs 是 ESM 模块，export default 就是 renderMathInElement 函数。
-      // Vite ESM-mode 动态 import 返回 { default: renderMathInElement }。
-      const renderMathInElement = (autoRenderMod as any).default ?? autoRenderMod;
-      if (typeof renderMathInElement !== 'function') {
-        console.warn('[LecturePane] renderMathInElement 获取失败，模块结构:', autoRenderMod);
-        return;
-      }
-      const root = document.querySelector('.lecture') as HTMLElement | null;
-      if (root) {
-        renderMathInElement(root, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false },
-          ],
-          throwOnError: false,
-        });
-      }
-    });
-  }, [lectureHtml]);
 
   // 加载中或未选节点
   if (!state.loaded) {
@@ -63,6 +34,8 @@ export function LecturePane({ levelId }: { levelId: string }) {
     }
     return <div style={{ padding: 16, height: '100%', overflow: 'auto' }}>加载讲义...</div>;
   }
+
+  const lectureHtml = state.html;
 
   // 没讲义（旧关卡 / 生成失败）
   if (!lectureHtml) {
@@ -97,17 +70,6 @@ export function LecturePane({ levelId }: { levelId: string }) {
     );
   }
 
-  // 渲染讲义（依赖后端 nh3 白名单清洗，不在前端二次清洗）
-  return (
-    <div
-      className="lecture"
-      style={{
-        padding: 16,
-        height: '100%',
-        overflow: 'auto',
-        fontFamily: 'HedvigLettersSerif, serif',
-      }}
-      dangerouslySetInnerHTML={{ __html: lectureHtml }}
-    />
-  );
+  // 渲染讲义：把 KaTeX 懒加载移交给 MarkdownRenderer。
+  return <MarkdownRenderer html={lectureHtml} className="lecture" />;
 }

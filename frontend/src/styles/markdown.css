@@ -1,59 +1,57 @@
-/* 讲义样式（UKIYO × Notion 主题）
- * 兼容层：.lecture 是历史 className 的别名，等价于 .markdown-body。
- * 新代码请直接使用 MarkdownRenderer 组件（应用 .markdown-body）。
- */
-.lecture,
+/* Markdown 内容共用样式（讲义 / 资源预览 / 提炼面板 通用） */
 .markdown-body {
-  background: #FBF7EC;
+  background: #FBF7EC;        /* 米黄底（比 --paper 略深） */
   font-family: HedvigLettersSerif, "STKaiti", "KaiTi", serif;
   color: #1A1A1A;
   line-height: 1.7;
+  padding: 16px;
+  height: 100%;
+  overflow: auto;
 }
-.lecture h2,
 .markdown-body h2 {
-  color: #1B3B6F;
+  color: #1B3B6F;             /* 靛蓝（= --indigo） */
   font-family: "STSong", "SimSun", "Times New Roman", serif;
   border-bottom: 1px solid rgba(27, 59, 111, 0.15);
   padding-bottom: 4px;
   margin-top: 24px;
 }
-.lecture h3,
 .markdown-body h3 {
   color: #1B3B6F;
   font-family: "STSong", "SimSun", "Times New Roman", serif;
   margin-top: 16px;
 }
-.lecture p,
 .markdown-body p {
   margin: 12px 0;
 }
-.lecture ul, .lecture ol,
 .markdown-body ul, .markdown-body ol {
   padding-left: 24px;
 }
-.lecture code,
 .markdown-body code {
   font-family: "SF Mono", Consolas, monospace;
   background: rgba(27, 59, 111, 0.05);
   padding: 1px 4px;
   border-radius: 2px;
 }
-.lecture pre,
 .markdown-body pre {
   background: #FFF;
   border: 1px solid rgba(27, 59, 111, 0.15);
   padding: 8px 12px;
   overflow-x: auto;
 }
-.lecture .callout,
+.markdown-body blockquote {
+  border-left: 3px solid rgba(27, 59, 111, 0.3);
+  margin: 12px 0;
+  padding-left: 12px;
+  color: #6B6B70;
+  font-style: italic;
+}
 .markdown-body .callout {
-  border-left: 4px solid #BC4749;
+  border-left: 4px solid #BC4749;  /* 朱红（= --vermilion） */
   background: rgba(188, 71, 73, 0.06);
   padding: 8px 12px;
   margin: 12px 0;
   border-radius: 0 4px 4px 0;
 }
-.lecture .formula,
 .markdown-body .formula {
   background: #FFF;
   border: 1px solid rgba(27, 59, 111, 0.15);
@@ -63,19 +61,10 @@
   text-align: center;
   overflow-x: auto;
 }
-.lecture .example,
 .markdown-body .example {
   background: rgba(27, 59, 111, 0.04);
   border-left: 2px solid rgba(27, 59, 111, 0.3);
   padding: 8px 12px;
   margin: 12px 0;
   font-family: "STKaiti", "KaiTi", serif;
-}
-.lecture blockquote,
-.markdown-body blockquote {
-  border-left: 3px solid rgba(27, 59, 111, 0.3);
-  margin: 12px 0;
-  padding-left: 12px;
-  color: #6B6B70;
-  font-style: italic;
 }
