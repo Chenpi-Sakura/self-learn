@@ -1,17 +1,13 @@
 """Onboarding HTTP 路由测试。"""
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from selflearn.gateway.routes.onboarding import router
-
-QUESTION_FILE = Path(__file__).parent.parent.parent / "src/selflearn/data/onboarding_questions.json"
 
 
 @pytest.fixture
@@ -30,12 +26,6 @@ def test_get_questions_returns_8(client: TestClient) -> None:
 
 
 def test_post_submit_success(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
-    fake_agent = MagicMock()
-    fake_agent.run = AsyncMock(return_value=json.dumps({
-        "kb": 0.7, "vp": 0.5, "as": 0.5, "ge": 0.5, "ept": 0.5, "fd": 0.5,
-        "reasoning": "ok",
-    }, ensure_ascii=False))
-
     async def fake_onboard(student_id, answers, agent):
         return {
             "ok": True,
@@ -47,10 +37,6 @@ def test_post_submit_success(monkeypatch: pytest.MonkeyPatch, client: TestClient
     monkeypatch.setattr(
         "selflearn.gateway.routes.onboarding._run_onboard",
         fake_onboard,
-    )
-    monkeypatch.setattr(
-        "selflearn.gateway.routes.onboarding._build_agent",
-        lambda: fake_agent,
     )
 
     payload = {
