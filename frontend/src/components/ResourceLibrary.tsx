@@ -169,10 +169,10 @@ export function ResourceLibrary({
             taskId: extractTaskId,
             stages: [
               { key: 'parse', label: '加载资料' },
-              { key: 'embed', label: '向量化' },
-              { key: 'extract', label: 'AI 抽取主题' },
-              { key: 'dedup', label: '去重' },
-              { key: 'persist', label: '写入知识图谱' },
+              { key: 'llm', label: 'LLM 抽取' },
+              { key: 'validate', label: '校验' },
+              { key: 'write', label: '写入图谱' },
+              { key: 'done', label: '完成' },
             ],
             onDone: () => {
               setExtractTaskId(null);

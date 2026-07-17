@@ -77,6 +77,7 @@ interface WorkspaceState {
   tasks: TaskItem[];
   chat: ChatMsg[];
   focusedId: string | null;
+  hasOpenedFirstWindow: boolean;
 
   setMode: (m: Mode) => void;
   setLayout: (l: LayoutId, next: WindowState[]) => void;
@@ -102,6 +103,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   tasks: [],
   chat: [],
   focusedId: null,
+  hasOpenedFirstWindow: false,
 
   setMode: (m) => set({ mode: m }),
 
@@ -239,6 +241,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           return {
             windows: { ...s.windows, [existing.id]: { ...existing, metadata: existing.metadata ? { ...existing.metadata, ...payload } : payload ? { ...payload } : existing.metadata, minimized: false, z: maxZ + 1 } },
             focusedId: existing.id,
+            hasOpenedFirstWindow: true,
           };
         }
       }
@@ -250,7 +253,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         const existingWin = s.windows[existingKey];
         return {
           windows: { ...s.windows, [existingKey]: { ...existingWin, metadata: existingWin.metadata ? { ...existingWin.metadata, ...payload } : payload ? { ...payload } : existingWin.metadata, minimized: false, z: maxZ + 1 } },
-          focusedId: existingKey
+          focusedId: existingKey,
+          hasOpenedFirstWindow: true,
         };
       }
       // 不存在 → 新建
@@ -275,7 +279,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       };
       return {
         windows: { ...s.windows, [key]: newWin },
-        focusedId: key
+        focusedId: key,
+        hasOpenedFirstWindow: true,
       };
     }),
 
