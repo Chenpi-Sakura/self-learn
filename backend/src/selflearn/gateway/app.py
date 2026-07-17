@@ -16,12 +16,14 @@ from selflearn.gateway.routes import health, profile
 from selflearn.gateway.routes.level import router as level_router
 from selflearn.gateway.routes.map import router as map_router
 from selflearn.infra.rabbit import setup_topology
+from selflearn.infra.seed_account import ensure_keep_student
 
 log = get_logger("gateway")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    await ensure_keep_student()        # 新增：幂等 ensure Profile 行
     await setup_topology()
     log.info("gateway.startup_done")
     yield
