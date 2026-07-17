@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { MouseEvent } from 'react';
 import { useWorkspace } from '../store/useWorkspace';
 import { ResourceListView } from './ResourceListView';
 import type { WindowState } from '../types/window';
@@ -34,6 +33,14 @@ export function ResourceLibrary({
   const [items, setItems] = useState<ResourceListItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [extractTaskId, setExtractTaskId] = useState<string | null>(null);
+  const [virtualFolders, setVirtualFolders] = useState<string[]>([]);
+
+  // 启动时读取 localStorage 中的虚拟文件夹
+  useEffect(() => {
+    setVirtualFolders(
+      JSON.parse(localStorage.getItem('selflearn.folders') || '[]') as string[],
+    );
+  }, []);
 
   // 从窗口 metadata 读取已有的 extractTaskId（ExtractTopicsDialog 确认后通过 App.tsx 注入）
   useEffect(() => {
@@ -155,14 +162,26 @@ export function ResourceLibrary({
           selectedIds={selected}
           onSelectionChange={setSelected}
           onOpen={(id) => openWindow('md_browser', { resourceId: id })}
-          onContextMenu={(_e: MouseEvent, id: string) => {
-            if (window.confirm('删除这份资源？')) {
-              deleteResource(id).then(refresh).catch((err) => {
-                console.error('[ResourceLibrary] delete failed', err);
-              });
-            }
+          onDelete={(id) => {
+            deleteResource(id).then(refresh).catch((err) => {
+              console.error('[ResourceLibrary] delete failed', err);
+            });
           }}
           onRename={(id, name) => updateResource(id, name).then(refresh)}
+          onCreateFolder={() => {
+            // 虚拟前缀文件夹：弹 prompt 问文件夹名，存到 localStorage。
+            // 资源可被 rename 时改 name 加前缀"folder/"从而"归入"该虚拟文件夹。
+            const existing = JSON.parse(
+              localStorage.getItem('selflearn.folders') || '[]',
+            ) as string[];
+            const name = window.prompt('输入新文件夹名（虚拟前缀）:', '新文件夹');
+            if (!name) return;
+            const safe = name.trim().replace(/\/+$/g, '');
+            if (!safe) return;
+            const next = Array.from(new Set([...existing, safe])).sort();
+            localStorage.setItem('selflearn.folders', JSON.stringify(next));
+            setVirtualFolders(next);
+          }}
         />
       </div>
 

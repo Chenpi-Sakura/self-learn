@@ -26,7 +26,9 @@ export interface ResourceListViewProps {
   onContextMenu?: (e: ReactMouseEvent, id: string) => void;
   onRename?: (id: string, newName: string) => Promise<void>;
   onMove?: (id: string, newName: string) => Promise<void>;
-  onDelete?: (id: string) => Promise<void>;
+  onDelete?: (id: string) => void | Promise<void>;
+  /** 在空白处右键菜单触发的"新建文件夹" */
+  onCreateFolder?: () => void;
 }
 
 interface DragRect {
@@ -46,6 +48,7 @@ export function ResourceListView({
   onRename,
   onMove,
   onDelete,
+  onCreateFolder,
 }: ResourceListViewProps) {
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
 
@@ -76,6 +79,30 @@ export function ResourceListView({
   const [dragRect, setDragRect] = useState<DragRect | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // 右键菜单状态：区分 item（资源右键）和 background（空白右键）
+  const [ctxMenu, setCtxMenu] = useState<
+    | { kind: 'item'; id: string; itemName: string; x: number; y: number }
+    | { kind: 'background'; x: number; y: number }
+    | null
+  >(null);
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    document.addEventListener('click', close);
+    document.addEventListener('contextmenu', close);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('contextmenu', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu]);
+
+  // 新建文件夹的回调（由 ResourceLibrary 注入）
 
   const hitTest = (rect: DragRect): Set<string> => {
     const minX = Math.min(rect.startX, rect.endX);
@@ -157,6 +184,22 @@ export function ResourceListView({
     <div
       ref={containerRef}
       onMouseDown={onContainerMouseDown}
+      onContextMenu={(e) => {
+        // 仅在 picker 不响应右键；grid 模式下若点在已知缩略图外则显示"新建文件夹"菜单
+        if (mode !== 'grid') return;
+        const target = e.target as HTMLElement;
+        let insideItem = false;
+        for (const el of itemRefs.current.values()) {
+          if (el.contains(target) || el === target) {
+            insideItem = true;
+            break;
+          }
+        }
+        if (insideItem) return; // 缩略图自身走各自的 onContextMenu
+        if (!onCreateFolder) return;
+        e.preventDefault();
+        setCtxMenu({ kind: 'background', x: e.clientX, y: e.clientY });
+      }}
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -216,7 +259,8 @@ export function ResourceListView({
             }}
             onContextMenu={(e) => {
               if (mode === 'picker') return;
-              onContextMenu?.(e, r.id);
+              e.preventDefault();
+              setCtxMenu({ kind: 'item', id: r.id, itemName: r.name, x: e.clientX, y: e.clientY });
             }}
             style={{
               cursor: 'pointer',
@@ -303,11 +347,98 @@ export function ResourceListView({
                 {displayName}
               </div>
             )}
-            {/* 静默引用 onDelete 以避免"声明但不读取"的 lint 噪音（将来扩展用） */}
-            {void onDelete}
+            {void onCreateFolder}
           </div>
         );
       })}
+      {/* 右键菜单浮层：item（资源右键）/ background（空白右键） */}
+      {ctxMenu && (() => {
+        const itemW = 180;
+        const itemH = ctxMenu.kind === 'item' ? 96 : 56;
+        const maxX = window.innerWidth - itemW - 4;
+        const maxY = window.innerHeight - itemH - 4;
+        const x = Math.min(ctxMenu.x, maxX);
+        const y = Math.min(ctxMenu.y, maxY);
+        const buttonStyle = (hoverBg: string): React.CSSProperties => ({
+          display: 'block',
+          width: '100%',
+          padding: '6px 12px',
+          background: 'transparent',
+          border: 'none',
+          borderRadius: 4,
+          textAlign: 'left',
+          cursor: 'pointer',
+          fontSize: 13,
+        });
+        const enter = (e: ReactMouseEvent<HTMLButtonElement>) =>
+          (e.currentTarget.style.background = 'rgba(27,59,111,0.08)');
+        const leave = (e: ReactMouseEvent<HTMLButtonElement>) =>
+          (e.currentTarget.style.background = 'transparent');
+        const enterDanger = (e: ReactMouseEvent<HTMLButtonElement>) =>
+          (e.currentTarget.style.background = 'rgba(188,71,73,0.08)');
+        const menuStyle: React.CSSProperties = {
+          position: 'fixed',
+          left: x,
+          top: y,
+          minWidth: 180,
+          background: '#FBF7EC',
+          border: '1px solid #1B3B6F',
+          borderRadius: 6,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          padding: 4,
+          zIndex: 10000,
+          fontFamily: 'HedvigLettersSerif, serif',
+        };
+        if (ctxMenu.kind === 'item') {
+          return (
+            <div role="menu" onClick={(e) => e.stopPropagation()} style={menuStyle}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing({ id: ctxMenu.id, value: ctxMenu.itemName });
+                  setCtxMenu(null);
+                }}
+                style={buttonStyle('rgba(27,59,111,0.08)')}
+                onMouseEnter={enter}
+                onMouseLeave={leave}
+              >
+                ✎ 重命名
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`确认删除「${ctxMenu.itemName}」？`)) {
+                    onDelete?.(ctxMenu.id);
+                  }
+                  setCtxMenu(null);
+                }}
+                style={{ ...buttonStyle(''), color: '#BC4749' }}
+                onMouseEnter={enterDanger}
+                onMouseLeave={leave}
+              >
+                🗑 删除
+              </button>
+            </div>
+          );
+        }
+        // background：空白处右键
+        return (
+          <div role="menu" onClick={(e) => e.stopPropagation()} style={menuStyle}>
+            <button
+              type="button"
+              onClick={() => {
+                onCreateFolder?.();
+                setCtxMenu(null);
+              }}
+              style={buttonStyle('rgba(27,59,111,0.08)')}
+              onMouseEnter={enter}
+              onMouseLeave={leave}
+            >
+              📁 新建文件夹
+            </button>
+          </div>
+        );
+      })()}
       {/* 框选矩形浮层（与容器同坐标系，避免 fixed 滚动条偏移） */}
       {dragRect && (() => {
         const cr = containerRef.current?.getBoundingClientRect();
