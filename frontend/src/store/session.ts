@@ -1,21 +1,12 @@
 import { create } from 'zustand';
+import { KEEP_STUDENT } from '../constants/account';
 
-const KEY = 'selflearn.student_id';
-
-function genId(): string {
-  return crypto.randomUUID();
-}
-
+// 唯一账户（spec Task 265）：前端不再生成临时 UUID，永久使用 KEEP_STUDENT。
+// 这是部署时唯一的合法 student_id。无登录/无注册/无切换。
 export const useSession = create<{ studentId: string; reset: () => void }>((set) => ({
-  studentId: localStorage.getItem(KEY) ?? (() => {
-    const id = genId();
-    localStorage.setItem(KEY, id);
-    return id;
-  })(),
+  studentId: KEEP_STUDENT,
   reset: () => {
-    localStorage.removeItem(KEY);
-    set({ studentId: genId() });
-    // spec § 10.6 重置 demo
+    // reset 保留只是为了兼容旧 demo 的"硬刷"动作；唯一副作用是 location.reload()。
     location.reload();
   },
 }));
