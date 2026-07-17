@@ -21,6 +21,13 @@ class Stage(str, Enum):
     EXTRACT_TOPICS_VALIDATE = "extract_topics.validate"
     EXTRACT_TOPICS_WRITE = "extract_topics.write"
     EXTRACT_TOPICS_DONE = "extract_topics.done"
+    # Task 362: Director chain 4 阶段 (前端 LevelStartProgress 4 个圆点).
+    # 后缀是短 key, 与前端 ProgressOverlay 的 stages[].key 对齐;
+    # ProgressOverlay 用 stage.split('.').pop() 取最后一段匹配.
+    DIRECTOR_OUTLINE = "director.outline"
+    DIRECTOR_LECTURE = "director.lecture"
+    DIRECTOR_EXERCISE = "director.exercise"
+    DIRECTOR_REVIEW = "director.review"
 
 
 @dataclass

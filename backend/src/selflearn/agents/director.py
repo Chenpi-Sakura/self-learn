@@ -51,19 +51,27 @@ async def run_director_chain(
 
     # 1-3. 数据准备
     requested_node_id = env.payload.get("node_id")
+    await _publish(trace_id, Stage.DIRECTOR_OUTLINE, "running",
+                   {"action": "fetching_node_kp", "node_id": requested_node_id})
     node = await agent.mcp.call(
         "tool.get_active_node", student_id=student_id, node_id=requested_node_id,
     )
     if not node.get("ok"):
+        await _publish(trace_id, Stage.DIRECTOR_OUTLINE, "failed",
+                       {"error": f"get_active_node: {node.get('error')}"})
         raise AppError(ErrorCode.INTERNAL, f"get_active_node: {node.get('error')}")
     kp = await agent.mcp.call("tool.get_kp", kp_id=node["kp_id"])
     if not kp.get("ok"):
+        await _publish(trace_id, Stage.DIRECTOR_OUTLINE, "failed",
+                       {"error": f"get_kp: {kp.get('error')}"})
         raise AppError(ErrorCode.INTERNAL, f"get_kp: {kp.get('error')}")
     recent = await agent.mcp.call("tool.get_recent_scores", student_id=student_id, limit=3)
     difficulty = _compute_difficulty(list(recent))
+    await _publish(trace_id, Stage.DIRECTOR_OUTLINE, "completed",
+                   {"action": "outline_ready", "kp_title": kp["title"], "difficulty": difficulty})
 
     # 4. lecture
-    await _publish(trace_id, Stage.DIRECTOR, "running",
+    await _publish(trace_id, Stage.DIRECTOR_LECTURE, "running",
                    {"action": "lecture_generate", "node_id": node["node_id"]})
     lecture_html = await agent.run(
         "skill.lecture.generate",
@@ -73,7 +81,7 @@ async def run_director_chain(
             "tool.get_recent_scores": {"student_id": student_id, "limit": 3},
         },
     )
-    await _publish(trace_id, Stage.DIRECTOR, "completed",
+    await _publish(trace_id, Stage.DIRECTOR_LECTURE, "completed",
                    {"action": "lecture_generated", "lecture_html_len": len(lecture_html)})
 
     # 5. lecture 业务规则
@@ -94,6 +102,8 @@ async def run_director_chain(
     final_review: Any = None
     for revision in range(2):
         # 6a. 调 exercise skill
+        await _publish(trace_id, Stage.DIRECTOR_EXERCISE, "running",
+                       {"action": "exercise_generate", "revision": revision})
         env_ex = Envelope(
             action="skill.execute",
             sender=env.sender,
@@ -133,12 +143,22 @@ async def run_director_chain(
         review_llm = await review.review_exercise_llm(exercises, kp["title"], trace_id)
         final_review = review_llm
 
+        await _publish(trace_id, Stage.DIRECTOR_EXERCISE, "completed",
+                       {"revision": revision, "exercises_count": len(exercises),
+                        "verdict": review_llm.verdict, "score": review_llm.score})
+
         if review_llm.verdict == "passed":
             break
         if revision == 1:
             log.warning("director.exercise_max_revisions_reached", trace_id=trace_id)
             break
         suggestions = review_llm.suggestions
+
+    # 6.5 review（业务规则 + 语义审查的总结；已嵌在 6b/6c, 此处推一条顶层 review 事件）
+    if final_review is not None:
+        await _publish(trace_id, Stage.DIRECTOR_REVIEW, "completed",
+                       {"verdict": final_review.verdict, "score": final_review.score,
+                        "issues": final_review.issues})
 
     # 7. 写库
     level = await agent.mcp.call(

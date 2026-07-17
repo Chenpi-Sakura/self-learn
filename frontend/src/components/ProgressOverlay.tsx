@@ -63,6 +63,16 @@ export function ProgressOverlay({
         if (idxMap[shortKey] !== undefined) {
           setCurrentStageIdx(idxMap[shortKey]);
         }
+        // Director chain 终态: stage='review' (最后阶段) + status='completed'
+        // → 主动调 onDone (后端 start-stream 不发 'completed' 事件,
+        // 避免单阶段 completed 过早关流).
+        if (
+          source.kind === 'level' &&
+          shortKey === 'review' &&
+          d.status === 'completed'
+        ) {
+          source.onDone();
+        }
       } else if (ev.event === 'completed') {
         const d = ev.data as {
           status: string;

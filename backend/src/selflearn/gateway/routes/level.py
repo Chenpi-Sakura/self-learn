@@ -116,8 +116,10 @@ async def start_level(body: LevelStartRequest) -> dict[str, object]:
 async def stream_level_start(trace_id: str) -> EventSourceResponse:
     """Trace-only SSE for /api/level/start (no level_id yet — director chain async dispatch).
 
-    与 {level_id}/stream 内容一致, 只是 URL 不依赖 level_id (reused=false 时
-    level_id 由 director chain 后续生成, 启动时前端还不知道).
+    终态判定: 只在 status="failed" 时关闭 SSE. status="completed" 持续转发
+    (director chain 现在有 4+ 阶段: outline/lecture/exercise/review, 每阶段
+    都会发 completed, 不应过早关流). 真正关闭由前端 ProgressOverlay 按
+    stage==review.completed 决定 (onDone).
     """
     async def event_gen() -> AsyncIterator[dict[str, str]]:
         async for ev in progress_consume(trace_id):
@@ -130,13 +132,13 @@ async def stream_level_start(trace_id: str) -> EventSourceResponse:
                 ensure_ascii=False,
             )
             yield {"event": "progress", "data": data}
-            if ev.status in ("completed", "failed"):
+            if ev.status == "failed":
                 final = json.dumps(
                     {"status": ev.status, "payload": ev.payload},
                     ensure_ascii=False,
                 )
                 yield {
-                    "event": "completed" if ev.status == "completed" else "error",
+                    "event": "error",
                     "data": final,
                 }
                 return
