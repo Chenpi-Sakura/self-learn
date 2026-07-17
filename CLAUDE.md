@@ -40,7 +40,7 @@ cd backend && uv run python -m scripts.purge_test_data
 - 删 KEEP_STUDENT 的 NULL-lecture level（让 `/start` 重新生成讲义）
 - 保留 KEEP_STUDENT 的有讲义 level（= 最近一次真实使用的关卡）
 
-如要修改 KEEP_STUDENT，改 `backend/scripts/purge_test_data.py` 第 22 行。
+如要修改 KEEP_STUDENT，改 `backend/scripts/purge_test_data.py` 第 24 行。
 
 ## 唯一账户约束（Task 265）
 

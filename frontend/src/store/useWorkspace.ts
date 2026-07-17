@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AppId, WindowState, PinLevel } from '../types/window';
 import { SINGLETON_APP_IDS } from '../types/window';
-import type { MapNode, ProfileDimensions } from '../api/types';
+import type { MapNode } from '../api/types';
 
 export type Mode = 'proficiency' | 'exploration';
 export type LayoutId = 'reading' | 'practice' | 'coding';
