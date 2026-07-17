@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from selflearn.core.envelope import ActorRef, Envelope
@@ -83,13 +84,21 @@ async def onboard_profile(
     if existing.get("ok") and _is_initialized(existing.get("dimensions")):
         return {"ok": False, "error": "already_onboarded"}
 
-    # 2. 构造 envelope + 调 LLM skill（走 agent.run 走 lint 链）
+    # 2. 加载题目 JSON（供 LLM 评分参考）
+    questions_path = (
+        Path(__file__).resolve().parents[4]
+        / "src" / "selflearn" / "data" / "onboarding_questions.json"
+    )
+    questions = json.loads(questions_path.read_text(encoding="utf-8"))
+
+    # 3. 构造 envelope + 调 LLM skill（走 agent.run 走 lint 链）
     env = Envelope(
         action="skill.execute",
         sender=ActorRef(type="tool", id="onboard_profile"),
         target=ActorRef(type="skill", id="skill.profile.onboard"),
         payload={
             "student_id": student_id,
+            "questions": questions,
             "answers": answers,
         },
     )
@@ -99,7 +108,7 @@ async def onboard_profile(
         log.warning("onboard_profile.agent_run_failed", error=str(e))
         return {"ok": False, "error": "onboard_lint_failed"}
 
-    # 3. 解析 LLM JSON（容错：fence/裸 JSON 都行）
+    # 4. 解析 LLM JSON（容错：fence/裸 JSON 都行）
     try:
         parsed = extract_json_from_fence(llm_output) if isinstance(llm_output, str) else llm_output
         if isinstance(parsed, str):
@@ -110,11 +119,11 @@ async def onboard_profile(
         log.warning("onboard_profile.parse_failed", error=str(e), raw=llm_output[:200])
         return {"ok": False, "error": "onboard_lint_failed"}
 
-    # 4. 归一化（clamp + 缺维度补 0.5）
+    # 5. 归一化（clamp + 缺维度补 0.5）
     dimensions = _normalize_dims(parsed)
     reasoning = str(parsed.get("reasoning", ""))
 
-    # 5. 写 profile + snapshot
+    # 6. 写 profile + snapshot
     create_result = await create_profile(student_id, dimensions, tags=["onboarded"])
     if not create_result.get("ok"):
         return {"ok": False, "error": "profile_write_failed"}

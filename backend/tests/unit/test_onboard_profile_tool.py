@@ -2,21 +2,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from selflearn.mcp_server.tools.onboard_profile import onboard_profile
-
-
-def _fake_env() -> dict[str, Any]:
-    return {
-        "trace_id": "test-trace",
-        "sender": {"type": "test", "id": "test"},
-        "target": {"type": "skill", "id": "skill.profile.onboard"},
-        "payload": {"student_id": "sid"},
-    }
 
 
 def _fake_agent(llm_output: str) -> MagicMock:
