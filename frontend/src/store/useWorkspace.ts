@@ -222,12 +222,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   closeWindow: (id) =>
     set((s) => {
       const remaining = Object.keys(s.windows).filter((k) => k !== id);
-      if (remaining.length === 0) return s; // 至少保留一个窗口
       const windows: Record<string, WindowState> = {};
       for (const k of remaining) {
         windows[k] = s.windows[k];
       }
-      const focusedId = s.focusedId === id ? remaining[0] : s.focusedId;
+      const focusedId = s.focusedId === id ? (remaining.length > 0 ? remaining[0] : null) : s.focusedId;
       return { windows, focusedId };
     }),
 
