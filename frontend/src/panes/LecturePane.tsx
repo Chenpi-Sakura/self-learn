@@ -22,18 +22,17 @@ export function LecturePane({ levelId }: { levelId: string }) {
     Promise.all([
       import('katex/dist/katex.min.css'),
       import('katex'),
-      import('katex/dist/contrib/auto-render.min.js'),
+      import('katex/dist/contrib/auto-render.mjs'),
     ]).then(([, , autoRenderMod]) => {
-      // auto-render.min.js 是 UMD 模块，导出 renderMathInElement 函数。
-      // Vite 把 CJS module.exports 包装成 { default: <exports> }；
-      // 同时也直接暴露命名导出作为 fallback。两者取其一即可。
-      const mod = (autoRenderMod as any).default ?? autoRenderMod;
-      const renderMathInElement = mod.renderMathInElement as (
-        el: HTMLElement,
-        opts: object,
-      ) => void;
+      // auto-render.mjs 是 ESM 模块，export default 就是 renderMathInElement 函数。
+      // Vite ESM-mode 动态 import 返回 { default: renderMathInElement }。
+      const renderMathInElement = (autoRenderMod as any).default ?? autoRenderMod;
+      if (typeof renderMathInElement !== 'function') {
+        console.warn('[LecturePane] renderMathInElement 获取失败，模块结构:', autoRenderMod);
+        return;
+      }
       const root = document.querySelector('.lecture') as HTMLElement | null;
-      if (root && typeof renderMathInElement === 'function') {
+      if (root) {
         renderMathInElement(root, {
           delimiters: [
             { left: '$$', right: '$$', display: true },
