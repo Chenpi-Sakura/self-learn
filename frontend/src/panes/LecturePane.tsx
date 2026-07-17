@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react';
 import { getLevel } from '../api/level';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { LevelStartProgress } from '../components/LevelStartProgress';
+import { useLevel } from '../store/levelStore';
 
+/**
+ * 讲义窗格：
+ * - lecture_html 已就绪 → MarkdownRenderer 渲染（Task 4 路径）。
+ * - lecture_html == null → 用 LevelStartProgress 订阅 director chain SSE，
+ *   生成完成（completed 事件）后重新拉关卡 → 落入 MarkdownRenderer 分支。
+ *
+ * traceId 取自 levelStore.byLevel（TreasureMap 启动关卡时一并存）。
+ */
 export function LecturePane({ levelId }: { levelId: string }) {
+  const traceIdByLevel = useLevel((s) => s.byLevel);
   const [state, setState] = useState<
     | { loaded: false }
     | { loaded: true; html: string | null }
@@ -14,6 +25,14 @@ export function LecturePane({ levelId }: { levelId: string }) {
       .then((lv) => setState({ loaded: true, html: lv.lecture_html ?? null }))
       .catch(() => setState({ loaded: true, html: null }));
   }, [levelId]);
+
+  const reload = () => {
+    if (!levelId) return;
+    setState({ loaded: false });
+    getLevel(levelId)
+      .then((lv) => setState({ loaded: true, html: lv.lecture_html ?? null }))
+      .catch(() => setState({ loaded: true, html: null }));
+  };
 
   // 加载中或未选节点
   if (!state.loaded) {
@@ -36,9 +55,21 @@ export function LecturePane({ levelId }: { levelId: string }) {
   }
 
   const lectureHtml = state.html;
+  const traceId = traceIdByLevel[levelId] ?? '';
 
-  // 没讲义（旧关卡 / 生成失败）
+  // 没讲义 → 走关卡进度条（Task 6）。
+  // 必须有 traceId 才能订阅 SSE；没有就退回原占位文案（兼容旧 store 缓存）。
   if (!lectureHtml) {
+    if (traceId) {
+      return (
+        <LevelStartProgress
+          levelId={levelId}
+          traceId={traceId}
+          onDone={reload}
+          onClose={reload}
+        />
+      );
+    }
     return (
       <div
         style={{

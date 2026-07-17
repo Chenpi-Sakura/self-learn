@@ -122,7 +122,7 @@ export function TreasureMap({ studentId }: Props) {
       const data = await res.json();
       if (data.level_id) {
         // 立即把 levelId 推入 store，LecturePane/ExercisePane 就能拉题
-        setActiveLevel(data.level_id, node.id);
+        setActiveLevel(data.level_id, node.id, data.trace_id);
         setMsg(
           `${node.label} ${data.reused ? '已就绪（复用）' : '已启动'}（${data.level_id.slice(0, 8)}…）`
         );
