@@ -15,6 +15,12 @@ class Stage(str, Enum):
     REVIEW = "review"
     COMPLETED = "completed"
     FAILED = "failed"
+    # Task 2：提炼主题 5 阶段流水线
+    EXTRACT_TOPICS_PARSE = "extract_topics.parse"
+    EXTRACT_TOPICS_LLM = "extract_topics.llm"
+    EXTRACT_TOPICS_VALIDATE = "extract_topics.validate"
+    EXTRACT_TOPICS_WRITE = "extract_topics.write"
+    EXTRACT_TOPICS_DONE = "extract_topics.done"
 
 
 @dataclass

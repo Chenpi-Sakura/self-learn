@@ -13,6 +13,7 @@ from selflearn.core.errors import AppError
 from selflearn.core.logging import get_logger
 from selflearn.core.tracing import setup_tracing
 from selflearn.gateway.routes import health, profile
+from selflearn.gateway.routes.extract_topics import router as extract_topics_router
 from selflearn.gateway.routes.level import router as level_router
 from selflearn.gateway.routes.map import router as map_router
 from selflearn.gateway.routes.resources import router as resources_router
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(map_router)
     app.include_router(level_router)
     app.include_router(resources_router)
+    app.include_router(extract_topics_router)
 
     # Stage 4: AOP /debug/state 路由（spec § 6.5 + § 10.7，plan T5）
     # 仅在 settings.debug=True 时挂载；生产场景（DEBUG 不设）返回 404，零暴露面。
