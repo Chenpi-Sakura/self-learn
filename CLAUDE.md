@@ -41,3 +41,17 @@ cd backend && uv run python -m scripts.purge_test_data
 - 保留 KEEP_STUDENT 的有讲义 level（= 最近一次真实使用的关卡）
 
 如要修改 KEEP_STUDENT，改 `backend/scripts/purge_test_data.py` 第 22 行。
+
+## 唯一账户约束（Task 265）
+
+后端永远只有 1 个学生账户，前端硬编码使用，**不允许动态生成新 UUID**：
+
+- `KEEP_STUDENT = "86820161-b0f0-455f-91b4-a69e49445bdf"`
+- 4 处字面量来源必须保持完全一致：
+  1. `backend/scripts/purge_test_data.py:24`（E2E 清理保留目标）
+  2. `backend/src/selflearn/infra/seed_account.py:17`（启动 ensure）
+  3. `frontend/src/constants/account.ts:6`（前端唯一 ID）
+  4. `CLAUDE.md` 本段（文档）
+- 后端 startup `lifespan` 会自动 ensure KEEP_STUDENT 的 Profile 行（幂等，见 `backend/src/selflearn/infra/seed_account.py`）
+- 前端不再有 demo 模式 / sample 数据 / ResetButton；session.ts 同步取常量（`frontend/src/store/session.ts`）
+- Demo 模式（`data/sample.ts`、`reset/ResetButton.tsx`）已全部清除，不残留 mock 数据
