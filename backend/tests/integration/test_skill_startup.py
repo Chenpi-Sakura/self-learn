@@ -9,6 +9,8 @@ EXPECTED = {
     "skill.review.exercise.llm",
     "skill.lecture.generate",
     "skill.director.start",
+    # Task 2 added 8th skill：提炼主题流水线
+    "skill.resource.extract_topics",
 }
 
 
