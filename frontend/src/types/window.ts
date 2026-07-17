@@ -10,6 +10,8 @@ export type AppId =
   | 'notebook'
   | 'mind_map'
   | 'resource_library'
+  | 'extract_topics_dialog'
+  | 'md_browser'
   | 'dashboard'
   | 'settings'
   | 'task_list'
@@ -37,6 +39,7 @@ export interface WindowState {
   metadata?: {
     levelId?: string;
     resourceId?: string;
+    preselected?: string[];
     transient?: boolean;
   };
 }
@@ -53,6 +56,8 @@ export const SINGLETON_APP_IDS: ReadonlySet<AppId> = new Set<AppId>([
   'treasure_map',
   'notebook',
   'resource_library',
+  'extract_topics_dialog',
+  'md_browser',
   'dashboard',
   'settings',
   'task_list',

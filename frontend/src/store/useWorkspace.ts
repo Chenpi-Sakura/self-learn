@@ -40,6 +40,9 @@ const DEFAULT_WIN: Record<string, Omit<WindowState, 'pinLevel'>> = {
   today:    { id: 'today',    appId: 'task_list',    x: 820, y: 80,  w: 420, h: 360, z: 1001 },
   profile:  { id: 'profile',  appId: 'profile',      x: 80,  y: 460, w: 720, h: 300, z: 1002 },
   chat:     { id: 'chat',     appId: 'chat',         x: 1000, y: 460, w: 280, h: 320, z: 1003 },
+  resource_library: { id: 'resource_library', appId: 'resource_library', x: 120, y: 120, w: 720, h: 480, z: 1010 },
+  extract_topics_dialog: { id: 'extract_topics_dialog', appId: 'extract_topics_dialog', x: 200, y: 160, w: 560, h: 420, z: 1011 },
+  md_browser: { id: 'md_browser', appId: 'md_browser', x: 240, y: 200, w: 640, h: 480, z: 1012 },
 };
 
 /** 同一个 appId→id 的映射 */
@@ -48,15 +51,20 @@ const APP_TO_ID: Record<string, string> = {
   task_list: 'today',
   profile: 'profile',
   chat: 'chat',
+  resource_library: 'resource_library',
+  extract_topics_dialog: 'extract_topics_dialog',
+  md_browser: 'md_browser',
 };
 
 function initWindows(): Record<string, WindowState> {
-  const w: Record<string, WindowState> = {};
-  for (const [k, v] of Object.entries(DEFAULT_WIN)) {
-    const pinLevel: PinLevel = k === 'chat' ? 'always' : 'none';
-    w[k] = { ...v, pinLevel };
-  }
-  return w;
+  // Task 5 改动：默认空 windows（首次进入只看到引导卡），不预置 map/today/profile/chat。
+  // 4 个任务窗口按 brief 改为 openWindow 时再生成（demo 模式全清场）。
+  return {};
+}
+
+interface WindowPayload {
+  preselected?: string[];
+  resourceId?: string;
 }
 
 interface WorkspaceState {
@@ -78,7 +86,7 @@ interface WorkspaceState {
   toggleMaximize: (id: string) => void;
   togglePin: (id: string) => void;
   closeWindow: (id: string) => void;
-  openWindow: (appId: WindowState['appId']) => void;
+  openWindow: (appId: WindowState['appId'], payload?: WindowPayload) => void;
   resizeWindow: (id: string, size: { w?: number; h?: number; x?: number; y?: number }) => void;
   toggleTask: (id: string) => void;
   sendChat: (text: string) => void;
@@ -93,7 +101,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   profile: { student: '', dimensions: [] },
   tasks: [],
   chat: [],
-  focusedId: 'map',
+  focusedId: null,
 
   setMode: (m) => set({ mode: m }),
 
@@ -221,7 +229,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       return { windows, focusedId };
     }),
 
-  openWindow: (appId) =>
+  openWindow: (appId, payload) =>
     set((s) => {
       // 单实例 appId 列表（v4 § 3.11.1）：第二次打开只聚焦
       if (SINGLETON_APP_IDS.has(appId)) {
@@ -229,7 +237,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         if (existing) {
           const maxZ = Math.max(...Object.values(s.windows).map((w) => w.z));
           return {
-            windows: { ...s.windows, [existing.id]: { ...existing, minimized: false, z: maxZ + 1 } },
+            windows: { ...s.windows, [existing.id]: { ...existing, metadata: existing.metadata ? { ...existing.metadata, ...payload } : payload ? { ...payload } : existing.metadata, minimized: false, z: maxZ + 1 } },
             focusedId: existing.id,
           };
         }
@@ -239,14 +247,17 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       if (existingKey && s.windows[existingKey]) {
         // 已存在 → 聚焦 + 取消最小化
         const maxZ = Math.max(...Object.values(s.windows).map((w) => w.z));
+        const existingWin = s.windows[existingKey];
         return {
-          windows: { ...s.windows, [existingKey]: { ...s.windows[existingKey], minimized: false, z: maxZ + 1 } },
+          windows: { ...s.windows, [existingKey]: { ...existingWin, metadata: existingWin.metadata ? { ...existingWin.metadata, ...payload } : payload ? { ...payload } : existingWin.metadata, minimized: false, z: maxZ + 1 } },
           focusedId: existingKey
         };
       }
       // 不存在 → 新建
       const key = existingKey || `win_${appId}_${Date.now()}`;
-      const maxZ = Math.max(...Object.values(s.windows).map((w) => w.z));
+      const maxZ = s.windows && Object.keys(s.windows).length > 0
+        ? Math.max(...Object.values(s.windows).map((w) => w.z))
+        : 999;
       const def = DEFAULT_WIN[key];
       const TOPBAR_H = 52;
       const initW = def?.w ?? 600;
@@ -259,7 +270,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         w: initW,
         h: initH,
         z: maxZ + 1,
-        pinLevel: appId === 'chat' ? 'always' : 'none'
+        pinLevel: appId === 'chat' ? 'always' : 'none',
+        metadata: payload ? { ...payload } : undefined,
       };
       return {
         windows: { ...s.windows, [key]: newWin },
