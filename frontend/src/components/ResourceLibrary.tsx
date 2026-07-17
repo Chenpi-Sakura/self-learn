@@ -33,6 +33,7 @@ export function ResourceLibrary({
   const closeWindow = useWorkspace((s) => s.closeWindow);
   const [items, setItems] = useState<ResourceListItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [multiSelect, setMultiSelect] = useState<boolean>(false);
   const [extractTaskId, setExtractTaskId] = useState<string | null>(null);
 
   // 从窗口 metadata 读取已有的 extractTaskId（ExtractTopicsDialog 确认后通过 App.tsx 注入）
@@ -122,6 +123,25 @@ export function ResourceLibrary({
           />
         </label>
         <button
+          type="button"
+          onClick={() => {
+            setMultiSelect((v) => !v);
+            setSelected(new Set());
+          }}
+          style={{
+            padding: '6px 12px',
+            background: multiSelect ? '#5A8F4D' : '#E5E5E0',
+            color: multiSelect ? '#FBF7EC' : '#6B6B70',
+            borderRadius: 4,
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+          title={multiSelect ? '退出多选模式（单击资源会直接打开）' : '开启多选模式（单击资源变为勾选）'}
+        >
+          {multiSelect ? '☑ 多选模式' : '☐ 单击进入多选'}
+        </button>
+        <button
           disabled={selected.size === 0}
           onClick={onExtractClick}
           style={{
@@ -152,7 +172,7 @@ export function ResourceLibrary({
       >
         <ResourceListView
           items={items}
-          mode="grid"
+          mode={multiSelect ? 'picker' : 'grid'}
           selectedIds={selected}
           onSelectionChange={setSelected}
           onOpen={(id) => openWindow('md_browser', { resourceId: id })}
