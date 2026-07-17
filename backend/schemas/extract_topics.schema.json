@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "required": ["topics"],
+  "additionalProperties": false,
+  "properties": {
+    "topics": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["title", "description", "prerequisites", "excerpt_text", "source_resource_id"],
+        "additionalProperties": false,
+        "properties": {
+          "title": {"type": "string", "minLength": 1, "maxLength": 30},
+          "description": {"type": "string", "minLength": 1, "maxLength": 200},
+          "prerequisites": {"type": "array", "items": {"type": "string"}},
+          "excerpt_text": {"type": "string", "minLength": 500, "maxLength": 1500},
+          "source_resource_id": {"type": "string"}
+        }
+      }
+    }
+  }
+}

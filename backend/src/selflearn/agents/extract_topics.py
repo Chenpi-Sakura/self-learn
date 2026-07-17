@@ -24,6 +24,7 @@ from selflearn.domain.map_node import MapNode
 from selflearn.domain.resource import Resource
 from selflearn.infra.db import get_session_factory
 from selflearn.llm.registry import LLMRegistry
+from selflearn.mcp_client import mcp_client_lifespan
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.progress.stream import progress_publish
 
@@ -180,62 +181,64 @@ async def _run_pipeline(task_id: str, selected_ids: list[UUID]) -> None:
         ),
     )
 
-    # 2. llm（最多 1 次重试）
+    # 2. llm（最多 1 次重试）：mcp_client_lifespan 包住 LLM 调用，
+    #    LLMAgent 需要真 mcp client 来 fetch_skill（不能用 None）。
     drafts: list[TopicDraft] = []
     last_error: str = ""
-    for attempt in range(2):
-        if attempt == 0:
-            await progress_publish(
-                task_id,
-                ProgressEvent(stage=Stage.EXTRACT_TOPICS_LLM, status="running"),
-            )
-        else:
-            await progress_publish(
-                task_id,
-                ProgressEvent(
-                    stage=Stage.EXTRACT_TOPICS_LLM,
-                    status="running",
-                    payload={"retry": True, "last_error": last_error},
+    async with mcp_client_lifespan() as mcp:
+        for attempt in range(2):
+            if attempt == 0:
+                await progress_publish(
+                    task_id,
+                    ProgressEvent(stage=Stage.EXTRACT_TOPICS_LLM, status="running"),
+                )
+            else:
+                await progress_publish(
+                    task_id,
+                    ProgressEvent(
+                        stage=Stage.EXTRACT_TOPICS_LLM,
+                        status="running",
+                        payload={"retry": True, "last_error": last_error},
+                    ),
+                )
+            registry = LLMRegistry()
+            agent = LLMAgent(mcp_client=mcp, llm_registry=registry)
+            env = Envelope(
+                action="skill.execute",
+                sender=ActorRef(type="script", id="extract_topics"),
+                target=ActorRef(
+                    type="skill", id="skill.resource.extract_topics"
                 ),
+                payload={"resources": resources_payload},
             )
-        registry = LLMRegistry()
-        agent = LLMAgent(mcp_client=None, llm_registry=registry)
-        env = Envelope(
-            action="skill.execute",
-            sender=ActorRef(type="script", id="extract_topics"),
-            target=ActorRef(
-                type="skill", id="skill.resource.extract_topics"
-            ),
-            payload={"resources": resources_payload},
-        )
-        try:
-            response_text = await asyncio.wait_for(
-                agent.run("skill.resource.extract_topics", env),
-                timeout=TIMEOUT_LLM_SEC,
-            )
-        except asyncio.TimeoutError:
-            await progress_publish(
-                task_id,
-                ProgressEvent(
-                    stage=Stage.EXTRACT_TOPICS_LLM,
-                    status="failed",
-                    payload={"error": f"llm timeout >{TIMEOUT_LLM_SEC}s"},
-                ),
-            )
-            return
+            try:
+                response_text = await asyncio.wait_for(
+                    agent.run("skill.resource.extract_topics", env),
+                    timeout=TIMEOUT_LLM_SEC,
+                )
+            except asyncio.TimeoutError:
+                await progress_publish(
+                    task_id,
+                    ProgressEvent(
+                        stage=Stage.EXTRACT_TOPICS_LLM,
+                        status="failed",
+                        payload={"error": f"llm timeout >{TIMEOUT_LLM_SEC}s"},
+                    ),
+                )
+                return
 
-        # parse output → schema validate
-        try:
-            data = json.loads(response_text)
-        except json.JSONDecodeError as e:
-            last_error = f"json decode: {e}"
-            continue
-        try:
-            drafts = _validate_topics(data, input_ids)
-            break
-        except _SchemaValidationError as e:
-            last_error = str(e)
-            continue
+            # parse output → schema validate
+            try:
+                data = json.loads(response_text)
+            except json.JSONDecodeError as e:
+                last_error = f"json decode: {e}"
+                continue
+            try:
+                drafts = _validate_topics(data, input_ids)
+                break
+            except _SchemaValidationError as e:
+                last_error = str(e)
+                continue
 
     if not drafts:
         await progress_publish(

@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks
 from sse_starlette.sse import EventSourceResponse
 
 from selflearn.agents.extract_topics import run_extract_topics
-from selflearn.infra.redis_client import get_redis
 from selflearn.progress.stages import Stage
 from selflearn.progress.stream import progress_consume
 from selflearn.schemas.extract_topics import (
@@ -26,10 +25,8 @@ async def trigger(
     body: ExtractTopicsRequest, background_tasks: BackgroundTasks,
 ) -> ExtractTopicsResponse:
     task_id = str(uuid4())
-    r = get_redis()
-    # Task 3 SSE 路由会复用 stream:{task_id}；这里先 set 个 TTL 兜底标志，
-    # 让 progress_publish 的 expire 不用依赖第一次写入时机。
-    await r.set(f"stream:{task_id}", "running", ex=3600)
+    # stream:{task_id} 由第一次 progress_publish (xadd + expire) 创建；
+    # 不要在这里 r.set (会与后续 XADD 撞 WRONGTYPE)
     # 走 BackgroundTasks 同进程执行（T1 ~ T3 阶段不做 worker 进程扩展）
     background_tasks.add_task(run_extract_topics, task_id, body.selected_resource_ids)
     return ExtractTopicsResponse(task_id=task_id)
