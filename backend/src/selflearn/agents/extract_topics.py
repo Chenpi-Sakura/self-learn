@@ -23,7 +23,7 @@ from selflearn.domain.knowledge_point import KnowledgePoint
 from selflearn.domain.map_node import MapNode
 from selflearn.domain.resource import Resource
 from selflearn.infra.db import get_session_factory
-from selflearn.llm.registry import LLMRegistry
+from selflearn.llm.registry import llm_registry
 from selflearn.mcp_client import mcp_client_lifespan
 from selflearn.progress.stages import ProgressEvent, Stage
 from selflearn.progress.stream import progress_publish
@@ -145,31 +145,42 @@ async def _run_pipeline(task_id: str, selected_ids: list[UUID]) -> None:
         task_id,
         ProgressEvent(stage=Stage.EXTRACT_TOPICS_PARSE, status="running"),
     )
-    async with factory() as session:
-        rows = (
-            await session.execute(
-                select(Resource).where(
-                    Resource.id.in_(selected_ids),
-                    Resource.deleted_at.is_(None),
+    try:
+        async with factory() as session:
+            rows = (
+                await session.execute(
+                    select(Resource).where(
+                        Resource.id.in_(selected_ids),
+                        Resource.deleted_at.is_(None),
+                    )
                 )
-            )
-        ).scalars().all()
-        if not rows:
-            await progress_publish(
-                task_id,
-                ProgressEvent(
-                    stage=Stage.EXTRACT_TOPICS_PARSE,
-                    status="failed",
-                    payload={"error": "no resources found"},
-                ),
-            )
-            return
-        resources_payload = [
-            {"id": str(r.id), "name": r.name, "content_md": r.content_md}
-            for r in rows
-        ]
-        student_id = rows[0].student_id
-        input_ids = {str(r.id) for r in rows}
+            ).scalars().all()
+            if not rows:
+                await progress_publish(
+                    task_id,
+                    ProgressEvent(
+                        stage=Stage.EXTRACT_TOPICS_PARSE,
+                        status="failed",
+                        payload={"error": "no resources found"},
+                    ),
+                )
+                return
+            resources_payload = [
+                {"id": str(r.id), "name": r.name, "content_md": r.content_md}
+                for r in rows
+            ]
+            student_id = rows[0].student_id
+            input_ids = {str(r.id) for r in rows}
+    except Exception as e:  # noqa: BLE001
+        await progress_publish(
+            task_id,
+            ProgressEvent(
+                stage=Stage.EXTRACT_TOPICS_PARSE,
+                status="failed",
+                payload={"error": f"db parse failed: {type(e).__name__}: {e}"},
+            ),
+        )
+        return
     await progress_publish(
         task_id,
         ProgressEvent(
@@ -201,7 +212,7 @@ async def _run_pipeline(task_id: str, selected_ids: list[UUID]) -> None:
                         payload={"retry": True, "last_error": last_error},
                     ),
                 )
-            registry = LLMRegistry()
+            registry = llm_registry
             agent = LLMAgent(mcp_client=mcp, llm_registry=registry)
             env = Envelope(
                 action="skill.execute",
@@ -223,6 +234,16 @@ async def _run_pipeline(task_id: str, selected_ids: list[UUID]) -> None:
                         stage=Stage.EXTRACT_TOPICS_LLM,
                         status="failed",
                         payload={"error": f"llm timeout >{TIMEOUT_LLM_SEC}s"},
+                    ),
+                )
+                return
+            except Exception as e:  # noqa: BLE001 — 任何未预期异常（无 adapter / MCP 错 / JSON 错）都推 failed
+                await progress_publish(
+                    task_id,
+                    ProgressEvent(
+                        stage=Stage.EXTRACT_TOPICS_LLM,
+                        status="failed",
+                        payload={"error": f"{type(e).__name__}: {e}"},
                     ),
                 )
                 return

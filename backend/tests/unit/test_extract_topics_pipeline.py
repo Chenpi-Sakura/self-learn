@@ -200,7 +200,7 @@ async def test_pipeline_publishes_5_stages_on_success() -> None:
     with patch("selflearn.agents.extract_topics.progress_publish", new=AsyncMock(side_effect=fake_publish)), \
          patch("selflearn.agents.extract_topics.LLMAgent") as mock_agent_cls, \
          patch("selflearn.agents.extract_topics.get_session_factory", return_value=lambda: fake_session), \
-         patch("selflearn.agents.extract_topics.LLMRegistry"):
+         patch("selflearn.agents.extract_topics.llm_registry"):
         agent_instance = MagicMock()
         agent_instance.run = AsyncMock(return_value=_valid_llm_json(rows))
         mock_agent_cls.return_value = agent_instance
@@ -238,7 +238,7 @@ async def test_pipeline_retries_once_when_llm_returns_bad_json() -> None:
     with patch("selflearn.agents.extract_topics.progress_publish", new=AsyncMock(side_effect=fake_publish)), \
          patch("selflearn.agents.extract_topics.LLMAgent") as mock_agent_cls, \
          patch("selflearn.agents.extract_topics.get_session_factory", return_value=lambda: fake_session), \
-         patch("selflearn.agents.extract_topics.LLMRegistry"):
+         patch("selflearn.agents.extract_topics.llm_registry"):
         agent_instance = MagicMock()
         agent_instance.run = AsyncMock(side_effect=fake_run)
         mock_agent_cls.return_value = agent_instance
@@ -268,7 +268,7 @@ async def test_pipeline_marks_validate_failed_after_two_bad_llm_attempts() -> No
     with patch("selflearn.agents.extract_topics.progress_publish", new=AsyncMock(side_effect=fake_publish)), \
          patch("selflearn.agents.extract_topics.LLMAgent") as mock_agent_cls, \
          patch("selflearn.agents.extract_topics.get_session_factory", return_value=lambda: fake_session), \
-         patch("selflearn.agents.extract_topics.LLMRegistry"):
+         patch("selflearn.agents.extract_topics.llm_registry"):
         agent_instance = MagicMock()
         agent_instance.run = AsyncMock(side_effect=["bad", "still bad"])
         mock_agent_cls.return_value = agent_instance
@@ -293,7 +293,7 @@ async def test_pipeline_db_write_failure_marks_write_failed() -> None:
     with patch("selflearn.agents.extract_topics.progress_publish", new=AsyncMock(side_effect=fake_publish)), \
          patch("selflearn.agents.extract_topics.LLMAgent") as mock_agent_cls, \
          patch("selflearn.agents.extract_topics.get_session_factory", return_value=lambda: fake_session), \
-         patch("selflearn.agents.extract_topics.LLMRegistry"):
+         patch("selflearn.agents.extract_topics.llm_registry"):
         agent_instance = MagicMock()
         agent_instance.run = AsyncMock(return_value=_valid_llm_json(rows))
         mock_agent_cls.return_value = agent_instance
@@ -317,7 +317,7 @@ async def test_pipeline_writes_drafts_as_kps_and_nodes() -> None:
     with patch("selflearn.agents.extract_topics.progress_publish", new=AsyncMock(side_effect=fake_publish)), \
          patch("selflearn.agents.extract_topics.LLMAgent") as mock_agent_cls, \
          patch("selflearn.agents.extract_topics.get_session_factory", return_value=lambda: fake_session), \
-         patch("selflearn.agents.extract_topics.LLMRegistry"):
+         patch("selflearn.agents.extract_topics.llm_registry"):
         agent_instance = MagicMock()
         agent_instance.run = AsyncMock(return_value=_valid_llm_json(rows))
         mock_agent_cls.return_value = agent_instance
