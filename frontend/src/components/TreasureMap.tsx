@@ -44,11 +44,16 @@ const STATUS_TEXT: Record<string, string> = {
   sleeping:    '#A1A1AA',
 };
 
+// extract_topics 写入的 position 是网格坐标 col/row (1 cell = 1 unit),
+// TreasureMap viewBox 760x240 期望每节点宽 100 + 间距 60, 这里按 160 缩放
+// 让 4 节点横排时 [0,1,2,3] → [0,160,320,480] 落在 760 viewBox 内
+const POSITION_SCALE = 160;
+
 function mapApiNode(n: ApiMapNode): InternalNode {
   return {
     id: n.node_id,
-    x: n.position.x,
-    y: n.position.y,
+    x: n.position.x * POSITION_SCALE,
+    y: n.position.y * POSITION_SCALE,
     label: n.title,
     status: n.status,
     minutes: 0,
