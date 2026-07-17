@@ -41,7 +41,7 @@
 | T1 前端 KEEP_STUDENT 常量 + session.ts 重写 | complete | 1e613bf | review clean (haiku) — Minor: 文件末尾无 newline, brief 未要求, 不阻塞 |
 | T2 后端 startup ensure KEEP_STUDENT + 单测 | complete | f4a6465 | review clean (sonnet) — 两个 brief 偏差 (`from sqlalchemy import select` 缺 import; `loop_scope="session"` 适配项目 pytest-asyncio) 由 TDD 暴露, 均为 brief 修正, 不算 overstep |
 | T3 删 demo（sample.ts + ResetButton）+ store 默认空 | complete | a189986 | review clean (sonnet) — Important: useWorkspace.ts 有无用 import ProfileDimensions; Minor: 注释仍提及 data/sample（不影响运行）。无用 import 已当场修 |
-| T4 e2e + CLAUDE.md 更新 | complete | pending (commit TBD) | review via whole-branch after commit |
+| T4 e2e + CLAUDE.md 更新 | complete | 3315d2e | whole-branch review clean after fix (b9ebd88) — Important: useWorkspace 无用 import 已提交修; Minor: CLAUDE.md 行号 `:22`→`:24` 已一并修 |
 
 ## Task 262 — 讲义反孤儿化（A + B）
 
