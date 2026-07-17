@@ -1,0 +1,92 @@
+[
+  {
+    "id": "q1_kb",
+    "dimension_hint": "kb",
+    "type": "single",
+    "prompt": "遇到一个全新概念，你的第一反应是？",
+    "options": [
+      { "id": "a", "label": "先找它的定义和理论来源" },
+      { "id": "b", "label": "看几个例子理解它的用法" },
+      { "id": "c", "label": "直接动手试一试" },
+      { "id": "d", "label": "找同学或老师讨论一下" }
+    ]
+  },
+  {
+    "id": "q2_vp",
+    "dimension_hint": "vp",
+    "type": "single",
+    "prompt": "下面哪种资料对你最有吸引力？",
+    "options": [
+      { "id": "a", "label": "详细的图表与流程图" },
+      { "id": "b", "label": "完整的文字说明" },
+      { "id": "c", "label": "音频或视频讲解" },
+      { "id": "d", "label": "可以亲手操作的小实验" }
+    ]
+  },
+  {
+    "id": "q3_as",
+    "dimension_hint": "as",
+    "type": "single",
+    "prompt": "解一道难题时，你倾向：",
+    "options": [
+      { "id": "a", "label": "一步步严格推导" },
+      { "id": "b", "label": "先想一个直觉，再补细节" },
+      { "id": "c", "label": "类比熟悉的场景找答案" },
+      { "id": "d", "label": "直接尝试不同解法看哪种能跑通" }
+    ]
+  },
+  {
+    "id": "q4_ge",
+    "dimension_hint": "ge",
+    "type": "single",
+    "prompt": "你学习这门课的主要目标更接近：",
+    "options": [
+      { "id": "a", "label": "拿到一份工程师 / 实习 offer" },
+      { "id": "b", "label": "通过学校课程考试" },
+      { "id": "c", "label": "纯粹兴趣 / 提升视野" },
+      { "id": "d", "label": "为转方向或读研打基础" }
+    ]
+  },
+  {
+    "id": "q5_ept",
+    "dimension_hint": "ept",
+    "type": "single",
+    "prompt": "过去学习时，你最常在哪类问题上卡住？",
+    "options": [
+      { "id": "a", "label": "概念辨析（似是而非的术语）" },
+      { "id": "b", "label": "计算与公式推导" },
+      { "id": "c", "label": "把知识用到具体场景" },
+      { "id": "d", "label": "记忆细节与例外" }
+    ]
+  },
+  {
+    "id": "q6_fd",
+    "dimension_hint": "fd",
+    "type": "single",
+    "prompt": "你能保持高效专注学习的连续时长一般是：",
+    "options": [
+      { "id": "a", "label": "15 分钟以内" },
+      { "id": "b", "label": "15-30 分钟" },
+      { "id": "c", "label": "30-60 分钟" },
+      { "id": "d", "label": "60 分钟以上" }
+    ]
+  },
+  {
+    "id": "q7_mixed",
+    "dimension_hint": "as",
+    "type": "multi",
+    "prompt": "下面哪些描述符合你？（可多选）",
+    "options": [
+      { "id": "a", "label": "我喜欢把问题拆解成一步步的小任务" },
+      { "id": "b", "label": "我经常从结果反推原因" },
+      { "id": "c", "label": "我倾向于记口诀或顺口溜" },
+      { "id": "d", "label": "我倾向于画图或列表" }
+    ]
+  },
+  {
+    "id": "q8_open",
+    "type": "open",
+    "prompt": "请用一两句话描述：你理想的学习方式是什么？",
+    "placeholder": "比如：我喜欢先看图，再看例子，最后总结…"
+  }
+]
