@@ -1,13 +1,39 @@
 import { create } from 'zustand';
 import type { AppId, WindowState, PinLevel } from '../types/window';
 import { SINGLETON_APP_IDS } from '../types/window';
-import { mapNodes, mapEdges, profile, tasks, initialChat, mockAiReplies } from '../data/sample';
+import type { MapNode, ProfileDimensions } from '../api/types';
 
 export type Mode = 'proficiency' | 'exploration';
 export type LayoutId = 'reading' | 'practice' | 'coding';
 export type { AppId, WindowState, PinLevel };
 
 interface ChatMsg { role: 'user' | 'ai'; text: string }
+
+/** demo 数据已删除，前端不再持有内置 profile / nodes / edges；
+ *  真实数据由后端 API（profile / map）填充。本 store 仅提供空形状占位。 */
+export interface Profile {
+  student: string;
+  dimensions: Array<{
+    key: string;
+    label: string;
+    value: number;
+    pulsing?: boolean;
+  }>;
+}
+
+/** 关卡地图边；原 data/sample.Edge 形状保留，api/types.ts 暂未定义 Edge */
+export interface Edge {
+  from: string;
+  to: string;
+  kind: 'main' | 'interest' | 'sleeping';
+}
+
+interface TaskItem {
+  id: string;
+  title: string;
+  status: 'todo' | 'doing' | 'done';
+  minutes: number;
+}
 
 const DEFAULT_WIN: Record<string, Omit<WindowState, 'pinLevel'>> = {
   map:      { id: 'map',      appId: 'treasure_map', x: 80,  y: 80,  w: 720, h: 360, z: 1000 },
@@ -33,16 +59,14 @@ function initWindows(): Record<string, WindowState> {
   return w;
 }
 
-let replyIdx = 0;
-
 interface WorkspaceState {
   mode: Mode;
   layout: LayoutId;
   windows: Record<string, WindowState>;
-  nodes: typeof mapNodes;
-  edges: typeof mapEdges;
-  profile: typeof profile;
-  tasks: typeof tasks;
+  nodes: MapNode[];
+  edges: Edge[];
+  profile: Profile;
+  tasks: TaskItem[];
   chat: ChatMsg[];
   focusedId: string | null;
 
@@ -64,11 +88,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   mode: 'proficiency',
   layout: 'reading',
   windows: initWindows(),
-  nodes: mapNodes,
-  edges: mapEdges,
-  profile,
-  tasks,
-  chat: initialChat,
+  nodes: [],
+  edges: [],
+  profile: { student: '', dimensions: [] },
+  tasks: [],
+  chat: [],
   focusedId: 'map',
 
   setMode: (m) => set({ mode: m }),
@@ -274,11 +298,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   sendChat: (text) => {
     const userMsg: ChatMsg = { role: 'user', text };
     set((s) => ({ chat: [...s.chat, userMsg] }));
-    setTimeout(() => {
-      const reply = mockAiReplies[replyIdx % mockAiReplies.length];
-      replyIdx++;
-      const aiMsg: ChatMsg = { role: 'ai', text: reply };
-      set((s) => ({ chat: [...s.chat, aiMsg] }));
-    }, 500);
+    // demo 模式移除：AI 助手暂未接入，给出明确占位提示
+    const aiMsg: ChatMsg = { role: 'ai', text: 'AI 助手暂未接入' };
+    set((s) => ({ chat: [...s.chat, aiMsg] }));
   }
 }));

@@ -4,10 +4,17 @@
 // 单消费者、读多写少的场景继续走 Zustand。
 
 import mitt, { type Emitter } from 'mitt';
-import type { MapNode, Edge } from '../data/sample';
+import type { MapNode } from '../api/types';
 import type { WindowState } from '../types/window';
 
 export type Profile = unknown; // 占位：v4 § 5.1 结构
+
+/** 关卡地图边（关卡间依赖/兴趣关联），原 data/sample.Edge 形状保留 */
+export interface Edge {
+  from: string;
+  to: string;
+  kind: 'main' | 'interest' | 'sleeping';
+}
 
 export interface LayoutSnapshot {
   id: string;

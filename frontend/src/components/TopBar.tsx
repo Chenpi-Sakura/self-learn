@@ -1,7 +1,6 @@
 import './TopBar.css';
 import { ModeToggle } from './ModeToggle';
 import { LayoutIcons } from './LayoutIcons';
-import { ResetButton } from '../reset/ResetButton';
 import { useSession } from '../store/session';
 
 export function TopBar() {
@@ -22,8 +21,6 @@ export function TopBar() {
       <div className="right">
         <span className="cmdk">⌘K</span>
         <span className="student-id" title={studentId}>ID · {shortId}</span>
-        <ResetButton />
-        <span className="avatar">林</span>
       </div>
     </header>
   );
