@@ -17,10 +17,20 @@ class LLMAgent:
         self.mcp: Any = mcp_client
         self.llm: Any = llm_registry
 
-    async def run(self, skill_id: str, env: Envelope) -> str:
+    async def run(
+        self,
+        skill_id: str,
+        env: Envelope,
+        prefetch_args: dict[str, dict[str, Any]] | None = None,
+    ) -> str:
         """按 Skill 跑一次。
 
         Phase 3 简化版：prefetch + LLM + lint 重试；tool_use 循环在后续 task 加。
+
+        prefetch_args: 可选. {tool_name: {arg: value}}, 给 mcp_prefetch 工具传参数.
+        例如 {"tool.get_kp": {"kp_id": kp_uuid}, "tool.get_recent_scores":
+        {"student_id": sid}}. 不传则无参调用 (向后兼容, 但部分 tool 必传
+        参数时会失败).
         """
         skill = await self.mcp.call("tool.fetch_skill", skill_id=skill_id)
         if not skill.get("ok"):
@@ -28,7 +38,8 @@ class LLMAgent:
 
         prefetch: dict[str, Any] = {}
         for tool in skill.get("mcp_prefetch", []):
-            prefetch[tool] = await self.mcp.call(tool)
+            args = (prefetch_args or {}).get(tool, {})
+            prefetch[tool] = await self.mcp.call(tool, **args)
 
         # body 保留 markdown 原文，不 .format()——所有 {...} 都是普通文本，
         # 一旦 format 会把 dict 值 str() 里的 {exercise_type} 误当占位符。

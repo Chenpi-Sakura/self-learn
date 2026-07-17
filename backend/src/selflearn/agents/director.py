@@ -65,7 +65,14 @@ async def run_director_chain(
     # 4. lecture
     await _publish(trace_id, Stage.DIRECTOR, "running",
                    {"action": "lecture_generate", "node_id": node["node_id"]})
-    lecture_html = await agent.run("skill.lecture.generate", env)
+    lecture_html = await agent.run(
+        "skill.lecture.generate",
+        env,
+        prefetch_args={
+            "tool.get_kp": {"kp_id": node["kp_id"]},
+            "tool.get_recent_scores": {"student_id": student_id, "limit": 3},
+        },
+    )
     await _publish(trace_id, Stage.DIRECTOR, "completed",
                    {"action": "lecture_generated", "lecture_html_len": len(lecture_html)})
 
@@ -102,7 +109,13 @@ async def run_director_chain(
             trace_id=trace_id,
             parent_id=env.span_id,
         )
-        exercises_raw = await agent.run("skill.exercise.generate", env_ex)
+        exercises_raw = await agent.run(
+            "skill.exercise.generate",
+            env_ex,
+            prefetch_args={
+                "tool.get_recent_scores": {"student_id": student_id, "limit": 3},
+            },
+        )
         try:
             parsed = extract_json_from_fence(exercises_raw) if isinstance(exercises_raw, str) else exercises_raw
             exercises = cast(list[dict[str, Any]], parsed)
