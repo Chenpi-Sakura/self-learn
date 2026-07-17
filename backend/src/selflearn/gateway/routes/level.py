@@ -112,6 +112,38 @@ async def start_level(body: LevelStartRequest) -> dict[str, object]:
     return {"trace_id": env.trace_id, "node_id": str(node.node_id), "reused": False}
 
 
+@router.get("/start-stream")
+async def stream_level_start(trace_id: str) -> EventSourceResponse:
+    """Trace-only SSE for /api/level/start (no level_id yet — director chain async dispatch).
+
+    与 {level_id}/stream 内容一致, 只是 URL 不依赖 level_id (reused=false 时
+    level_id 由 director chain 后续生成, 启动时前端还不知道).
+    """
+    async def event_gen() -> AsyncIterator[dict[str, str]]:
+        async for ev in progress_consume(trace_id):
+            data = json.dumps(
+                {
+                    "stage": ev.stage.value,
+                    "status": ev.status,
+                    "payload": ev.payload,
+                },
+                ensure_ascii=False,
+            )
+            yield {"event": "progress", "data": data}
+            if ev.status in ("completed", "failed"):
+                final = json.dumps(
+                    {"status": ev.status, "payload": ev.payload},
+                    ensure_ascii=False,
+                )
+                yield {
+                    "event": "completed" if ev.status == "completed" else "error",
+                    "data": final,
+                }
+                return
+
+    return EventSourceResponse(event_gen())
+
+
 @router.get("/{level_id}/stream")
 async def stream_level(level_id: UUID, trace_id: str) -> EventSourceResponse:
     async def event_gen() -> AsyncIterator[dict[str, str]]:

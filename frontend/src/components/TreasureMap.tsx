@@ -4,6 +4,7 @@ import { useWorkspace } from '../store/useWorkspace';
 import { useSession } from '../store/session';
 import { useLevel } from '../store/levelStore';
 import type { MapNode as ApiMapNode } from '../api/types';
+import { LevelStartProgress } from './LevelStartProgress';
 import './TreasureMap.css';
 
 interface InternalNode {
@@ -79,6 +80,8 @@ export function TreasureMap({ studentId }: Props) {
   })();
   const [starting, setStarting] = useState<string | null>(null); // node.id being started
   const [msg, setMsg] = useState<string | null>(null);
+  // 关卡启动进度条：reused=false 时显示等 SSE，reused=true 直接关掉
+  const [pendingLevel, setPendingLevel] = useState<{ levelId: string; traceId: string; label: string } | null>(null);
 
   const loadNodes = useCallback(() => {
     if (!studentId) return;
@@ -114,26 +117,30 @@ export function TreasureMap({ studentId }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: studentId, node_id: node.id }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as {
+        level_id?: string;
+        trace_id?: string;
+        reused?: boolean;
+      };
       if (data.level_id) {
         // 立即把 levelId 推入 store，LecturePane/ExercisePane 就能拉题
         setActiveLevel(data.level_id, node.id, data.trace_id);
         setMsg(
           `${node.label} ${data.reused ? '已就绪（复用）' : '已启动'}（${data.level_id.slice(0, 8)}…）`
         );
-        // 1s 后刷新节点（status 可能变 in_progress）
-        setTimeout(() => {
-          loadNodes();
-          setMsg(null);
+        if (data.reused) {
+          // 已就绪的关卡不需要进度条，直接清 starting
           setStarting(null);
-        }, 1000);
-      } else {
-        setMsg(`启动中：trace=${data.trace_id?.slice(0, 8) ?? '?'}…3 秒后刷新`);
-        setTimeout(() => {
-          loadNodes();
           setMsg(null);
-          setStarting(null);
-        }, 3500);
+        } else if (data.trace_id) {
+          // 等待 director chain 跑完，打开进度浮层
+          setPendingLevel({ levelId: data.level_id, traceId: data.trace_id, label: node.label });
+        }
+      } else if (data.trace_id) {
+        // 后端走 async dispatch（envelope 入队），没有 level_id 立即返回
+        // 但 progress_consume SSE 还是 trace_id 维度, 借用一个占位 levelId 等 onDone
+        setPendingLevel({ levelId: 'pending', traceId: data.trace_id, label: node.label });
+        setMsg(`启动中：trace=${data.trace_id.slice(0, 8)}…`);
       }
     } catch (e) {
       setMsg(`启动失败：${String(e)}`);
@@ -216,6 +223,23 @@ export function TreasureMap({ studentId }: Props) {
           );
         })}
       </svg>
+      {pendingLevel && (
+        <LevelStartProgress
+          levelId={pendingLevel.levelId}
+          traceId={pendingLevel.traceId}
+          onDone={() => {
+            // SSE completed: 关卡生成完, 重新拉地图刷新状态
+            loadNodes();
+            setPendingLevel(null);
+            setStarting(null);
+            setMsg(`${pendingLevel.label} 已就绪`);
+          }}
+          onClose={() => {
+            setPendingLevel(null);
+            setStarting(null);
+          }}
+        />
+      )}
     </div>
   );
 }
