@@ -76,12 +76,19 @@ export function ResourceListView({
               e.dataTransfer.setData('resource:id', r.id);
             }}
             onClick={() => {
-              if (mode === 'picker' && onSelectionChange) {
+              // grid 和 picker 都把单击解释为"切换选中"。
+              // 打开 MD 浏览器由 onDoubleClick 触发（仅 grid 模式）。
+              if (onSelectionChange) {
                 const ns = new Set(selectedIds);
                 if (ns.has(r.id)) ns.delete(r.id);
                 else ns.add(r.id);
                 onSelectionChange(ns);
-              } else if (onOpen) onOpen(r.id);
+              }
+            }}
+            onDoubleClick={() => {
+              // 只在 grid 模式下，双击打开 MD 浏览器。
+              if (mode !== 'grid') return;
+              if (onOpen) onOpen(r.id);
             }}
             onContextMenu={(e) => {
               if (mode === 'picker') return;
