@@ -66,6 +66,7 @@ export function ResourceListView({
   );
 
   // 框选状态：拖动时画一个矩形，鼠标抬起时把命中项加入 selected。
+  // 用 document-level 监听 mouseup，避免子 div 的 mousedown 拦截冒泡。
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [dragRect, setDragRect] = useState<DragRect | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -86,55 +87,71 @@ export function ResourceListView({
     return hits;
   };
 
-  const onContainerMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
-    // 只在按下的是容器本身（空白处）时启动框选，点缩略图由子 div 的 onClick 处理
-    if (mode !== 'grid') return;
-    if (e.target !== e.currentTarget) return;
-    if (e.button !== 0) return; // 只响应左键
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-    setDragRect({ startX: e.clientX, startY: e.clientY, endX: e.clientX, endY: e.clientY });
-  };
-
-  const onContainerMouseMove = (e: ReactMouseEvent<HTMLDivElement>) => {
+  // 注：因为子缩略图上 onMouseDown 阻止了冒泡，
+  // 用 container 的 mousedown 仅当起点在容器空白处（不是缩略图）时启动。
+  // mouseup 也用 document 监听，确保拖框松手总能命中。
+  useEffect(() => {
     if (!dragStartRef.current) return;
-    setDragRect({
-      startX: dragStartRef.current.x,
-      startY: dragStartRef.current.y,
-      endX: e.clientX,
-      endY: e.clientY,
-    });
-  };
-
-  const onContainerMouseUp = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!dragStartRef.current || !dragRect) {
+    const onMove = (e: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      setDragRect({
+        startX: dragStartRef.current.x,
+        startY: dragStartRef.current.y,
+        endX: e.clientX,
+        endY: e.clientY,
+      });
+    };
+    const onUp = (e: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      const rect = {
+        startX: dragStartRef.current.x,
+        startY: dragStartRef.current.y,
+        endX: e.clientX,
+        endY: e.clientY,
+      } as DragRect;
+      const hits = hitTest(rect);
+      const startedInContainer = containerRef.current?.contains(e.target as Node) ?? false;
+      if (hits.size > 0 && onSelectionChange) {
+        onSelectionChange(hits);
+      } else if (hits.size === 0 && startedInContainer && onSelectionChange && selectedIds.size > 0) {
+        // 起点 + 终点都在容器空白处 → 清空选中
+        onSelectionChange(new Set());
+      }
       dragStartRef.current = null;
       setDragRect(null);
-      return;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragRect]); // 每次 dragRect 改变时 re-attach（仅用于 cleanup 衔接）
+
+  const onContainerMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (mode !== 'grid') return;
+    if (e.button !== 0) return;
+    // 仅当按下时不在任何已知缩略图内才启动框选
+    const target = e.target as HTMLElement;
+    let insideItem = false;
+    for (const el of itemRefs.current.values()) {
+      if (el.contains(target) || el === target) {
+        insideItem = true;
+        break;
+      }
     }
-    const hits = hitTest(dragRect);
-    if (hits.size > 0 && onSelectionChange) {
-      // 替换式框选：拖框内所有项成为 selected（不含已有的全清）
-      onSelectionChange(hits);
-    } else if (hits.size === 0 && e.target === e.currentTarget) {
-      // 框选落空 + 点的是空白 → 清空 selected
-      if (onSelectionChange && selectedIds.size > 0) onSelectionChange(new Set());
-    }
-    dragStartRef.current = null;
-    setDragRect(null);
+    if (insideItem) return;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    setDragRect({ startX: e.clientX, startY: e.clientY, endX: e.clientX, endY: e.clientY });
   };
 
   return (
     <div
       ref={containerRef}
       onMouseDown={onContainerMouseDown}
-      onMouseMove={onContainerMouseMove}
-      onMouseUp={onContainerMouseUp}
-      onMouseLeave={() => {
-        if (dragStartRef.current) {
-          dragStartRef.current = null;
-          setDragRect(null);
-        }
-      }}
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -278,22 +295,30 @@ export function ResourceListView({
           </div>
         );
       })}
-      {/* 框选矩形浮层 */}
-      {dragRect && (
-        <div
-          style={{
-            position: 'fixed',
-            left: Math.min(dragRect.startX, dragRect.endX),
-            top: Math.min(dragRect.startY, dragRect.endY),
-            width: Math.abs(dragRect.endX - dragRect.startX),
-            height: Math.abs(dragRect.endY - dragRect.startY),
-            border: '1px dashed #1B3B6F',
-            background: 'rgba(27,59,111,0.08)',
-            pointerEvents: 'none',
-            zIndex: 9999,
-          }}
-        />
-      )}
+      {/* 框选矩形浮层（与容器同坐标系，避免 fixed 滚动条偏移） */}
+      {dragRect && (() => {
+        const cr = containerRef.current?.getBoundingClientRect();
+        if (!cr) return null;
+        const minX = Math.min(dragRect.startX, dragRect.endX) - cr.left + containerRef.current!.scrollLeft;
+        const minY = Math.min(dragRect.startY, dragRect.endY) - cr.top + containerRef.current!.scrollTop;
+        const w = Math.abs(dragRect.endX - dragRect.startX);
+        const h = Math.abs(dragRect.endY - dragRect.startY);
+        return (
+          <div
+            style={{
+              position: 'absolute',
+              left: minX,
+              top: minY,
+              width: w,
+              height: h,
+              border: '1px dashed #1B3B6F',
+              background: 'rgba(27,59,111,0.08)',
+              pointerEvents: 'none',
+              zIndex: 10,
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
