@@ -1,13 +1,35 @@
+import { useEffect, useState } from 'react';
 import { useWorkspace } from '../store/useWorkspace';
+import { listResources } from '../api/resources';
 
 /**
- * 冷启动引导卡（Task 5）。
- * 当 windows 为空时显示；中心按钮打开资源管理器。
+ * 冷启动引导卡（Task 5 + Q1 fix）。
+ * 仅当 **windows 为空** 且 **资源列表为空** 时显示。
+ * 用户开了任何窗口、或已经上传过至少一份资源，都不再骚扰。
  */
 export function EmptyStateOverlay() {
   const windows = useWorkspace((s) => s.windows);
   const openWindow = useWorkspace((s) => s.openWindow);
+  const [hasResources, setHasResources] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listResources()
+      .then((r) => {
+        if (!cancelled) setHasResources(r.items.length > 0);
+      })
+      .catch(() => {
+        // 后端不在线时不阻塞 UI：保守显示引导卡
+        if (!cancelled) setHasResources(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (Object.keys(windows).length > 0) return null;
+  if (hasResources === null) return null; // 初次加载未完成不闪
+  if (hasResources) return null;
 
   return (
     <div

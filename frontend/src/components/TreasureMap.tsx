@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getMapNodes } from '../api/map';
+import { useWorkspace } from '../store/useWorkspace';
 import { useSession } from '../store/session';
 import { useLevel } from '../store/levelStore';
 import type { MapNode as ApiMapNode } from '../api/types';
@@ -59,6 +60,7 @@ interface Props {
 }
 
 export function TreasureMap({ studentId }: Props) {
+  const openWindow = useWorkspace((s) => s.openWindow);
   const [nodes, setNodes] = useState<InternalNode[]>([]);
   const setActiveLevel = useLevel((s) => s.setActive);
   // T13-fix: edges 由 nodes 自动派生（按当前 y,x 顺序串成 main 主干），不再硬编码空数组
@@ -70,7 +72,6 @@ export function TreasureMap({ studentId }: Props) {
     }
     return out;
   })();
-  const [generating, setGenerating] = useState(false);
   const [starting, setStarting] = useState<string | null>(null); // node.id being started
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -83,29 +84,18 @@ export function TreasureMap({ studentId }: Props) {
 
   useEffect(() => {
     loadNodes();
+    // 监听 ResourceLibrary 完成提炼后的全局事件，刷新地图
+    const onRefresh = () => loadNodes();
+    window.addEventListener('selflearn:refresh-map', onRefresh);
+    return () => window.removeEventListener('selflearn:refresh-map', onRefresh);
   }, [loadNodes]);
 
-  const handleGenerate = async () => {
-    if (!studentId || generating) return;
-    setGenerating(true);
-    setMsg('正在生成地图...');
-    try {
-      const res = await fetch('http://localhost:8000/api/map/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: studentId }),
-      });
-      const data = await res.json();
-      setMsg(`已提交，2 秒后刷新`);
-      setTimeout(() => {
-        loadNodes();
-        setMsg(null);
-        setGenerating(false);
-      }, 2500);
-    } catch (e) {
-      setMsg(`生成失败：${String(e)}`);
-      setGenerating(false);
-    }
+  // Q2 fix: "生成地图" 不再直接 POST /api/map/generate（那是 demo 路径，
+  // 不接 md 资源），而是 **打开 ResourceLibrary** 让用户先勾选资源再走
+  // ResourceLibrary → ExtractTopicsDialog → 真正触发提炼。
+  const handleOpenResourceLibrary = () => {
+    openWindow('resource_library');
+    setMsg(null);
   };
 
   const handleNodeClick = async (node: InternalNode) => {
@@ -152,20 +142,19 @@ export function TreasureMap({ studentId }: Props) {
         <div className="h">深度学习路径</div>
         <div className="s">{nodes.length} 站</div>
         <button
-          onClick={handleGenerate}
-          disabled={generating}
+          onClick={handleOpenResourceLibrary}
           style={{
             marginLeft: 'auto',
             padding: '4px 10px',
             fontSize: 12,
-            background: generating ? '#ccc' : '#1B3B6F',
+            background: '#1B3B6F',
             color: '#fff',
             border: 'none',
             borderRadius: 4,
-            cursor: generating ? 'not-allowed' : 'pointer',
+            cursor: 'pointer',
           }}
         >
-          {generating ? '生成中…' : '生成地图'}
+          生成地图
         </button>
       </div>
       {msg && <p style={{ margin: '4px 0 0 16px', fontSize: 12, color: '#6B6B70' }}>{msg}</p>}
