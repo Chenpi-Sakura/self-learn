@@ -55,6 +55,16 @@ async def get_map_nodes(student_id: str) -> MapNodesResponse:
         )
         rows = (await session.execute(stmt)).all()
 
+    def _position_xy(pos: dict[str, object]) -> tuple[float, float]:
+        """兼容两套 position schema:
+        - 新: {"x": float, "y": float}
+        - 老: {"col": int, "row": int} (extract_topics 流水线写入, 网格坐标)
+        前端 TreasureMap 需要浮点字段; 老数据按 col→x、row→y 映射 (1 cell = 1 unit)。
+        """
+        if "x" in pos or "y" in pos:
+            return (float(str(pos.get("x", 0))), float(str(pos.get("y", 0))))
+        return (float(str(pos.get("col", 0))), float(str(pos.get("row", 0))))
+
     return MapNodesResponse(
         nodes=[
             MapNodeResponse(
@@ -62,8 +72,8 @@ async def get_map_nodes(student_id: str) -> MapNodesResponse:
                 kp_id=row[0].kp_id,
                 title=row[1],
                 position=MapNodePosition(
-                    x=float(row[0].position.get("x", 0.0)),
-                    y=float(row[0].position.get("y", 0.0)),
+                    x=_position_xy(row[0].position)[0],
+                    y=_position_xy(row[0].position)[1],
                 ),
                 status=row[0].status,
             )

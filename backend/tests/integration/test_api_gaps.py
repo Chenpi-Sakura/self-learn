@@ -300,6 +300,41 @@ async def test_get_map_nodes_empty_when_no_match(app_client: AsyncClient) -> Non
     assert data["nodes"] == []
 
 
+@pytest.mark.asyncio
+async def test_get_map_nodes_normalizes_col_row_position(app_client: AsyncClient) -> None:
+    """extract_topics 流水线写入 position={"col":N, "row":N}（grid 坐标），
+    API 必须映射成 x/y 浮点供前端 TreasureMap 渲染。否则 4 节点全堆在 (0,0)。"""
+    sid = uuid.uuid4()
+    kp_id = uuid.uuid4()
+    # 模拟 extract_topics 写入的 col/row 格式
+    fake_node = _make_fake_map_node(
+        sid, kp_id, status="active", position={"col": 2, "row": 1}
+    )
+    fake_rows = [(fake_node, "Position Encoding")]
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.all.return_value = fake_rows
+    mock_session.execute.return_value = mock_result
+
+    with patch(
+        "selflearn.gateway.routes.map.get_session_factory"
+    ) as factory_mock:
+        factory_mock.return_value = lambda: _make_async_session_cm(mock_session)
+
+        resp = await app_client.get(f"/api/map/{sid}/nodes")
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data["nodes"]) == 1
+    n = data["nodes"][0]
+    # col=2 → x=2.0, row=1 → y=1.0 (extract_topics col/row 是网格坐标不是浮点,
+    # 但前端 TreasureMap 渲染需要浮点字段, 这里按 col*W/row*H 等比换算更好;
+    # 测试先锁定 x=col y=row 这条最小契约, 后续若需归一化再加)
+    assert n["position"]["x"] == pytest.approx(2.0, 0.001)
+    assert n["position"]["y"] == pytest.approx(1.0, 0.001)
+
+
 def _make_fake_level(
     level_id: uuid.UUID,
     node_id: uuid.UUID | None = None,
