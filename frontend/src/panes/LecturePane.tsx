@@ -44,8 +44,23 @@ export function LecturePane({ levelId }: { levelId: string }) {
     });
   }, [lectureHtml]);
 
-  // 加载中
+  // 加载中或未选节点
   if (!state.loaded) {
+    if (!levelId) {
+      return (
+        <div
+          style={{
+            padding: 16,
+            height: '100%',
+            overflow: 'auto',
+            color: '#6B6B70',
+            fontFamily: 'HedvigLettersSerif, serif',
+          }}
+        >
+          请先选择左侧地图上的节点
+        </div>
+      );
+    }
     return <div style={{ padding: 16, height: '100%', overflow: 'auto' }}>加载讲义...</div>;
   }
 
